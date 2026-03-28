@@ -147,6 +147,9 @@ function addNotif(ico, txt) {
 // ─── LOGOUT ───────────────────────────────────────────────
 function doLogout() {
   if (confirm('Möchtest du dich wirklich abmelden?')) {
+    var uid = getUser().uid;
+    // Zuerst alle Daten in Firebase speichern, dann erst localStorage leeren
+    syncToFirebase(uid);
     if (typeof firebase !== 'undefined' && firebase.apps.length) {
       firebase.auth().signOut().catch(function () {});
     }
@@ -157,7 +160,7 @@ function doLogout() {
 
 // ─── FIREBASE SYNC ────────────────────────────────────────
 function syncToFirebase(uid) {
-  if (!uid || uid === 'admin') return;
+  if (!uid || uid === 'admin' || uid === 'demo') return;
   if (typeof firebase === 'undefined') return;
   var db = firebase.firestore();
   var data = {};
@@ -166,7 +169,7 @@ function syncToFirebase(uid) {
 }
 
 function loadFromFirebase(uid, callback) {
-  if (!uid || uid === 'admin') { if (callback) callback(); return; }
+  if (!uid || uid === 'admin' || uid === 'demo') { if (callback) callback(); return; }
   if (typeof firebase === 'undefined') { if (callback) callback(); return; }
   var db = firebase.firestore();
   db.collection('data').doc(uid).get().then(function (snap) {
