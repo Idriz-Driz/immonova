@@ -6,264 +6,687 @@
   <title>Kontakte – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+checkAuth();
+checkTrial();
+
 var user = getUser();
 
-var _kSearchQ  = '';
-var _kFilter   = 'alle';
-var _kEditId   = null;
+// ─── STATE ────────────────────────────────────────────────
+var _editId      = null;
+var _searchQuery = '';
+var _katFilter   = 'alle';
+var _sortMode    = 'name_az';
+var _viewMode    = localStorage.getItem('kon_view') || 'karten';
 
-var DEFAULT_KONTAKTE = [
-  {id:'kon_1',vn:'Hans',   nn:'Becker',   kat:'eigentuemer', firma:'Becker Immobilien', tel:'0151 123456', email:'hans@becker.de',   adr:'Musterstraße 1, Dortmund', not:'Haupteigentümer'},
-  {id:'kon_2',vn:'',       nn:'Stadtwerke Dortmund', kat:'behoerde',   firma:'Stadtwerke', tel:'0231 999000', email:'info@stadtwerke.de',adr:'Stadtwerke-Str. 1, Dortmund', not:''},
-  {id:'kon_3',vn:'',       nn:'Sparkasse Dortmund',  kat:'bank',       firma:'Sparkasse', tel:'0231 7000',   email:'info@sparkasse.de', adr:'Königswall 18, Dortmund', not:''}
-];
-
+// ─── KATEGORIE CONFIG ─────────────────────────────────────
 var KAT_CFG = {
-  eigentuemer: { label:'Eigentümer',    color:'#2563eb', bg:'#dbeafe', icon:'🏠' },
-  dienstleister:{ label:'Dienstleister', color:'#16a34a', bg:'#dcfce7', icon:'🔧' },
-  behoerde:    { label:'Behörde',        color:'#d97706', bg:'#fef9c3', icon:'🏛️' },
-  bank:        { label:'Bank',           color:'#7c3aed', bg:'#ede9fe', icon:'🏦' },
-  sonstiges:   { label:'Sonstiges',      color:'#64748b', bg:'#f1f5f9', icon:'📋' }
+  mieter:      { label: 'Mieter',      color: '#2563eb', bg: '#dbeafe', border: '#bfdbfe' },
+  handwerker:  { label: 'Handwerker',  color: '#ea580c', bg: '#ffedd5', border: '#fed7aa' },
+  eigentuemer: { label: 'Eigentümer',  color: '#7c3aed', bg: '#ede9fe', border: '#ddd6fe' },
+  behoerde:    { label: 'Behörde',     color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+  lieferant:   { label: 'Lieferant',   color: '#16a34a', bg: '#dcfce7', border: '#bbf7d0' },
+  sonstiges:   { label: 'Sonstiges',   color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' }
 };
 
-var AVATAR_COLORS = ['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#be185d','#0f766e'];
+var KAT_KEYS = ['mieter', 'handwerker', 'eigentuemer', 'behoerde', 'lieferant', 'sonstiges'];
 
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escAttr(s){ return (s||'').replace(/'/g,'\\x27').replace(/"/g,'&quot;'); }
+var AVATAR_COLORS = ['#2563eb', '#16a34a', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#0d9488'];
 
-function avatarColor(id){
-  var sum=0; for(var i=0;i<(id||'').length;i++) sum+=(id||'').charCodeAt(i);
-  return AVATAR_COLORS[sum%AVATAR_COLORS.length];
+// ─── HELPERS ──────────────────────────────────────────────
+function esc(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function initKontakte(){
-  var existing = getData(KEYS.kontakte, null);
-  if(!existing || !existing.length){
-    setData(KEYS.kontakte, DEFAULT_KONTAKTE);
+function escAttr(s) {
+  return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function avatarColor(seed) {
+  var code = 0;
+  for (var i = 0; i < (seed || '').length; i++) code += (seed || '').charCodeAt(i);
+  return AVATAR_COLORS[code % AVATAR_COLORS.length];
+}
+
+function getKonfakte() {
+  return getData(KEYS.kontakte, []);
+}
+
+function fullName(k) {
+  return ((k.vn || '') + ' ' + (k.nn || '')).trim();
+}
+
+function initials(k) {
+  var parts = fullName(k).split(' ').filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// ─── KPI ──────────────────────────────────────────────────
+function getKPIs() {
+  var list = getKonfakte();
+  var now  = Date.now();
+  var weekMs = 7 * 24 * 60 * 60 * 1000;
+  var letzte = 0;
+  for (var i = 0; i < list.length; i++) {
+    var ts = list[i].createdAt ? new Date(list[i].createdAt).getTime() : 0;
+    if (now - ts < weekMs) letzte++;
   }
+  var kategorien = {};
+  for (var j = 0; j < list.length; j++) {
+    kategorien[list[j].kategorie || 'sonstiges'] = true;
+  }
+  return {
+    gesamt:    list.length,
+    kategorien: Object.keys(kategorien).length,
+    letzte:    letzte
+  };
 }
 
-function render(){
-  initKontakte();
+// ─── BUILD KPI ROW ────────────────────────────────────────
+function buildKPIRow() {
+  var kpis = getKPIs();
 
-  var actionBtn = '<button onclick="openAddKontakt()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Kontakt hinzufügen</button>';
+  function kpiCard(ico, label, value, sub, bg) {
+    return '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;'
+      + 'box-shadow:0 1px 4px rgba(0,0,0,0.05);display:flex;align-items:center;gap:16px;">'
+      + '<div style="width:48px;height:48px;border-radius:12px;background:' + bg + ';'
+      + 'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + ico + '</div>'
+      + '<div>'
+      + '<div style="font-size:26px;font-weight:800;color:#0f172a;line-height:1.1;">' + value + '</div>'
+      + '<div style="font-size:12px;font-weight:600;color:#64748b;margin-top:2px;">' + label + '</div>'
+      + (sub ? '<div style="font-size:11px;color:#94a3b8;margin-top:1px;">' + sub + '</div>' : '')
+      + '</div>'
+      + '</div>';
+  }
 
-  var filterCfg = [
-    {key:'alle',      label:'Alle'},
-    {key:'eigentuemer', label:'Eigentümer'},
-    {key:'dienstleister',label:'Dienstleister'},
-    {key:'behoerde',  label:'Behörde'},
-    {key:'bank',      label:'Bank'},
-    {key:'sonstiges', label:'Sonstiges'}
-  ];
+  return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">'
+    + kpiCard('📇', 'Gesamt Kontakte',         kpis.gesamt,    'Alle erfassten Kontakte', '#eff6ff')
+    + kpiCard('🏷️', 'Kategorien',              kpis.kategorien,'Verschiedene Kategorien', '#faf5ff')
+    + kpiCard('🆕', 'Letzte Woche hinzugefügt', kpis.letzte,   'In den letzten 7 Tagen',  '#f0fdf4')
+    + '</div>';
+}
 
-  var filterHTML = filterCfg.map(function(f){
-    var isActive = _kFilter===f.key;
-    return '<button id="kf-'+f.key+'" onclick="setKFilter(\''+f.key+'\')" style="background:'+(isActive?'#2563eb':'white')+';color:'+(isActive?'white':'#64748b')+';border:1px solid '+(isActive?'#2563eb':'#e2e8f0')+';border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;">'+f.label+'</button>';
-  }).join('');
+// ─── FILTER + SORT ────────────────────────────────────────
+function applySearch(q) {
+  _searchQuery = q;
+  renderContent();
+}
 
-  var mainHTML =
-    // Top bar
-    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">'
-    +  '<div style="flex:1;min-width:200px;max-width:340px;position:relative;">'
-    +    '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none;">🔍</span>'
-    +    '<input id="k-search" type="text" placeholder="Name, Firma oder Telefon suchen..." oninput="searchKontakte(this.value)" style="width:100%;padding:9px 12px 9px 36px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
-    +  '</div>'
-    +  '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-    +    filterHTML
-    +  '</div>'
-    +'</div>'
-    // Grid
-    +'<div id="k-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"></div>'
-    // Empty state
-    +'<div id="k-empty" style="display:none;text-align:center;padding:60px 20px;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +  '<div style="font-size:48px;margin-bottom:16px;">📇</div>'
-    +  '<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;">Keine Kontakte gefunden</div>'
-    +  '<div style="font-size:13px;color:#64748b;margin-bottom:20px;">Passe die Suche oder den Filter an.</div>'
-    +'</div>';
+function applyKatFilter(k) {
+  _katFilter = k;
+  renderContent();
+}
 
-  var katOpts = Object.keys(KAT_CFG).map(function(k){
-    return '<option value="'+k+'">'+KAT_CFG[k].icon+' '+KAT_CFG[k].label+'</option>';
-  }).join('');
+function applySort(s) {
+  _sortMode = s;
+  renderContent();
+}
 
-  var modalContent =
+function filteredAndSorted() {
+  var list = getKonfakte();
+  var q    = _searchQuery.toLowerCase();
+
+  // Filter
+  list = list.filter(function (k) {
+    var matchKat = _katFilter === 'alle' || (k.kategorie || 'sonstiges') === _katFilter;
+    if (!matchKat) return false;
+    if (!q) return true;
+    var haystack = (
+      (k.vn  || '') + ' ' + (k.nn || '') + ' ' +
+      (k.firma || '') + ' ' + (k.email || '') + ' ' + (k.tel || '')
+    ).toLowerCase();
+    return haystack.indexOf(q) >= 0;
+  });
+
+  // Sort
+  list.sort(function (a, b) {
+    if (_sortMode === 'name_az') {
+      return fullName(a).localeCompare(fullName(b), 'de');
+    }
+    if (_sortMode === 'zuletzt') {
+      var ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      var tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    }
+    if (_sortMode === 'kategorie') {
+      var ka = a.kategorie || 'sonstiges';
+      var kb = b.kategorie || 'sonstiges';
+      var r  = KAT_KEYS.indexOf(ka) - KAT_KEYS.indexOf(kb);
+      if (r !== 0) return r;
+      return fullName(a).localeCompare(fullName(b), 'de');
+    }
+    return 0;
+  });
+
+  return list;
+}
+
+// ─── BUILD TOOLBAR ────────────────────────────────────────
+function buildToolbar() {
+  var katOpts = '<option value="alle"' + (_katFilter === 'alle' ? ' selected' : '') + '>Alle Kategorien</option>';
+  for (var i = 0; i < KAT_KEYS.length; i++) {
+    var k   = KAT_KEYS[i];
+    var cfg = KAT_CFG[k];
+    katOpts += '<option value="' + k + '"' + (_katFilter === k ? ' selected' : '') + '>' + cfg.label + '</option>';
+  }
+
+  var sortSelected = {
+    name_az:  _sortMode === 'name_az'  ? ' selected' : '',
+    zuletzt:  _sortMode === 'zuletzt'  ? ' selected' : '',
+    kategorie:_sortMode === 'kategorie'? ' selected' : ''
+  };
+
+  var selectStyle = 'padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;'
+    + 'font-family:inherit;color:#0f172a;background:white;outline:none;cursor:pointer;';
+
+  return '<div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">'
+    // Search
+    + '<div style="position:relative;flex:1;min-width:200px;max-width:360px;">'
+    + '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:#94a3b8;pointer-events:none;">🔍</span>'
+    + '<input type="text" placeholder="Name, Firma, E-Mail oder Telefon..." value="' + esc(_searchQuery) + '" '
+    + 'oninput="applySearch(this.value)" '
+    + 'style="width:100%;padding:9px 12px 9px 36px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;'
+    + 'font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" '
+    + 'onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '</div>'
+    // Kategorie filter
+    + '<select onchange="applyKatFilter(this.value)" style="' + selectStyle + '" '
+    + 'onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + katOpts
+    + '</select>'
+    // Sort
+    + '<select onchange="applySort(this.value)" style="' + selectStyle + '" '
+    + 'onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '<option value="name_az"' + sortSelected.name_az   + '>Name A–Z</option>'
+    + '<option value="zuletzt" ' + sortSelected.zuletzt  + '>Zuletzt hinzugefügt</option>'
+    + '<option value="kategorie"' + sortSelected.kategorie + '>Kategorie</option>'
+    + '</select>'
+    // View toggle
+    + '<div style="display:flex;gap:0;border:1.5px solid #e2e8f0;border-radius:9px;overflow:hidden;">'
+    + '<button onclick="setView(\'karten\')" title="Karten-Ansicht" style="padding:8px 13px;border:none;cursor:pointer;font-size:15px;'
+    + 'background:' + (_viewMode === 'karten' ? '#2563eb' : 'white') + ';color:' + (_viewMode === 'karten' ? 'white' : '#64748b') + ';'
+    + 'transition:all 0.15s;font-family:inherit;">⊞</button>'
+    + '<button onclick="setView(\'liste\')" title="Listen-Ansicht" style="padding:8px 13px;border:none;border-left:1px solid #e2e8f0;cursor:pointer;font-size:15px;'
+    + 'background:' + (_viewMode === 'liste' ? '#2563eb' : 'white') + ';color:' + (_viewMode === 'liste' ? 'white' : '#64748b') + ';'
+    + 'transition:all 0.15s;font-family:inherit;">☰</button>'
+    + '</div>'
+    + '</div>';
+}
+
+// ─── BUILD KATEGORIE BADGE ────────────────────────────────
+function katBadge(kat) {
+  var cfg = KAT_CFG[kat] || KAT_CFG.sonstiges;
+  return '<span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;'
+    + 'background:' + cfg.bg + ';color:' + cfg.color + ';border:1px solid ' + cfg.border + ';">'
+    + cfg.label
+    + '</span>';
+}
+
+// ─── BUILD CARD VIEW ──────────────────────────────────────
+function buildCardView(list) {
+  if (list.length === 0) {
+    return emptyState(
+      '📇',
+      'Keine Kontakte gefunden',
+      _searchQuery || _katFilter !== 'alle'
+        ? 'Keine Kontakte entsprechen deinem Filter. Passe die Suche an.'
+        : 'Füge deinen ersten Kontakt hinzu, um loszulegen.',
+      _searchQuery || _katFilter !== 'alle' ? '' : '+ Kontakt hinzufügen',
+      'openAddModal()'
+    );
+  }
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;">';
+
+  for (var i = 0; i < list.length; i++) {
+    var k    = list[i];
+    var name = fullName(k);
+    var ini  = initials(k);
+    var kat  = k.kategorie || 'sonstiges';
+    var cfg  = KAT_CFG[kat] || KAT_CFG.sonstiges;
+    var ac   = avatarColor(k.id || name);
+    var waNum = (k.tel || '').replace(/\D/g, '');
+    if (waNum && waNum.charAt(0) === '0') waNum = '49' + waNum.slice(1);
+
+    html += '<div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;overflow:hidden;'
+      + 'box-shadow:0 1px 4px rgba(0,0,0,0.05);display:flex;flex-direction:column;transition:all 0.15s;" '
+      + 'onmouseover="this.style.boxShadow=\'0 4px 16px rgba(37,99,235,0.12)\';this.style.borderColor=\'#bfdbfe\';" '
+      + 'onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,0.05)\';this.style.borderColor=\'#e2e8f0\';">';
+
+    // Top color stripe
+    html += '<div style="height:4px;background:' + ac + ';"></div>';
+
+    // Header: avatar + name + badge
+    html += '<div style="padding:18px 18px 12px;display:flex;align-items:flex-start;gap:13px;">';
+    html += '<div style="width:50px;height:50px;border-radius:13px;background:' + ac + ';'
+      + 'display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;'
+      + 'color:white;flex-shrink:0;letter-spacing:-0.5px;">' + ini + '</div>';
+    html += '<div style="flex:1;min-width:0;">';
+    html += '<div style="font-size:14px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+      + esc(name || '(kein Name)') + '</div>';
+    if (k.firma) {
+      html += '<div style="font-size:12px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + esc(k.firma) + '</div>';
+    }
+    html += '<div style="margin-top:6px;">' + katBadge(kat) + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div style="height:1px;background:#f1f5f9;"></div>';
+
+    // Details
+    html += '<div style="padding:14px 18px;flex:1;display:flex;flex-direction:column;gap:7px;">';
+
+    if (k.tel) {
+      html += '<div style="display:flex;align-items:center;gap:6px;">';
+      html += '<span style="font-size:13px;">📞</span>';
+      html += '<a href="tel:' + esc(k.tel) + '" style="font-size:13px;color:#2563eb;text-decoration:none;font-weight:500;">'
+        + esc(k.tel) + '</a>';
+      html += '</div>';
+    }
+
+    if (k.email) {
+      html += '<div style="display:flex;align-items:center;gap:6px;min-width:0;">';
+      html += '<span style="font-size:13px;flex-shrink:0;">✉️</span>';
+      html += '<a href="mailto:' + esc(k.email) + '" style="font-size:13px;color:#2563eb;text-decoration:none;font-weight:500;'
+        + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + esc(k.email) + '</a>';
+      html += '</div>';
+    }
+
+    if (k.adresse) {
+      html += '<div style="display:flex;align-items:center;gap:6px;min-width:0;">';
+      html += '<span style="font-size:13px;flex-shrink:0;">📍</span>';
+      html += '<span style="font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + esc(k.adresse) + '</span>';
+      html += '</div>';
+    }
+
+    if (k.notizen) {
+      html += '<div style="font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+        + 'font-style:italic;margin-top:2px;">'
+        + esc(k.notizen) + '</div>';
+    }
+
+    html += '</div>';
+
+    html += '<div style="height:1px;background:#f1f5f9;"></div>';
+
+    // Action buttons
+    html += '<div style="padding:12px 18px;display:flex;gap:7px;">';
+
+    if (k.tel) {
+      html += '<a href="tel:' + esc(k.tel) + '" '
+        + 'style="flex:1;padding:8px 0;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;'
+        + 'font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;text-decoration:none;'
+        + 'display:flex;align-items:center;justify-content:center;transition:background 0.15s;" '
+        + 'onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fdf4\'">📞 Anrufen</a>';
+
+      if (waNum) {
+        html += '<a href="https://wa.me/' + waNum + '" target="_blank" '
+          + 'style="flex:1;padding:8px 0;background:#f0fff4;color:#25D366;border:1px solid #bbf7d0;border-radius:8px;'
+          + 'font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;text-decoration:none;'
+          + 'display:flex;align-items:center;justify-content:center;transition:background 0.15s;" '
+          + 'onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fff4\'">💬 WhatsApp</a>';
+      }
+    }
+
+    html += '<button onclick="openEditModal(\'' + escAttr(k.id) + '\')" title="Bearbeiten" '
+      + 'style="width:36px;height:36px;background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;'
+      + 'cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background 0.15s;flex-shrink:0;" '
+      + 'onmouseover="this.style.background=\'#eff6ff\';this.style.color=\'#2563eb\';" '
+      + 'onmouseout="this.style.background=\'#f8fafc\';this.style.color=\'#64748b\';">✏️</button>';
+
+    html += '<button onclick="confirmDelete(\'' + escAttr(k.id) + '\')" title="Löschen" '
+      + 'style="width:36px;height:36px;background:#fff5f5;color:#dc2626;border:1px solid #fecaca;border-radius:8px;'
+      + 'cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background 0.15s;flex-shrink:0;" '
+      + 'onmouseover="this.style.background=\'#fee2e2\';" '
+      + 'onmouseout="this.style.background=\'#fff5f5\';">🗑️</button>';
+
+    html += '</div>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ─── BUILD LIST VIEW ──────────────────────────────────────
+function buildListView(list) {
+  if (list.length === 0) {
+    return emptyState(
+      '📇',
+      'Keine Kontakte gefunden',
+      _searchQuery || _katFilter !== 'alle'
+        ? 'Keine Kontakte entsprechen deinem Filter. Passe die Suche an.'
+        : 'Füge deinen ersten Kontakt hinzu, um loszulegen.',
+      _searchQuery || _katFilter !== 'alle' ? '' : '+ Kontakt hinzufügen',
+      'openAddModal()'
+    );
+  }
+
+  var thStyle = 'padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;'
+    + 'text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;';
+  var tdStyle = 'padding:13px 14px;font-size:13px;color:#0f172a;vertical-align:middle;';
+
+  var html = '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.05);">';
+  html += '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;">';
+
+  // Header
+  html += '<thead style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">';
+  html += '<tr>';
+  html += '<th style="' + thStyle + '">Name</th>';
+  html += '<th style="' + thStyle + '">Kategorie</th>';
+  html += '<th style="' + thStyle + '">Telefon</th>';
+  html += '<th style="' + thStyle + '">E-Mail</th>';
+  html += '<th style="' + thStyle + '">Firma</th>';
+  html += '<th style="' + thStyle + 'text-align:right;">Aktionen</th>';
+  html += '</tr>';
+  html += '</thead>';
+
+  // Rows
+  html += '<tbody>';
+  for (var i = 0; i < list.length; i++) {
+    var k    = list[i];
+    var name = fullName(k);
+    var ini  = initials(k);
+    var kat  = k.kategorie || 'sonstiges';
+    var ac   = avatarColor(k.id || name);
+    var rowBg = i % 2 === 0 ? 'white' : '#fafafa';
+    var waNum = (k.tel || '').replace(/\D/g, '');
+    if (waNum && waNum.charAt(0) === '0') waNum = '49' + waNum.slice(1);
+
+    html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #f1f5f9;transition:background 0.1s;" '
+      + 'onmouseover="this.style.background=\'#f8fafc\';" onmouseout="this.style.background=\'' + rowBg + '\';">';
+
+    // Name cell with avatar
+    html += '<td style="' + tdStyle + '">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<div style="width:36px;height:36px;border-radius:9px;background:' + ac + ';'
+      + 'display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;'
+      + 'color:white;flex-shrink:0;">' + ini + '</div>';
+    html += '<div>';
+    html += '<div style="font-weight:600;color:#0f172a;">' + esc(name || '(kein Name)') + '</div>';
+    if (k.adresse) {
+      html += '<div style="font-size:11px;color:#94a3b8;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">'
+        + esc(k.adresse) + '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+    html += '</td>';
+
+    // Kategorie
+    html += '<td style="' + tdStyle + '">' + katBadge(kat) + '</td>';
+
+    // Telefon
+    html += '<td style="' + tdStyle + '">';
+    if (k.tel) {
+      html += '<div style="display:flex;align-items:center;gap:6px;">';
+      html += '<a href="tel:' + esc(k.tel) + '" style="color:#2563eb;text-decoration:none;font-weight:500;white-space:nowrap;">'
+        + esc(k.tel) + '</a>';
+      if (waNum) {
+        html += '<a href="https://wa.me/' + waNum + '" target="_blank" '
+          + 'style="background:#25D366;color:white;border-radius:5px;padding:2px 8px;font-size:10px;'
+          + 'font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0;">WhatsApp</a>';
+      }
+      html += '</div>';
+    } else {
+      html += '<span style="color:#d1d5db;">–</span>';
+    }
+    html += '</td>';
+
+    // Email
+    html += '<td style="' + tdStyle + '">';
+    if (k.email) {
+      html += '<a href="mailto:' + esc(k.email) + '" style="color:#2563eb;text-decoration:none;font-weight:500;'
+        + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;display:inline-block;">'
+        + esc(k.email) + '</a>';
+    } else {
+      html += '<span style="color:#d1d5db;">–</span>';
+    }
+    html += '</td>';
+
+    // Firma
+    html += '<td style="' + tdStyle + 'color:#64748b;">';
+    html += k.firma ? esc(k.firma) : '<span style="color:#d1d5db;">–</span>';
+    html += '</td>';
+
+    // Aktionen
+    html += '<td style="' + tdStyle + 'text-align:right;white-space:nowrap;">';
+    html += '<button onclick="openEditModal(\'' + escAttr(k.id) + '\')" title="Bearbeiten" '
+      + 'style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:6px 11px;font-size:13px;'
+      + 'cursor:pointer;font-family:inherit;margin-right:5px;transition:background 0.15s;" '
+      + 'onmouseover="this.style.background=\'#eff6ff\';" onmouseout="this.style.background=\'#f8fafc\';">✏️ Bearbeiten</button>';
+    html += '<button onclick="confirmDelete(\'' + escAttr(k.id) + '\')" title="Löschen" '
+      + 'style="background:#fff5f5;border:1px solid #fecaca;border-radius:7px;padding:6px 11px;font-size:13px;'
+      + 'color:#dc2626;cursor:pointer;font-family:inherit;transition:background 0.15s;" '
+      + 'onmouseover="this.style.background=\'#fee2e2\';" onmouseout="this.style.background=\'#fff5f5\';">🗑️ Löschen</button>';
+    html += '</td>';
+
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  html += '</table>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+// ─── VIEW TOGGLE ──────────────────────────────────────────
+function setView(v) {
+  _viewMode = v;
+  localStorage.setItem('kon_view', v);
+  renderContent();
+}
+
+// ─── BUILD MODAL ──────────────────────────────────────────
+function buildModal() {
+  var katOptHtml = '';
+  for (var i = 0; i < KAT_KEYS.length; i++) {
+    var k   = KAT_KEYS[i];
+    var cfg = KAT_CFG[k];
+    katOptHtml += '<option value="' + k + '">' + cfg.label + '</option>';
+  }
+
+  var taStyle = 'style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;'
+    + 'font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" '
+    + 'onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"';
+
+  var body =
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +formGroup('Vorname','<input id="kf-vn" type="text" placeholder="Vorname..." '+inputStyle+'>')
-    +formGroup('Nachname','<input id="kf-nn" type="text" placeholder="Nachname / Firmenname..." '+inputStyle+'>')
-    +'</div>'
-    +formGroup('Kategorie','<select id="kf-kat" '+inputStyle+'>'+katOpts+'</select>')
-    +formGroup('Firma','<input id="kf-firma" type="text" placeholder="Firmenname..." '+inputStyle+'>')
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +formGroup('Telefon','<input id="kf-tel" type="tel" placeholder="0151 123456..." '+inputStyle+'>')
-    +formGroup('E-Mail','<input id="kf-email" type="email" placeholder="name@firma.de..." '+inputStyle+'>')
-    +'</div>'
-    +formGroup('Adresse','<input id="kf-adr" type="text" placeholder="Straße, Stadt..." '+inputStyle+'>')
-    +formGroup('Notiz','<textarea id="kf-not" rows="2" placeholder="Optionale Notizen..." style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>')
-    +'<div id="kf-del-wrap" style="display:none;margin-bottom:12px;">'
-    +'<button onclick="deleteKontakt()" style="width:100%;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Kontakt löschen</button>'
-    +'</div>'
-    +'<div style="display:flex;gap:10px;">'
-    +'<button onclick="saveKontakt()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'<button onclick="hideModal(\'kon-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'</div>';
+    + formGroup('Vorname', '<input id="kn-vn" type="text" placeholder="Vorname..." ' + inputStyle + '>')
+    + formGroup('Nachname', '<input id="kn-nn" type="text" placeholder="Nachname..." ' + inputStyle + '>')
+    + '</div>'
+    + formGroup('Firma', '<input id="kn-firma" type="text" placeholder="Firmenname (optional)..." ' + inputStyle + '>')
+    + formGroup('Kategorie', '<select id="kn-kat" ' + inputStyle + '>' + katOptHtml + '</select>')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Telefon', '<input id="kn-tel" type="tel" placeholder="0151 123456..." ' + inputStyle + '>')
+    + formGroup('E-Mail', '<input id="kn-email" type="email" placeholder="name@beispiel.de..." ' + inputStyle + '>')
+    + '</div>'
+    + formGroup('Adresse', '<input id="kn-adresse" type="text" placeholder="Straße, PLZ, Stadt..." ' + inputStyle + '>')
+    + formGroup('Website', '<input id="kn-website" type="url" placeholder="https://... (optional)" ' + inputStyle + '>')
+    + formGroup('Notizen', '<textarea id="kn-notizen" rows="3" placeholder="Notizen, Hinweise..." ' + taStyle + '></textarea>')
+    + formGroup('Tags (kommagetrennt)', '<input id="kn-tags" type="text" placeholder="z.B. wichtig, VIP, Hausverwaltung..." ' + inputStyle + '>')
+    + '<div id="kn-del-wrap" style="display:none;margin-bottom:14px;">'
+    + '<button onclick="confirmDelete(_editId);hideModal(\'kon-modal\')" '
+    + 'style="width:100%;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:10px;'
+    + 'font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;" '
+    + 'onmouseover="this.style.background=\'#fee2e2\';" onmouseout="this.style.background=\'#fef2f2\';">🗑️ Kontakt löschen</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:10px;margin-top:4px;">'
+    + '<button onclick="saveKontakt()" '
+    + 'style="flex:1;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;'
+    + 'font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.15s;" '
+    + 'onmouseover="this.style.background=\'#1d4ed8\';" onmouseout="this.style.background=\'#2563eb\';">💾 Speichern</button>'
+    + '<button onclick="hideModal(\'kon-modal\')" '
+    + 'style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:9px;'
+    + 'font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>';
 
-  renderLayout('kontakte','Kontakte',actionBtn,mainHTML,modalHTML('kon-modal','📇 Kontakt',modalContent));
-  filterKontakte();
+  return modalHTML('kon-modal', '<span id="kon-modal-title">Kontakt hinzufügen</span>', body);
 }
 
-function searchKontakte(q){
-  _kSearchQ = q;
-  filterKontakte();
+// ─── OPEN MODAL ───────────────────────────────────────────
+function openAddModal() {
+  _editId = null;
+  document.getElementById('kon-modal-title').textContent = '📇 Kontakt hinzufügen';
+  document.getElementById('kn-vn').value      = '';
+  document.getElementById('kn-nn').value      = '';
+  document.getElementById('kn-firma').value   = '';
+  document.getElementById('kn-kat').value     = 'sonstiges';
+  document.getElementById('kn-tel').value     = '';
+  document.getElementById('kn-email').value   = '';
+  document.getElementById('kn-adresse').value = '';
+  document.getElementById('kn-website').value = '';
+  document.getElementById('kn-notizen').value = '';
+  document.getElementById('kn-tags').value    = '';
+  document.getElementById('kn-del-wrap').style.display = 'none';
+  showModal('kon-modal');
 }
 
-function setKFilter(f){
-  _kFilter = f;
-  // Update button styles
-  var all = document.querySelectorAll('[id^="kf-"]');
-  all.forEach(function(btn){
-    var key = btn.id.replace('kf-','');
-    var isActive = key===f;
-    btn.style.background   = isActive?'#2563eb':'white';
-    btn.style.color        = isActive?'white':'#64748b';
-    btn.style.borderColor  = isActive?'#2563eb':'#e2e8f0';
-  });
-  filterKontakte();
+function openEditModal(id) {
+  var list = getKonfakte();
+  var k    = null;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) { k = list[i]; break; }
+  }
+  if (!k) return;
+  _editId = id;
+  document.getElementById('kon-modal-title').textContent = '📇 Kontakt bearbeiten';
+  document.getElementById('kn-vn').value      = k.vn      || '';
+  document.getElementById('kn-nn').value      = k.nn      || '';
+  document.getElementById('kn-firma').value   = k.firma   || '';
+  document.getElementById('kn-kat').value     = k.kategorie || 'sonstiges';
+  document.getElementById('kn-tel').value     = k.tel     || '';
+  document.getElementById('kn-email').value   = k.email   || '';
+  document.getElementById('kn-adresse').value = k.adresse || '';
+  document.getElementById('kn-website').value = k.website || '';
+  document.getElementById('kn-notizen').value = k.notizen || '';
+  document.getElementById('kn-tags').value    = (k.tags   || []).join(', ');
+  document.getElementById('kn-del-wrap').style.display = 'block';
+  showModal('kon-modal');
 }
 
-function filterKontakte(){
-  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE);
-  var q = _kSearchQ.toLowerCase();
-  var filtered = kontakte.filter(function(k){
-    if(_kFilter!=='alle' && k.kat!==_kFilter) return false;
-    if(!q) return true;
-    return (k.vn+' '+k.nn+' '+k.firma+' '+k.tel+' '+k.email).toLowerCase().includes(q);
-  });
+// ─── SAVE ─────────────────────────────────────────────────
+function saveKontakt() {
+  var vn      = (document.getElementById('kn-vn').value      || '').trim();
+  var nn      = (document.getElementById('kn-nn').value      || '').trim();
+  var firma   = (document.getElementById('kn-firma').value   || '').trim();
+  var kat     = document.getElementById('kn-kat').value;
+  var tel     = (document.getElementById('kn-tel').value     || '').trim();
+  var email   = (document.getElementById('kn-email').value   || '').trim();
+  var adresse = (document.getElementById('kn-adresse').value || '').trim();
+  var website = (document.getElementById('kn-website').value || '').trim();
+  var notizen = (document.getElementById('kn-notizen').value || '').trim();
+  var tagsRaw = (document.getElementById('kn-tags').value    || '').trim();
+  var tags    = tagsRaw ? tagsRaw.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [];
 
-  var gridEl  = document.getElementById('k-grid');
-  var emptyEl = document.getElementById('k-empty');
-  if(!gridEl) return;
-
-  if(!filtered.length){
-    gridEl.innerHTML = '';
-    if(emptyEl) emptyEl.style.display='block';
+  if (!vn && !nn && !firma) {
+    alert('Bitte mindestens Vor- / Nachname oder Firma eingeben.');
     return;
   }
-  if(emptyEl) emptyEl.style.display='none';
 
-  gridEl.innerHTML = filtered.map(function(k){
-    var kc      = KAT_CFG[k.kat]||KAT_CFG.sonstiges;
-    var fullName= ((k.vn||'')+' '+(k.nn||'')).trim();
-    var initials = fullName.split(' ').filter(Boolean).slice(0,2).map(function(p){return p[0].toUpperCase();}).join('') || '?';
-    var ac      = avatarColor(k.id||fullName);
-    var waLink  = k.tel ? 'https://wa.me/'+k.tel.replace(/\D/g,'') : '#';
+  var list = getKonfakte();
 
-    return '<div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.15s;cursor:pointer;" onclick="openEditKontakt(\''+escAttr(k.id)+'\')" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(37,99,235,0.12)\';this.style.borderColor=\'#2563eb\'" onmouseout="this.style.boxShadow=\'0 1px 3px rgba(0,0,0,0.05)\';this.style.borderColor=\'#e2e8f0\'">'
-      // Avatar + name
-      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
-      +  '<div style="width:48px;height:48px;background:'+ac+';border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:white;flex-shrink:0;">'+initials+'</div>'
-      +  '<div style="flex:1;min-width:0;">'
-      +    '<div style="font-size:14px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(fullName)+'</div>'
-      +    '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:'+kc.bg+';color:'+kc.color+';">'+kc.icon+' '+kc.label+'</span>'
-      +  '</div>'
-      +'</div>'
-      // Details
-      +(k.firma?'<div style="font-size:12px;color:#64748b;margin-bottom:6px;display:flex;align-items:center;gap:5px;"><span>🏢</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(k.firma)+'</span></div>':'')
-      +(k.tel?'<div style="font-size:12px;color:#0f172a;margin-bottom:4px;display:flex;align-items:center;gap:5px;"><span>📞</span><a href="tel:'+esc(k.tel)+'" onclick="event.stopPropagation()" style="color:#2563eb;text-decoration:none;font-weight:500;">'+esc(k.tel)+'</a></div>':'')
-      +(k.email?'<div style="font-size:12px;color:#0f172a;margin-bottom:4px;display:flex;align-items:center;gap:5px;"><span>✉️</span><a href="mailto:'+esc(k.email)+'" onclick="event.stopPropagation()" style="color:#2563eb;text-decoration:none;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;display:inline-block;">'+esc(k.email)+'</a></div>':'')
-      // Action buttons
-      +'<div style="display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;">'
-      +  (k.tel?'<a href="tel:'+esc(k.tel)+'" onclick="event.stopPropagation()" style="flex:1;background:#f0fdf4;color:#16a34a;text-decoration:none;border-radius:8px;padding:7px;font-size:12px;font-weight:600;text-align:center;transition:background 0.15s;" onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fdf4\'">📞 Anrufen</a>':'<div style="flex:1;"></div>')
-      +  (k.tel?'<a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" style="flex:1;background:#f0fff4;color:#16a34a;text-decoration:none;border-radius:8px;padding:7px;font-size:12px;font-weight:600;text-align:center;border:1px solid #bbf7d0;transition:background 0.15s;" onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fff4\'">💬 WhatsApp</a>':'')
-      +  '<button onclick="event.stopPropagation();openEditKontakt(\''+escAttr(k.id)+'\')" style="width:34px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;transition:background 0.15s;" title="Bearbeiten" onmouseover="this.style.background=\'#eff6ff\'" onmouseout="this.style.background=\'#f8fafc\'">✏️</button>'
-      +'</div>'
-      +'</div>';
-  }).join('');
-}
-
-function openAddKontakt(){
-  _kEditId = null;
-  document.getElementById('kf-vn').value='';
-  document.getElementById('kf-nn').value='';
-  document.getElementById('kf-kat').value='sonstiges';
-  document.getElementById('kf-firma').value='';
-  document.getElementById('kf-tel').value='';
-  document.getElementById('kf-email').value='';
-  document.getElementById('kf-adr').value='';
-  document.getElementById('kf-not').value='';
-  document.getElementById('kf-del-wrap').style.display='none';
-  var hdr = document.querySelector('#kon-modal [style*="font-size:16px"]');
-  if(hdr) hdr.textContent='📇 Kontakt hinzufügen';
-  showModal('kon-modal');
-}
-
-function openEditKontakt(id){
-  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE);
-  var k = kontakte.find(function(x){return x.id===id;});
-  if(!k) return;
-  _kEditId = id;
-  document.getElementById('kf-vn').value    = k.vn||'';
-  document.getElementById('kf-nn').value    = k.nn||'';
-  document.getElementById('kf-kat').value   = k.kat||'sonstiges';
-  document.getElementById('kf-firma').value = k.firma||'';
-  document.getElementById('kf-tel').value   = k.tel||'';
-  document.getElementById('kf-email').value = k.email||'';
-  document.getElementById('kf-adr').value   = k.adr||'';
-  document.getElementById('kf-not').value   = k.not||'';
-  document.getElementById('kf-del-wrap').style.display='block';
-  var hdr = document.querySelector('#kon-modal [style*="font-size:16px"]');
-  if(hdr) hdr.textContent='📇 Kontakt bearbeiten';
-  showModal('kon-modal');
-}
-
-function saveKontakt(){
-  var vn    = (document.getElementById('kf-vn').value||'').trim();
-  var nn    = (document.getElementById('kf-nn').value||'').trim();
-  var kat   = document.getElementById('kf-kat').value;
-  var firma = (document.getElementById('kf-firma').value||'').trim();
-  var tel   = (document.getElementById('kf-tel').value||'').trim();
-  var email = (document.getElementById('kf-email').value||'').trim();
-  var adr   = (document.getElementById('kf-adr').value||'').trim();
-  var not   = (document.getElementById('kf-not').value||'').trim();
-
-  if(!nn&&!vn){ alert('Bitte mindestens einen Namen eingeben.'); return; }
-
-  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE);
-  if(_kEditId){
-    kontakte = kontakte.map(function(k){
-      if(k.id===_kEditId){ k.vn=vn;k.nn=nn;k.kat=kat;k.firma=firma;k.tel=tel;k.email=email;k.adr=adr;k.not=not; }
-      return k;
-    });
+  if (_editId) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === _editId) {
+        list[i].vn       = vn;
+        list[i].nn       = nn;
+        list[i].firma    = firma;
+        list[i].kategorie= kat;
+        list[i].tel      = tel;
+        list[i].email    = email;
+        list[i].adresse  = adresse;
+        list[i].website  = website;
+        list[i].notizen  = notizen;
+        list[i].tags     = tags;
+        break;
+      }
+    }
   } else {
-    var newK = {id:'kon_'+Date.now(),vn:vn,nn:nn,kat:kat,firma:firma,tel:tel,email:email,adr:adr,not:not};
-    kontakte.push(newK);
-    addNotif('📇','Kontakt hinzugefügt: '+(vn+' '+nn).trim());
+    var newK = {
+      id:        'kon_' + Date.now(),
+      vn:        vn,
+      nn:        nn,
+      firma:     firma,
+      kategorie: kat,
+      tel:       tel,
+      email:     email,
+      adresse:   adresse,
+      website:   website,
+      notizen:   notizen,
+      tags:      tags,
+      createdAt: new Date().toISOString()
+    };
+    list.push(newK);
+    addNotif('📇', 'Kontakt hinzugefügt: ' + ((vn + ' ' + nn).trim() || firma));
   }
-  setData(KEYS.kontakte, kontakte);
+
+  setData(KEYS.kontakte, list);
   syncToFirebase(user.uid);
   hideModal('kon-modal');
-  filterKontakte();
-  _kEditId = null;
+  _editId = null;
+  renderContent();
 }
 
-function deleteKontakt(){
-  if(!_kEditId||!confirm('Kontakt wirklich löschen?')) return;
-  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE).filter(function(k){return k.id!==_kEditId;});
-  setData(KEYS.kontakte, kontakte);
+// ─── DELETE ───────────────────────────────────────────────
+function confirmDelete(id) {
+  if (!id || !confirm('Kontakt wirklich löschen?')) return;
+  var list = getKonfakte().filter(function (k) { return k.id !== id; });
+  setData(KEYS.kontakte, list);
   syncToFirebase(user.uid);
-  hideModal('kon-modal');
-  filterKontakte();
-  _kEditId = null;
+  _editId = null;
+  renderContent();
 }
 
+// ─── RENDER CONTENT (without full layout re-render) ───────
+function renderContent() {
+  var container = document.getElementById('kon-main');
+  if (!container) { render(); return; }
+
+  var list    = filteredAndSorted();
+  var toolbar = buildToolbar();
+  var view    = _viewMode === 'liste' ? buildListView(list) : buildCardView(list);
+  container.innerHTML = buildKPIRow() + toolbar + view;
+}
+
+// ─── MAIN RENDER ──────────────────────────────────────────
+function render() {
+  var actionBtn =
+    '<button onclick="openAddModal()" '
+    + 'style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 20px;font-size:13px;font-weight:700;'
+    + 'cursor:pointer;font-family:inherit;transition:background 0.15s;" '
+    + 'onmouseover="this.style.background=\'#1d4ed8\';" onmouseout="this.style.background=\'#2563eb\';">+ Kontakt hinzufügen</button>';
+
+  var list    = filteredAndSorted();
+  var toolbar = buildToolbar();
+  var view    = _viewMode === 'liste' ? buildListView(list) : buildCardView(list);
+
+  var mainContent =
+    getTrialBanner()
+    + '<div id="kon-main">'
+    + buildKPIRow()
+    + toolbar
+    + view
+    + '</div>';
+
+  var modals = buildModal();
+
+  renderLayout('kontakte', '📇 Kontakte', actionBtn, mainContent, modals);
+}
+
+// ─── BOOT ─────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, render);
+startPageListener(user.uid, render);
 </script>
 </body>
 </html>

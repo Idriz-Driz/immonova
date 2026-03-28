@@ -6,291 +6,676 @@
   <title>Objekte – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+checkAuth();
+checkTrial();
+
 var user = getUser();
 var editObjId = null;
+var filterTyp = 'alle';
+var searchQ = '';
 
-var DEMO_OBJ = [
-  {id:'obj1', name:'Hauptstraße 15', str:'Hauptstraße 15', plz:'44135', stadt:'Dortmund', typ:'Mehrfamilienhaus', einh:5, bj:1985, zielmiete:4600, not:'Solide Bausubstanz, letztes Dach 2019 erneuert.'},
-  {id:'obj2', name:'Gartenweg 3', str:'Gartenweg 3', plz:'44787', stadt:'Bochum', typ:'Mehrfamilienhaus', einh:3, bj:2001, zielmiete:2730, not:'Neubauqualität, KfW-gefördert.'}
+// ─── DEFAULT DEMO DATA ──────────────────────────────────────
+var DEMO_OBJEKTE = [
+  {
+    id: 'obj_demo1',
+    name: 'Hauptstraße 15',
+    strasse: 'Hauptstraße 15',
+    plz: '44135',
+    stadt: 'Dortmund',
+    typ: 'Mehrfamilienhaus',
+    baujahr: 1985,
+    flaeche: 420,
+    einheiten: 6,
+    stockwerke: 3,
+    heizung: 'Gas',
+    energie: 'C',
+    notizen: 'Solide Bausubstanz, Dach 2019 erneuert. Aufzug vorhanden.',
+    hausverwaltung: 'Müller Hausverwaltung GmbH'
+  },
+  {
+    id: 'obj_demo2',
+    name: 'Gartenweg 3',
+    strasse: 'Gartenweg 3',
+    plz: '44787',
+    stadt: 'Bochum',
+    typ: 'Mehrfamilienhaus',
+    baujahr: 2001,
+    flaeche: 280,
+    einheiten: 4,
+    stockwerke: 2,
+    heizung: 'Wärmepumpe',
+    energie: 'B',
+    notizen: 'Neubauqualität, KfW-gefördert. Tiefgarage mit 4 Stellplätzen.',
+    hausverwaltung: ''
+  },
+  {
+    id: 'obj_demo3',
+    name: 'Bergstraße 7',
+    strasse: 'Bergstraße 7',
+    plz: '45128',
+    stadt: 'Essen',
+    typ: 'Einfamilienhaus',
+    baujahr: 1972,
+    flaeche: 160,
+    einheiten: 1,
+    stockwerke: 2,
+    heizung: 'Öl',
+    energie: 'E',
+    notizen: 'Renovierungsbedarf Badezimmer. Großer Garten.',
+    hausverwaltung: ''
+  }
 ];
 
-function getObj() {
+// ─── DATA ACCESS ────────────────────────────────────────────
+function getObjekte() {
   var stored = getData(KEYS.objekte, null);
-  if(!stored || stored.length===0){
-    setData(KEYS.objekte, DEMO_OBJ);
-    return JSON.parse(JSON.stringify(DEMO_OBJ));
+  if (!stored || stored.length === 0) {
+    setData(KEYS.objekte, DEMO_OBJEKTE);
+    return JSON.parse(JSON.stringify(DEMO_OBJEKTE));
   }
   return stored;
 }
 
 function getMieter() {
-  return getData(KEYS.mieter, DEFAULT_MIETER);
+  return getData(KEYS.mieter, []);
 }
 
-function getObjMieter(obj) {
+function getTickets() {
+  return getData(KEYS.tickets, []);
+}
+
+// ─── BELEGUNG HELPERS ───────────────────────────────────────
+function getMieterFuerObjekt(obj) {
   var mieter = getMieter();
-  // Try to match by object name or address in wn field (simplified)
-  return mieter.filter(function(m){
-    return m.wn && m.wn.length > 0;
-  }).slice(0, obj.einh);
+  return mieter.filter(function(m) {
+    return m.objekt === obj.id || m.wn === obj.name || m.objekt === obj.name;
+  });
 }
 
-function getBelegtCount(obj) {
-  var mieter = getMieter();
-  // Simplified: count mieter up to einh
-  return Math.min(mieter.length, obj.einh - 1);
+function getAktiveMieterFuerObjekt(obj) {
+  return getMieterFuerObjekt(obj).filter(function(m) {
+    return m.status === 'Aktiv';
+  });
 }
 
-function avatarColorObj(name) {
-  var colors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
-  return colors[(name.charCodeAt(0)||65) % colors.length];
+function getBelegungsrate(obj) {
+  if (!obj.einheiten || obj.einheiten <= 0) return 0;
+  var aktiv = getAktiveMieterFuerObjekt(obj).length;
+  return Math.min(100, Math.round((aktiv / obj.einheiten) * 100));
 }
 
-function typBadgeColor(typ) {
-  if(typ==='Mehrfamilienhaus') return 'blue';
-  if(typ==='Einfamilienhaus') return 'green';
-  if(typ==='Gewerbe') return 'yellow';
+function getMonatsmiete(obj) {
+  var mieter = getMieterFuerObjekt(obj);
+  var sum = 0;
+  for (var i = 0; i < mieter.length; i++) {
+    sum += parseFloat(mieter[i].miete) || 0;
+  }
+  return sum;
+}
+
+// ─── TYP BADGE COLOR ────────────────────────────────────────
+function typColor(typ) {
+  if (typ === 'Mehrfamilienhaus')  return 'blue';
+  if (typ === 'Einfamilienhaus')   return 'green';
+  if (typ === 'Gewerbeobjekt')     return 'yellow';
+  if (typ === 'WEG')               return 'purple';
   return 'gray';
 }
 
-function buildKPIs(objs) {
-  var totalEinh = 0;
-  var totalMiete = 0;
-  var totalBelegt = 0;
-  for(var i=0;i<objs.length;i++){
-    totalEinh += objs[i].einh||0;
-    totalMiete += objs[i].zielmiete||0;
-    totalBelegt += getBelegtCount(objs[i]);
-  }
-  var leerstandPct = totalEinh > 0 ? Math.round(((totalEinh-totalBelegt)/totalEinh)*100) : 0;
+function typEmoji(typ) {
+  if (typ === 'Mehrfamilienhaus')  return '🏢';
+  if (typ === 'Einfamilienhaus')   return '🏠';
+  if (typ === 'Gewerbeobjekt')     return '🏪';
+  if (typ === 'WEG')               return '🏘️';
+  return '🏗️';
+}
 
-  var kpiData = [
-    {ico:'🏢', label:'Objekte gesamt', val:objs.length, color:'#2563eb', bg:'#eff6ff'},
-    {ico:'🏠', label:'Einheiten gesamt', val:totalEinh, color:'#7c3aed', bg:'#f5f3ff'},
-    {ico:'💶', label:'Monatliche Einnahmen', val:fmt(totalMiete)+' €', color:'#16a34a', bg:'#f0fdf4'},
-    {ico:'📊', label:'Leerstand', val:leerstandPct+'%', color: leerstandPct>20?'#dc2626':'#d97706', bg:leerstandPct>20?'#fef2f2':'#fffbeb'}
+function energieColor(klasse) {
+  var map = { 'A+': '#16a34a', 'A': '#22c55e', 'B': '#84cc16', 'C': '#eab308', 'D': '#f97316', 'E': '#ef4444', 'F': '#dc2626', 'G': '#991b1b' };
+  return map[klasse] || '#64748b';
+}
+
+// ─── KPI ROW ────────────────────────────────────────────────
+function buildKPIs(objs) {
+  var totalEinheiten = 0;
+  var totalMiete = 0;
+  var totalAktivMieter = 0;
+  var totalEinheitenForRate = 0;
+
+  for (var i = 0; i < objs.length; i++) {
+    var obj = objs[i];
+    totalEinheiten += obj.einheiten || 0;
+    totalMiete += getMonatsmiete(obj);
+    totalAktivMieter += getAktiveMieterFuerObjekt(obj).length;
+    totalEinheitenForRate += obj.einheiten || 0;
+  }
+
+  var belegungsrate = totalEinheitenForRate > 0
+    ? Math.round((totalAktivMieter / totalEinheitenForRate) * 100) : 0;
+
+  var kpis = [
+    {
+      ico: '🏢',
+      label: 'Gesamt Objekte',
+      val: objs.length,
+      color: '#2563eb',
+      bg: '#eff6ff',
+      border: '#bfdbfe'
+    },
+    {
+      ico: '🚪',
+      label: 'Gesamte Einheiten',
+      val: totalEinheiten,
+      color: '#7c3aed',
+      bg: '#f5f3ff',
+      border: '#ddd6fe'
+    },
+    {
+      ico: '📊',
+      label: 'Belegungsrate',
+      val: belegungsrate + ' %',
+      color: belegungsrate >= 80 ? '#16a34a' : belegungsrate >= 60 ? '#d97706' : '#dc2626',
+      bg: belegungsrate >= 80 ? '#f0fdf4' : belegungsrate >= 60 ? '#fffbeb' : '#fef2f2',
+      border: belegungsrate >= 80 ? '#bbf7d0' : belegungsrate >= 60 ? '#fde68a' : '#fecaca'
+    },
+    {
+      ico: '💶',
+      label: 'Monatliche Miete',
+      val: fmt(totalMiete) + ' €',
+      color: '#16a34a',
+      bg: '#f0fdf4',
+      border: '#bbf7d0'
+    }
   ];
 
-  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px;">';
-  for(var k=0;k<kpiData.length;k++){
-    var kpi = kpiData[k];
-    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
-    html += '<div style="width:40px;height:40px;border-radius:10px;background:'+kpi.bg+';display:flex;align-items:center;justify-content:center;font-size:20px;">'+kpi.ico+'</div>';
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:24px;">';
+  for (var k = 0; k < kpis.length; k++) {
+    var kpi = kpis[k];
+    html += '<div style="background:white;border:1px solid ' + kpi.border + ';border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">';
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">';
+    html += '<div style="width:42px;height:42px;border-radius:11px;background:' + kpi.bg + ';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">' + kpi.ico + '</div>';
+    html += '<div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;line-height:1.4;">' + kpi.label + '</div>';
     html += '</div>';
-    html += '<div style="font-size:24px;font-weight:800;color:'+kpi.color+';margin-bottom:4px;">'+kpi.val+'</div>';
-    html += '<div style="font-size:12px;color:#64748b;font-weight:500;">'+kpi.label+'</div>';
+    html += '<div style="font-size:26px;font-weight:800;color:' + kpi.color + ';line-height:1;">' + kpi.val + '</div>';
     html += '</div>';
   }
   html += '</div>';
   return html;
 }
 
+// ─── SEARCH & FILTER BAR ────────────────────────────────────
+function buildSearchBar() {
+  var types = ['alle', 'Mehrfamilienhaus', 'Einfamilienhaus', 'Gewerbeobjekt', 'WEG', 'Sonstiges'];
+  var html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">';
+
+  // Search input
+  html += '<div style="position:relative;flex:1;min-width:220px;">';
+  html += '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;color:#94a3b8;">🔍</span>';
+  html += '<input id="obj-search" type="text" placeholder="Objekte durchsuchen..." oninput="onSearch(this.value)" value="' + searchQ + '" ';
+  html += 'style="width:100%;padding:10px 13px 10px 38px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" ';
+  html += 'onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">';
+  html += '</div>';
+
+  // Type filter pills
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+  for (var i = 0; i < types.length; i++) {
+    var t = types[i];
+    var isActive = filterTyp === t;
+    var label = t === 'alle' ? 'Alle Typen' : t;
+    html += '<button onclick="setFilter(\'' + t + '\')" style="padding:8px 14px;border-radius:20px;border:1.5px solid ' + (isActive ? '#2563eb' : '#e2e8f0') + ';background:' + (isActive ? '#2563eb' : 'white') + ';color:' + (isActive ? 'white' : '#64748b') + ';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all 0.15s;">';
+    html += label + '</button>';
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function onSearch(q) {
+  searchQ = q;
+  renderMain();
+}
+
+function setFilter(typ) {
+  filterTyp = typ;
+  renderMain();
+}
+
+// ─── OBJECT CARDS GRID ──────────────────────────────────────
 function buildGrid(objs) {
-  if(objs.length===0){
+  // Apply search filter
+  var filtered = objs.filter(function(obj) {
+    var matchesTyp = filterTyp === 'alle' || obj.typ === filterTyp;
+    var matchesSearch = !searchQ || searchQ.length < 1
+      || (obj.name || '').toLowerCase().indexOf(searchQ.toLowerCase()) >= 0
+      || (obj.stadt || '').toLowerCase().indexOf(searchQ.toLowerCase()) >= 0
+      || (obj.strasse || '').toLowerCase().indexOf(searchQ.toLowerCase()) >= 0
+      || (obj.plz || '').indexOf(searchQ) >= 0;
+    return matchesTyp && matchesSearch;
+  });
+
+  if (filtered.length === 0) {
     return '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">'
-      +'<div style="font-size:48px;margin-bottom:12px;">🏢</div>'
-      +'<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Noch keine Objekte erfasst</div>'
-      +'<div style="font-size:13px;">Klicke auf "+ Objekt hinzufügen" um dein erstes Objekt anzulegen.</div>'
-      +'</div>';
+      + '<div style="font-size:52px;margin-bottom:14px;">🏢</div>'
+      + '<div style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:8px;">'
+      + (objs.length === 0 ? 'Noch keine Objekte erfasst' : 'Keine Objekte gefunden') + '</div>'
+      + '<div style="font-size:13px;color:#94a3b8;max-width:340px;margin:0 auto;">'
+      + (objs.length === 0
+        ? 'Klicke auf „+ Objekt hinzufügen", um dein erstes Objekt anzulegen.'
+        : 'Versuche einen anderen Suchbegriff oder Filter.')
+      + '</div>'
+      + (objs.length === 0 ? '<button onclick="openNewObjModal()" style="margin-top:20px;background:#2563eb;color:white;border:none;border-radius:9px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">+ Objekt hinzufügen</button>' : '')
+      + '</div>';
   }
 
-  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;">';
-  for(var i=0;i<objs.length;i++){
-    var obj = objs[i];
-    var belegt = getBelegtCount(obj);
-    var leer = Math.max(0, obj.einh - belegt);
-    var auslastung = obj.einh > 0 ? Math.round((belegt/obj.einh)*100) : 0;
-    var mapsUrl = 'https://maps.google.com/?q='+encodeURIComponent(obj.str+' '+obj.plz+' '+obj.stadt);
-    var mieterList = getMieter().slice(0, Math.min(belegt, 5));
-    var barColor = auslastung >= 80 ? '#16a34a' : auslastung >= 50 ? '#d97706' : '#dc2626';
-
-    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">';
-    // Top strip
-    html += '<div style="height:6px;background:linear-gradient(90deg,#2563eb,#7c3aed);"></div>';
-    // Header
-    html += '<div style="padding:20px 20px 16px;">';
-    html += '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">';
-    html += '<div style="font-size:32px;">🏢</div>';
-    html += '<div style="flex:1;min-width:0;">';
-    html += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+obj.name+'</div>';
-    html += '<a href="'+mapsUrl+'" target="_blank" style="font-size:12px;color:#2563eb;text-decoration:none;">📍 '+obj.str+', '+obj.plz+' '+obj.stadt+' ↗</a>';
-    html += '</div>';
-    html += badge(obj.typ, typBadgeColor(obj.typ));
-    html += '</div>';
-    // Divider
-    html += '<div style="height:1px;background:#f1f5f9;margin-bottom:14px;"></div>';
-    // Stats grid
-    html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">';
-    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
-    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Einheiten</div>';
-    html += '<div style="font-size:18px;font-weight:700;color:#0f172a;">'+obj.einh+'</div>';
-    html += '</div>';
-    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
-    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Belegt</div>';
-    html += '<div style="font-size:18px;font-weight:700;color:#16a34a;">'+belegt+'</div>';
-    html += '</div>';
-    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
-    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Leerstand</div>';
-    html += '<div style="font-size:18px;font-weight:700;color:'+(leer>0?'#dc2626':'#16a34a')+';">'+leer+'</div>';
-    html += '</div>';
-    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
-    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Monatl. Miete</div>';
-    html += '<div style="font-size:15px;font-weight:700;color:#2563eb;">'+fmt(obj.zielmiete)+' €</div>';
-    html += '</div>';
-    html += '</div>';
-    // Auslastung Bar
-    html += '<div style="margin-bottom:12px;">';
-    html += '<div style="display:flex;justify-content:space-between;margin-bottom:5px;">';
-    html += '<span style="font-size:11px;font-weight:600;color:#64748b;">AUSLASTUNG</span>';
-    html += '<span style="font-size:12px;font-weight:700;color:'+barColor+';">'+auslastung+'%</span>';
-    html += '</div>';
-    html += '<div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;">';
-    html += '<div style="height:100%;width:'+auslastung+'%;background:'+barColor+';border-radius:99px;transition:width 0.6s;"></div>';
-    html += '</div>';
-    html += '</div>';
-    // Baujahr + Mieter
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
-    html += '<span style="font-size:12px;color:#64748b;">🏗️ Baujahr: <strong style="color:#0f172a;">'+obj.bj+'</strong></span>';
-    // Mini mieter avatars
-    html += '<div style="display:flex;gap:-4px;">';
-    for(var m=0;m<mieterList.length;m++){
-      var mn = mieterList[m].name||'?';
-      var mc = avatarColorObj(mn);
-      html += '<div title="'+mn+'" style="width:26px;height:26px;border-radius:50%;background:'+mc+';border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;margin-left:-6px;z-index:'+(10-m)+';position:relative;">'+mn.charAt(0).toUpperCase()+'</div>';
-    }
-    if(belegt>5){ html += '<div style="width:26px;height:26px;border-radius:50%;background:#e2e8f0;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#64748b;margin-left:-6px;">+'+(belegt-5)+'</div>'; }
-    html += '</div>';
-    html += '</div>';
-    // Actions
-    html += '<div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9;">';
-    html += '<button onclick="openEditObjModal(\''+obj.id+'\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">✏️ Bearbeiten</button>';
-    html += '<button onclick="deleteObj(\''+obj.id+'\')" style="padding:9px 14px;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fff5f5\'">🗑️</button>';
-    html += '</div>';
-    html += '</div></div>';
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;">';
+  for (var i = 0; i < filtered.length; i++) {
+    html += buildCard(filtered[i]);
   }
   html += '</div>';
   return html;
 }
 
-function deleteObj(id) {
-  if(!confirm('Objekt wirklich löschen?')) return;
-  var objs = getObj().filter(function(o){return o.id!==id;});
-  setData(KEYS.objekte, objs);
-  syncToFirebase(user.uid);
-  render();
+function buildCard(obj) {
+  var aktiveMieter = getAktiveMieterFuerObjekt(obj);
+  var alleMieter = getMieterFuerObjekt(obj);
+  var belegung = getBelegungsrate(obj);
+  var monatsMiete = getMonatsmiete(obj);
+  var barColor = belegung >= 80 ? '#16a34a' : belegung >= 60 ? '#eab308' : '#dc2626';
+  var barBg = belegung >= 80 ? '#dcfce7' : belegung >= 60 ? '#fef9c3' : '#fee2e2';
+  var mapsUrl = 'https://maps.google.com/?q=' + encodeURIComponent((obj.strasse || '') + ', ' + (obj.plz || '') + ' ' + (obj.stadt || ''));
+  var emoji = typEmoji(obj.typ);
+
+  var html = '<div style="background:white;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;">';
+
+  // Colored top stripe
+  html += '<div style="height:5px;background:linear-gradient(90deg,#2563eb,#7c3aed);"></div>';
+
+  // Card header
+  html += '<div style="padding:20px 20px 0;">';
+  html += '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">';
+  html += '<div style="font-size:38px;line-height:1;flex-shrink:0;">' + emoji + '</div>';
+  html += '<div style="flex:1;min-width:0;">';
+  html += '<div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (obj.name || '–') + '</div>';
+  html += '<a href="' + mapsUrl + '" target="_blank" rel="noopener" style="font-size:12px;color:#2563eb;text-decoration:none;display:inline-flex;align-items:center;gap:3px;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">📍 ' + (obj.strasse || '') + ', ' + (obj.plz || '') + ' ' + (obj.stadt || '') + ' ↗</a>';
+  html += '</div>';
+  html += badge(obj.typ || 'Sonstiges', typColor(obj.typ));
+  html += '</div>';
+
+  // Stats row
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">';
+
+  html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;text-align:center;">';
+  html += '<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:3px;">EINHEITEN</div>';
+  html += '<div style="font-size:20px;font-weight:800;color:#0f172a;">' + (obj.einheiten || 0) + '</div>';
+  html += '</div>';
+
+  html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;text-align:center;">';
+  html += '<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:3px;">BAUJAHR</div>';
+  html += '<div style="font-size:20px;font-weight:800;color:#0f172a;">' + (obj.baujahr || '–') + '</div>';
+  html += '</div>';
+
+  html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;text-align:center;">';
+  html += '<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:3px;">FLÄCHE</div>';
+  html += '<div style="font-size:17px;font-weight:800;color:#0f172a;">' + (obj.flaeche ? fmt(obj.flaeche) + ' m²' : '–') + '</div>';
+  html += '</div>';
+
+  html += '</div>';
+
+  // Belegungsrate progress bar
+  html += '<div style="margin-bottom:14px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+  html += '<span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Belegungsrate</span>';
+  html += '<span style="font-size:13px;font-weight:800;color:' + barColor + ';background:' + barBg + ';padding:2px 9px;border-radius:20px;">' + belegung + ' %</span>';
+  html += '</div>';
+  html += '<div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;">';
+  html += '<div style="height:100%;width:' + belegung + '%;background:' + barColor + ';border-radius:99px;transition:width 0.5s ease;"></div>';
+  html += '</div>';
+  html += '</div>';
+
+  // Mieter + rent row
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;">';
+  html += '<div style="display:flex;align-items:center;gap:6px;">';
+  html += '<span style="font-size:13px;color:#64748b;">👤 <strong style="color:#0f172a;">' + aktiveMieter.length + '</strong> Mieter aktiv';
+  if (alleMieter.length !== aktiveMieter.length) {
+    html += ' <span style="color:#94a3b8;">/ ' + alleMieter.length + ' gesamt</span>';
+  }
+  html += '</span>';
+  html += '</div>';
+  if (monatsMiete > 0) {
+    html += '<div style="font-size:14px;font-weight:700;color:#16a34a;">💶 ' + fmt(monatsMiete) + ' €/Monat</div>';
+  } else {
+    html += '<div style="font-size:13px;color:#94a3b8;">Keine Miete erfasst</div>';
+  }
+  html += '</div>';
+
+  // Extra badges row (energy + heizung)
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:14px;">';
+  if (obj.energie) {
+    html += '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:' + energieColor(obj.energie) + '22;color:' + energieColor(obj.energie) + ';">⚡ Energie ' + obj.energie + '</span>';
+  }
+  if (obj.heizung) {
+    html += '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#f1f5f9;color:#475569;">🔥 ' + obj.heizung + '</span>';
+  }
+  if (obj.stockwerke) {
+    html += '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#f1f5f9;color:#475569;">🏗️ ' + obj.stockwerke + ' Stockwerk' + (obj.stockwerke > 1 ? 'e' : '') + '</span>';
+  }
+  html += '</div>';
+
+  html += '</div>'; // end padding div
+
+  // Action buttons
+  html += '<div style="display:flex;gap:8px;padding:12px 20px 16px;border-top:1px solid #f1f5f9;">';
+  html += '<button onclick="openEditObjModal(\'' + obj.id + '\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">✏️ Bearbeiten</button>';
+  html += '<button onclick="openDetailsModal(\'' + obj.id + '\')" style="flex:1;padding:9px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#2563eb;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#dbeafe\'" onmouseout="this.style.background=\'#eff6ff\'">👁️ Details</button>';
+  html += '<button onclick="deleteObj(\'' + obj.id + '\')" style="padding:9px 13px;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fff5f5\'">🗑️</button>';
+  html += '</div>';
+
+  html += '</div>';
+  return html;
 }
 
-function openEditObjModal(id) {
-  editObjId = id;
-  var objs = getObj();
+// ─── ADD / EDIT MODAL ───────────────────────────────────────
+function buildObjModal() {
+  var typOpts = ['Mehrfamilienhaus', 'Einfamilienhaus', 'Gewerbeobjekt', 'WEG', 'Sonstiges'];
+  var heizOpts = ['Gas', 'Öl', 'Wärmepumpe', 'Fernwärme', 'Elektro', 'Pellet'];
+  var energieOpts = ['A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
+
+  var typOptions = typOpts.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  var heizOptions = heizOpts.map(function(h) { return '<option value="' + h + '">' + h + '</option>'; }).join('');
+  var energieOptions = energieOpts.map(function(e) { return '<option value="' + e + '">' + e + '</option>'; }).join('');
+
+  var body = '';
+
+  body += formGroup('Objektname *', '<input id="obj-name" ' + inputStyle + ' placeholder="z.B. Musterstraße 12">');
+  body += formGroup('Straße + Hausnummer *', '<input id="obj-strasse" ' + inputStyle + ' placeholder="Musterstraße 12">');
+  body += '<div style="display:grid;grid-template-columns:130px 1fr;gap:12px;">';
+  body += formGroup('PLZ', '<input id="obj-plz" ' + inputStyle + ' placeholder="44135">');
+  body += formGroup('Stadt *', '<input id="obj-stadt" ' + inputStyle + ' placeholder="Dortmund">');
+  body += '</div>';
+  body += formGroup('Typ', '<select id="obj-typ" ' + inputStyle + '>' + typOptions + '</select>');
+  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  body += formGroup('Baujahr', '<input id="obj-baujahr" type="number" min="1800" max="2030" ' + inputStyle + ' placeholder="z.B. 1985">');
+  body += formGroup('Wohnfläche gesamt (m²)', '<input id="obj-flaeche" type="number" min="0" ' + inputStyle + ' placeholder="z.B. 420">');
+  body += '</div>';
+  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  body += formGroup('Anzahl Einheiten', '<input id="obj-einheiten" type="number" min="1" ' + inputStyle + ' placeholder="z.B. 6">');
+  body += formGroup('Anzahl Stockwerke', '<input id="obj-stockwerke" type="number" min="0" ' + inputStyle + ' placeholder="z.B. 3">');
+  body += '</div>';
+  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  body += formGroup('Heizungsart', '<select id="obj-heizung" ' + inputStyle + '><option value="">– wählen –</option>' + heizOptions + '</select>');
+  body += formGroup('Energieausweis-Klasse', '<select id="obj-energie" ' + inputStyle + '><option value="">– wählen –</option>' + energieOptions + '</select>');
+  body += '</div>';
+  body += formGroup('Hausverwaltung Kontakt', '<input id="obj-hausverwaltung" ' + inputStyle + ' placeholder="z.B. Müller Hausverwaltung GmbH">');
+  body += formGroup('Notizen', '<textarea id="obj-notizen" ' + inputStyle + ' rows="3" style="resize:vertical;" placeholder="Besonderheiten, Zustand, Renovierungen..."></textarea>');
+
+  body += '<div style="display:flex;gap:10px;margin-top:4px;">';
+  body += '<button onclick="saveObj()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">💾 Speichern</button>';
+  body += '<button onclick="hideModal(\'obj-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>';
+  body += '</div>';
+
+  return modalHTML('obj-modal', '<span id="obj-modal-title">Objekt hinzufügen</span>', body);
+}
+
+// ─── DETAILS MODAL ──────────────────────────────────────────
+function buildDetailsModal() {
+  return modalHTML('details-modal', '<span id="details-modal-title">Objektdetails</span>', '<div id="details-modal-body" style="min-height:200px;color:#64748b;font-size:13px;">Lade...</div>');
+}
+
+function openDetailsModal(id) {
+  var objs = getObjekte();
   var obj = null;
-  for(var i=0;i<objs.length;i++){ if(objs[i].id===id){ obj=objs[i]; break; } }
-  if(!obj) return;
-  document.getElementById('obj-modal-title').textContent = 'Objekt bearbeiten';
-  document.getElementById('obj-name').value = obj.name||'';
-  document.getElementById('obj-str').value = obj.str||'';
-  document.getElementById('obj-plz').value = obj.plz||'';
-  document.getElementById('obj-stadt').value = obj.stadt||'';
-  document.getElementById('obj-typ').value = obj.typ||'Mehrfamilienhaus';
-  document.getElementById('obj-einh').value = obj.einh||1;
-  document.getElementById('obj-bj').value = obj.bj||2000;
-  document.getElementById('obj-zielmiete').value = obj.zielmiete||0;
-  document.getElementById('obj-not').value = obj.not||'';
-  showModal('obj-modal');
+  for (var i = 0; i < objs.length; i++) { if (objs[i].id === id) { obj = objs[i]; break; } }
+  if (!obj) return;
+
+  var alleMieter = getMieterFuerObjekt(obj);
+  var aktiveMieter = alleMieter.filter(function(m) { return m.status === 'Aktiv'; });
+  var tickets = getTickets().filter(function(t) { return t.objekt === obj.id || t.objekt === obj.name || t.wn === obj.name; });
+  var offeneTickets = tickets.filter(function(t) { return t.status !== 'Erledigt' && t.status !== 'Geschlossen'; });
+  var belegung = getBelegungsrate(obj);
+  var monatsMiete = getMonatsmiete(obj);
+  var barColor = belegung >= 80 ? '#16a34a' : belegung >= 60 ? '#eab308' : '#dc2626';
+
+  document.getElementById('details-modal-title').textContent = '🏢 ' + (obj.name || 'Objekt');
+
+  var body = '';
+
+  // Basic info grid
+  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">';
+
+  function detailCell(label, val) {
+    return '<div style="background:#f8fafc;border-radius:9px;padding:12px;">'
+      + '<div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">' + label + '</div>'
+      + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + (val || '–') + '</div>'
+      + '</div>';
+  }
+
+  body += detailCell('Adresse', (obj.strasse || '') + ', ' + (obj.plz || '') + ' ' + (obj.stadt || ''));
+  body += detailCell('Typ', obj.typ || '–');
+  body += detailCell('Baujahr', obj.baujahr || '–');
+  body += detailCell('Wohnfläche', obj.flaeche ? fmt(obj.flaeche) + ' m²' : '–');
+  body += detailCell('Einheiten', obj.einheiten || '–');
+  body += detailCell('Stockwerke', obj.stockwerke || '–');
+  body += detailCell('Heizung', obj.heizung || '–');
+  body += detailCell('Energieklasse', obj.energie || '–');
+  if (obj.hausverwaltung) {
+    body += detailCell('Hausverwaltung', obj.hausverwaltung);
+  }
+  body += '</div>';
+
+  // Belegungsrate
+  body += '<div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:16px;">';
+  body += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+  body += '<span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;">Belegungsrate</span>';
+  body += '<span style="font-size:14px;font-weight:800;color:' + barColor + ';">' + belegung + '%</span>';
+  body += '</div>';
+  body += '<div style="height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden;">';
+  body += '<div style="height:100%;width:' + belegung + '%;background:' + barColor + ';border-radius:99px;"></div>';
+  body += '</div>';
+  body += '<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#94a3b8;">';
+  body += '<span>' + aktiveMieter.length + ' belegt</span>';
+  body += '<span>' + Math.max(0, (obj.einheiten || 0) - aktiveMieter.length) + ' frei</span>';
+  body += '</div>';
+  body += '</div>';
+
+  // Monthly rent
+  if (monatsMiete > 0) {
+    body += '<div style="display:flex;align-items:center;justify-content:space-between;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;">';
+    body += '<span style="font-size:13px;font-weight:600;color:#16a34a;">💶 Monatliche Mieteinnahmen</span>';
+    body += '<span style="font-size:16px;font-weight:800;color:#16a34a;">' + fmt(monatsMiete) + ' €</span>';
+    body += '</div>';
+  }
+
+  // Mieter in this building
+  body += '<div style="margin-bottom:16px;">';
+  body += '<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:10px;">👥 Mieter in diesem Objekt (' + alleMieter.length + ')</div>';
+  if (alleMieter.length === 0) {
+    body += '<div style="font-size:13px;color:#94a3b8;padding:10px;background:#f8fafc;border-radius:8px;text-align:center;">Keine Mieter diesem Objekt zugeordnet.</div>';
+  } else {
+    body += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    for (var mi = 0; mi < alleMieter.length; mi++) {
+      var m = alleMieter[mi];
+      var statusC = m.status === 'Aktiv' ? '#16a34a' : '#dc2626';
+      var statusBg = m.status === 'Aktiv' ? '#f0fdf4' : '#fef2f2';
+      body += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid #f1f5f9;">';
+      body += '<div>';
+      body += '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + (m.name || '–') + '</div>';
+      body += '<div style="font-size:11px;color:#64748b;">' + (m.wn || m.wohnung || '–') + (m.miete ? ' · ' + fmt(parseFloat(m.miete)) + ' €/Monat' : '') + '</div>';
+      body += '</div>';
+      body += '<span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;background:' + statusBg + ';color:' + statusC + ';">' + (m.status || '–') + '</span>';
+      body += '</div>';
+    }
+    body += '</div>';
+  }
+  body += '</div>';
+
+  // Open tickets
+  body += '<div style="margin-bottom:16px;">';
+  body += '<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:10px;">🎫 Offene Tickets (' + offeneTickets.length + ')</div>';
+  if (offeneTickets.length === 0) {
+    body += '<div style="font-size:13px;color:#94a3b8;padding:10px;background:#f8fafc;border-radius:8px;text-align:center;">Keine offenen Tickets für dieses Objekt.</div>';
+  } else {
+    body += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    for (var ti = 0; ti < Math.min(offeneTickets.length, 5); ti++) {
+      var tk = offeneTickets[ti];
+      var tkColor = tk.status === 'Offen' ? '#dc2626' : tk.status === 'In Bearbeitung' ? '#d97706' : '#64748b';
+      var tkBg = tk.status === 'Offen' ? '#fef2f2' : tk.status === 'In Bearbeitung' ? '#fffbeb' : '#f8fafc';
+      body += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid #f1f5f9;">';
+      body += '<div style="flex:1;min-width:0;">';
+      body += '<div style="font-size:13px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (tk.pb || tk.titel || '–') + '</div>';
+      body += '<div style="font-size:11px;color:#64748b;">' + (tk.prio || '') + (tk.datum ? ' · ' + fmtDate(tk.datum) : '') + '</div>';
+      body += '</div>';
+      body += '<span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;background:' + tkBg + ';color:' + tkColor + ';margin-left:10px;flex-shrink:0;">' + (tk.status || '–') + '</span>';
+      body += '</div>';
+    }
+    if (offeneTickets.length > 5) {
+      body += '<div style="text-align:center;font-size:12px;color:#94a3b8;padding:6px;">+ ' + (offeneTickets.length - 5) + ' weitere Tickets</div>';
+    }
+    body += '</div>';
+  }
+  body += '</div>';
+
+  // Notizen
+  if (obj.notizen) {
+    body += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:13px;margin-bottom:16px;">';
+    body += '<div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📝 Notizen</div>';
+    body += '<div style="font-size:13px;color:#0f172a;line-height:1.6;">' + obj.notizen + '</div>';
+    body += '</div>';
+  }
+
+  // Action buttons in detail view
+  body += '<div style="display:flex;gap:10px;margin-top:8px;">';
+  body += '<button onclick="hideModal(\'details-modal\');openEditObjModal(\'' + obj.id + '\')" style="flex:1;padding:11px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Bearbeiten</button>';
+  body += '<button onclick="hideModal(\'details-modal\')" style="padding:11px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Schließen</button>';
+  body += '</div>';
+
+  document.getElementById('details-modal-body').innerHTML = body;
+  showModal('details-modal');
 }
 
+// ─── OPEN / SAVE / DELETE ───────────────────────────────────
 function openNewObjModal() {
   editObjId = null;
   document.getElementById('obj-modal-title').textContent = 'Objekt hinzufügen';
   document.getElementById('obj-name').value = '';
-  document.getElementById('obj-str').value = '';
+  document.getElementById('obj-strasse').value = '';
   document.getElementById('obj-plz').value = '';
   document.getElementById('obj-stadt').value = '';
   document.getElementById('obj-typ').value = 'Mehrfamilienhaus';
-  document.getElementById('obj-einh').value = 1;
-  document.getElementById('obj-bj').value = 2000;
-  document.getElementById('obj-zielmiete').value = '';
-  document.getElementById('obj-not').value = '';
+  document.getElementById('obj-baujahr').value = '';
+  document.getElementById('obj-flaeche').value = '';
+  document.getElementById('obj-einheiten').value = '';
+  document.getElementById('obj-stockwerke').value = '';
+  document.getElementById('obj-heizung').value = '';
+  document.getElementById('obj-energie').value = '';
+  document.getElementById('obj-hausverwaltung').value = '';
+  document.getElementById('obj-notizen').value = '';
+  showModal('obj-modal');
+}
+
+function openEditObjModal(id) {
+  editObjId = id;
+  var objs = getObjekte();
+  var obj = null;
+  for (var i = 0; i < objs.length; i++) { if (objs[i].id === id) { obj = objs[i]; break; } }
+  if (!obj) return;
+
+  document.getElementById('obj-modal-title').textContent = 'Objekt bearbeiten';
+  document.getElementById('obj-name').value = obj.name || '';
+  document.getElementById('obj-strasse').value = obj.strasse || '';
+  document.getElementById('obj-plz').value = obj.plz || '';
+  document.getElementById('obj-stadt').value = obj.stadt || '';
+  document.getElementById('obj-typ').value = obj.typ || 'Mehrfamilienhaus';
+  document.getElementById('obj-baujahr').value = obj.baujahr || '';
+  document.getElementById('obj-flaeche').value = obj.flaeche || '';
+  document.getElementById('obj-einheiten').value = obj.einheiten || '';
+  document.getElementById('obj-stockwerke').value = obj.stockwerke || '';
+  document.getElementById('obj-heizung').value = obj.heizung || '';
+  document.getElementById('obj-energie').value = obj.energie || '';
+  document.getElementById('obj-hausverwaltung').value = obj.hausverwaltung || '';
+  document.getElementById('obj-notizen').value = obj.notizen || '';
   showModal('obj-modal');
 }
 
 function saveObj() {
   var name = document.getElementById('obj-name').value.trim();
-  var str = document.getElementById('obj-str').value.trim();
+  var strasse = document.getElementById('obj-strasse').value.trim();
   var stadt = document.getElementById('obj-stadt').value.trim();
-  if(!name || !str || !stadt){ alert('Name, Straße und Stadt sind Pflichtfelder.'); return; }
-  var objs = getObj();
+  if (!name) { alert('Bitte gib einen Objektnamen ein.'); return; }
+  if (!strasse) { alert('Bitte gib eine Straße ein.'); return; }
+  if (!stadt) { alert('Bitte gib eine Stadt ein.'); return; }
+
+  var objs = getObjekte();
   var obj = {
-    id: editObjId || ('obj_'+Date.now()),
+    id: editObjId || ('obj_' + Date.now()),
     name: name,
-    str: str,
+    strasse: strasse,
     plz: document.getElementById('obj-plz').value.trim(),
     stadt: stadt,
     typ: document.getElementById('obj-typ').value,
-    einh: parseInt(document.getElementById('obj-einh').value)||1,
-    bj: parseInt(document.getElementById('obj-bj').value)||2000,
-    zielmiete: parseFloat(document.getElementById('obj-zielmiete').value)||0,
-    not: document.getElementById('obj-not').value.trim()
+    baujahr: parseInt(document.getElementById('obj-baujahr').value) || null,
+    flaeche: parseFloat(document.getElementById('obj-flaeche').value) || null,
+    einheiten: parseInt(document.getElementById('obj-einheiten').value) || 1,
+    stockwerke: parseInt(document.getElementById('obj-stockwerke').value) || null,
+    heizung: document.getElementById('obj-heizung').value,
+    energie: document.getElementById('obj-energie').value,
+    hausverwaltung: document.getElementById('obj-hausverwaltung').value.trim(),
+    notizen: document.getElementById('obj-notizen').value.trim()
   };
-  if(editObjId){
-    for(var i=0;i<objs.length;i++){ if(objs[i].id===editObjId){ objs[i]=obj; break; } }
+
+  if (editObjId) {
+    for (var i = 0; i < objs.length; i++) {
+      if (objs[i].id === editObjId) { objs[i] = obj; break; }
+    }
   } else {
     objs.push(obj);
-    addNotif('🏢', 'Neues Objekt hinzugefügt: '+name+', '+stadt);
+    addNotif('🏢', 'Neues Objekt hinzugefügt: ' + name + ', ' + stadt);
   }
+
   setData(KEYS.objekte, objs);
   syncToFirebase(user.uid);
   hideModal('obj-modal');
-  render();
+  renderMain();
 }
 
-function render() {
-  var objs = getObj();
+function deleteObj(id) {
+  if (!confirm('Objekt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) return;
+  var objs = getObjekte().filter(function(o) { return o.id !== id; });
+  setData(KEYS.objekte, objs);
+  syncToFirebase(user.uid);
+  renderMain();
+}
 
-  var typOpts = ['Mehrfamilienhaus','Einfamilienhaus','Gewerbe','Wohnanlage','Sonstiges'];
-  var typOptsHtml = '';
-  for(var t=0;t<typOpts.length;t++){
-    typOptsHtml += '<option value="'+typOpts[t]+'">'+typOpts[t]+'</option>';
+// ─── RENDER MAIN CONTENT ONLY (no layout rebuild) ───────────
+function renderMain() {
+  var objs = getObjekte();
+  var mainEl = document.getElementById('main-content');
+  if (mainEl) {
+    mainEl.innerHTML = buildKPIs(objs) + buildSearchBar() + buildGrid(objs);
   }
+}
 
-  var modalBody =
-    formGroup('Name / Bezeichnung *', '<input id="obj-name" '+inputStyle+' placeholder="z.B. Hauptstraße 15">')
-    + formGroup('Straße + Hausnummer *', '<input id="obj-str" '+inputStyle+' placeholder="Musterstraße 12">')
-    + '<div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;">'
-    + formGroup('PLZ', '<input id="obj-plz" '+inputStyle+' placeholder="44135">')
-    + formGroup('Stadt *', '<input id="obj-stadt" '+inputStyle+' placeholder="Dortmund">')
-    + '</div>'
-    + formGroup('Objekttyp', '<select id="obj-typ" '+inputStyle+'>' + typOptsHtml + '</select>')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Anzahl Einheiten', '<input id="obj-einh" type="number" min="1" '+inputStyle+' placeholder="z.B. 5">')
-    + formGroup('Baujahr', '<input id="obj-bj" type="number" min="1800" max="2030" '+inputStyle+' placeholder="z.B. 1985">')
-    + '</div>'
-    + formGroup('Monatliche Zielmiete (€)', '<input id="obj-zielmiete" type="number" min="0" '+inputStyle+' placeholder="z.B. 4500">')
-    + formGroup('Notizen', '<textarea id="obj-not" '+inputStyle+' rows="3" placeholder="Besonderheiten, Zustand, Renovierungen..."></textarea>')
-    + '<div style="display:flex;gap:10px;margin-top:8px;">'
-    + '<button onclick="saveObj()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
-    + '<button onclick="hideModal(\'obj-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div>';
+// ─── FULL RENDER (layout + modals) ──────────────────────────
+function render() {
+  var objs = getObjekte();
 
-  var modalsHTML = modalHTML('obj-modal', '<span id="obj-modal-title">Objekt hinzufügen</span>', modalBody);
+  var actionBtn = '<button onclick="openNewObjModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">+ Objekt hinzufügen</button>';
 
-  var actionBtn = '<button onclick="openNewObjModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Objekt hinzufügen</button>';
+  var mainHTML = buildKPIs(objs) + buildSearchBar() + buildGrid(objs);
 
-  var mainHTML = buildKPIs(objs) + buildGrid(objs);
+  var modalsHTML = buildObjModal() + buildDetailsModal();
 
   renderLayout('objekte', '🏢 Objekte & Gebäude', actionBtn, mainHTML, modalsHTML);
 }
 
+// ─── INIT ───────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, render);
+startPageListener(user.uid, render);
 </script>
 </body>
 </html>

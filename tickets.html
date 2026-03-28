@@ -6,317 +6,574 @@
   <title>Tickets – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+checkAuth();
+checkTrial();
+
 var user = getUser();
+
+// ── State ────────────────────────────────────────────────────────
+var filterText   = '';
 var filterStatus = 'alle';
 var filterPrio   = 'alle';
-var editIdx      = -1;
+var filterBereich = 'alle';
+var editTicketId = null;
+var currentView  = localStorage.getItem('tickets_view') || 'kanban';
+var dragTicketId = null;
 
-/* ── Status-Wechsel ──────────────────────────────────── */
-function ticketNextStatus(idx) {
-  var tickets = getData(KEYS.tickets, []);
-  var t = tickets[idx];
-  if(!t) return;
-  if(t.status === 'Offen') t.status = 'In Bearbeitung';
-  else if(t.status === 'In Bearbeitung') t.status = 'Erledigt';
-  setData(KEYS.tickets, tickets);
+// ── Helpers ──────────────────────────────────────────────────────
+function relDate(dateStr) {
+  if (!dateStr) return '–';
+  var now  = new Date();
+  var then = new Date(dateStr);
+  var diff = Math.floor((now - then) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return 'heute';
+  if (diff === 1) return 'vor 1 Tag';
+  if (diff <  0)  return 'in ' + Math.abs(diff) + ' Tagen';
+  return 'vor ' + diff + ' Tagen';
+}
+
+function prioBorderColor(prio) {
+  if (prio === 'Notfall')  return '#dc2626';
+  if (prio === 'Dringend') return '#f97316';
+  return '#94a3b8';
+}
+
+function prioBadgeHTML(prio) {
+  if (prio === 'Notfall')
+    return '<span style="font-size:11px;font-weight:600;padding:3px 8px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;white-space:nowrap;">Notfall</span>';
+  if (prio === 'Dringend')
+    return '<span style="font-size:11px;font-weight:600;padding:3px 8px;background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;border-radius:6px;white-space:nowrap;">Dringend</span>';
+  return '<span style="font-size:11px;font-weight:600;padding:3px 8px;background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:6px;white-space:nowrap;">Normal</span>';
+}
+
+function statusBadgeHTML(status) {
+  if (status === 'Erledigt')
+    return '<span style="font-size:11px;font-weight:600;padding:3px 8px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;white-space:nowrap;">Erledigt</span>';
+  if (status === 'In Bearbeitung')
+    return '<span style="font-size:11px;font-weight:600;padding:3px 8px;background:#fffbeb;color:#d97706;border:1px solid #fde68a;border-radius:6px;white-space:nowrap;">In Bearbeitung</span>';
+  return '<span style="font-size:11px;font-weight:600;padding:3px 8px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;white-space:nowrap;">Offen</span>';
+}
+
+function nextStatus(current) {
+  if (current === 'Offen')          return 'In Bearbeitung';
+  if (current === 'In Bearbeitung') return 'Erledigt';
+  return null;
+}
+
+// ── Data ─────────────────────────────────────────────────────────
+function getTickets() {
+  return getData(KEYS.tickets, []);
+}
+
+function saveTickets(arr) {
+  setData(KEYS.tickets, arr);
   syncToFirebase(user.uid);
-  addNotif('🎫', 'Ticket Status: ' + t.status + ' – ' + (t.pb||'').substring(0,30));
+}
+
+function getFiltered() {
+  var tickets = getTickets();
+  var q = filterText.toLowerCase();
+  return tickets.filter(function(t) {
+    var matchText = !q ||
+      (t.titel       || '').toLowerCase().indexOf(q) >= 0 ||
+      (t.beschreibung|| '').toLowerCase().indexOf(q) >= 0 ||
+      (t.mieter      || '').toLowerCase().indexOf(q) >= 0 ||
+      (t.wohnung     || '').toLowerCase().indexOf(q) >= 0 ||
+      (t.handwerker  || '').toLowerCase().indexOf(q) >= 0;
+    var matchStatus  = filterStatus  === 'alle' || t.status  === filterStatus;
+    var matchPrio    = filterPrio    === 'alle' || t.prioritaet === filterPrio;
+    var matchBereich = filterBereich === 'alle' || t.bereich  === filterBereich;
+    return matchText && matchStatus && matchPrio && matchBereich;
+  });
+}
+
+// ── Actions ──────────────────────────────────────────────────────
+function ticketNextStatus(id) {
+  var tickets = getTickets();
+  var t = tickets.find(function(x){ return x.id == id; });
+  if (!t) return;
+  var ns = nextStatus(t.status);
+  if (!ns) return;
+  t.status = ns;
+  saveTickets(tickets);
+  addNotif('🎫', 'Ticket-Status: ' + ns + ' – ' + (t.titel || '').substring(0, 30));
   render();
 }
 
-/* ── Löschen ─────────────────────────────────────────── */
-function deleteTicket(idx) {
-  if(!confirm('Ticket wirklich löschen?')) return;
-  var tickets = getData(KEYS.tickets, []);
-  var desc = (tickets[idx].pb||'').substring(0,30);
+function deleteTicket(id) {
+  if (!confirm('Ticket wirklich löschen?')) return;
+  var tickets = getTickets();
+  var idx = tickets.findIndex(function(x){ return x.id == id; });
+  if (idx < 0) return;
+  var label = (tickets[idx].titel || '').substring(0, 30);
   tickets.splice(idx, 1);
-  setData(KEYS.tickets, tickets);
-  syncToFirebase(user.uid);
-  addNotif('🗑️', 'Ticket gelöscht: ' + desc);
+  saveTickets(tickets);
+  addNotif('🗑️', 'Ticket gelöscht: ' + label);
   render();
 }
 
-/* ── Modal öffnen ────────────────────────────────────── */
-function openTicketModal(idx) {
-  editIdx = idx;
-  var tickets = getData(KEYS.tickets, []);
-  var mieter  = getData(KEYS.mieter, DEFAULT_MIETER);
-  var hw      = getData(KEYS.handwerker, []);
+function openTicketModal(id) {
+  editTicketId = id || null;
+  var tickets = getTickets();
+  var t = id ? tickets.find(function(x){ return x.id == id; }) : null;
 
-  /* Wohnungs-Optionen */
-  var wohnungen = ['Allgemein'];
-  mieter.forEach(function(m){ if(m.wn && wohnungen.indexOf(m.wn) < 0) wohnungen.push(m.wn); });
-  var wnSelect = document.getElementById('t-wn');
-  if(wnSelect) {
-    wnSelect.innerHTML = wohnungen.map(function(w){ return '<option value="'+w+'">'+w+'</option>'; }).join('');
-  }
+  var titleEl = document.getElementById('tm-title');
+  if (titleEl) titleEl.textContent = t ? 'Ticket bearbeiten' : 'Ticket erstellen';
 
-  /* Handwerker-Optionen */
-  var hwSelect = document.getElementById('t-hw');
-  if(hwSelect) {
-    hwSelect.innerHTML = '<option value="Nicht zugewiesen">Nicht zugewiesen</option>' +
-      hw.map(function(h){ var n=(h.vn||'')+' '+(h.nn||''); return '<option value="'+n+'">'+n+'</option>'; }).join('');
-  }
+  var fields = {
+    'tm-titel':        t ? (t.titel         || '') : '',
+    'tm-beschreibung': t ? (t.beschreibung  || '') : '',
+    'tm-prioritaet':   t ? (t.prioritaet    || 'Normal') : 'Normal',
+    'tm-status':       t ? (t.status        || 'Offen')  : 'Offen',
+    'tm-bereich':      t ? (t.bereich       || 'Sonstiges') : 'Sonstiges',
+    'tm-mieter':       t ? (t.mieter        || '') : '',
+    'tm-wohnung':      t ? (t.wohnung       || '') : '',
+    'tm-handwerker':   t ? (t.handwerker    || '') : '',
+    'tm-datum':        t ? (t.datum         || today()) : today(),
+    'tm-kosten':       t ? (t.kosten != null ? t.kosten : '') : '',
+    'tm-notizen':      t ? (t.notizen       || '') : ''
+  };
 
-  if(idx >= 0 && tickets[idx]) {
-    var t = tickets[idx];
-    if(wnSelect) wnSelect.value    = t.wn     || 'Allgemein';
-    document.getElementById('t-pb').value     = t.pb     || '';
-    document.getElementById('t-prio').value   = t.prio   || 'Mittel';
-    if(hwSelect) hwSelect.value               = t.hw     || 'Nicht zugewiesen';
-    document.getElementById('t-status').value = t.status || 'Offen';
-    document.getElementById('t-foto').value   = t.foto   || '';
-    document.getElementById('t-modal-title').textContent = '✏️ Ticket bearbeiten';
-  } else {
-    if(wnSelect) wnSelect.value = 'Allgemein';
-    document.getElementById('t-pb').value     = '';
-    document.getElementById('t-prio').value   = 'Mittel';
-    if(hwSelect) hwSelect.value = 'Nicht zugewiesen';
-    document.getElementById('t-status').value = 'Offen';
-    document.getElementById('t-foto').value   = '';
-    document.getElementById('t-modal-title').textContent = '🎫 Ticket erstellen';
-  }
-  document.getElementById('t-err').textContent = '';
-  showModal('t-modal');
-}
-
-/* ── Speichern ───────────────────────────────────────── */
-function saveTicket() {
-  var wn     = (document.getElementById('t-wn').value||'').trim();
-  var pb     = (document.getElementById('t-pb').value||'').trim();
-  var prio   = document.getElementById('t-prio').value || 'Mittel';
-  var hw     = (document.getElementById('t-hw').value||'').trim();
-  var status = document.getElementById('t-status').value || 'Offen';
-  var foto   = (document.getElementById('t-foto').value||'').trim();
-  var errEl  = document.getElementById('t-err');
-
-  if(!pb) { errEl.textContent = '⚠️ Bitte Beschreibung eingeben.'; return; }
-
-  var tickets = getData(KEYS.tickets, []);
-  var obj = { wn:wn, pb:pb, prio:prio, hw:hw, status:status, foto:foto };
-
-  if(editIdx >= 0) {
-    obj.id    = tickets[editIdx].id    || Date.now();
-    obj.datum = tickets[editIdx].datum || today();
-    tickets[editIdx] = obj;
-  } else {
-    obj.id    = Date.now();
-    obj.datum = today();
-    tickets.push(obj);
-  }
-
-  setData(KEYS.tickets, tickets);
-  syncToFirebase(user.uid);
-  addNotif('🎫', 'Ticket: ' + pb.substring(0,30));
-  hideModal('t-modal');
-  render();
-}
-
-/* ── Filter-Button-Style ─────────────────────────────── */
-function filterBtnStyle(active) {
-  return 'padding:7px 14px;border-radius:8px;border:1.5px solid '+(active?'#2563eb':'#e2e8f0')+';background:'+(active?'#2563eb':'white')+';color:'+(active?'white':'#374151')+';font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;';
-}
-
-/* ── Priorität Badge HTML ────────────────────────────── */
-function prioBadge(prio) {
-  if(prio === 'Hoch')    return '<span style="font-size:11px;font-weight:600;padding:4px 9px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;white-space:nowrap;">🔴 Hoch</span>';
-  if(prio === 'Mittel')  return '<span style="font-size:11px;font-weight:600;padding:4px 9px;background:#fffbeb;color:#d97706;border:1px solid #fde68a;border-radius:6px;white-space:nowrap;">🟡 Mittel</span>';
-  return '<span style="font-size:11px;font-weight:600;padding:4px 9px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;white-space:nowrap;">🟢 Niedrig</span>';
-}
-
-/* ── Status Button/Badge HTML ────────────────────────── */
-function statusHTML(t, idx) {
-  if(t.status === 'Erledigt') {
-    return '<span style="font-size:12px;font-weight:600;padding:5px 11px;background:#16a34a;color:white;border-radius:8px;white-space:nowrap;">✅ Erledigt</span>';
-  }
-  if(t.status === 'In Bearbeitung') {
-    return '<button onclick="ticketNextStatus('+idx+')" style="font-size:12px;font-weight:600;padding:5px 11px;background:white;color:#d97706;border:1.5px solid #d97706;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">⏳ In Bearbeitung</button>';
-  }
-  return '<button onclick="ticketNextStatus('+idx+')" style="font-size:12px;font-weight:600;padding:5px 11px;background:white;color:#dc2626;border:1.5px solid #dc2626;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🔴 Offen</button>';
-}
-
-/* ── Render ──────────────────────────────────────────── */
-function render() {
-  var tickets = getData(KEYS.tickets, []);
-  var mieter  = getData(KEYS.mieter, DEFAULT_MIETER);
-  var hw      = getData(KEYS.handwerker, []);
-
-  /* Filter */
-  var statusFilter = filterStatus;
-  var prioFilter   = filterPrio;
-  var gefiltert = tickets.filter(function(t, i) {
-    t._origIdx = i; // merke ursprünglichen Index für Aktionen
-    var statusOk = statusFilter === 'alle' || t.status === statusFilter;
-    var prioOk   = prioFilter   === 'alle' || t.prio   === prioFilter;
-    return statusOk && prioOk;
+  Object.keys(fields).forEach(function(fid) {
+    var el = document.getElementById(fid);
+    if (el) el.value = fields[fid];
   });
 
-  /* ── Filter-Leiste ──────────────────────────────── */
-  var filterHTML =
-    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;align-items:center;">' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-        '<button onclick="filterStatus=\'alle\';render()" style="'+filterBtnStyle(statusFilter==='alle')+'">Alle</button>' +
-        '<button onclick="filterStatus=\'Offen\';render()" style="'+filterBtnStyle(statusFilter==='Offen')+'">Offen</button>' +
-        '<button onclick="filterStatus=\'In Bearbeitung\';render()" style="'+filterBtnStyle(statusFilter==='In Bearbeitung')+'">In Bearbeitung</button>' +
-        '<button onclick="filterStatus=\'Erledigt\';render()" style="'+filterBtnStyle(statusFilter==='Erledigt')+'">Erledigt</button>' +
-      '</div>' +
-      '<div style="width:1px;height:24px;background:#e2e8f0;margin:0 4px;"></div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-        '<button onclick="filterPrio=\'alle\';render()" style="'+filterBtnStyle(prioFilter==='alle')+'">Alle Prioritäten</button>' +
-        '<button onclick="filterPrio=\'Hoch\';render()" style="'+filterBtnStyle(prioFilter==='Hoch')+'">🔴 Hoch</button>' +
-        '<button onclick="filterPrio=\'Mittel\';render()" style="'+filterBtnStyle(prioFilter==='Mittel')+'">🟡 Mittel</button>' +
-        '<button onclick="filterPrio=\'Niedrig\';render()" style="'+filterBtnStyle(prioFilter==='Niedrig')+'">🟢 Niedrig</button>' +
-      '</div>' +
-    '</div>';
+  var errEl = document.getElementById('tm-err');
+  if (errEl) errEl.textContent = '';
 
-  /* ── Tabellen-Inhalt ─────────────────────────────── */
-  var tableHTML = '';
-  if(gefiltert.length === 0) {
-    tableHTML = '<div style="text-align:center;padding:60px 20px;">' +
-      '<div style="font-size:48px;margin-bottom:12px;">🎫</div>' +
-      '<div style="font-size:16px;font-weight:600;color:#374151;margin-bottom:6px;">Keine Tickets gefunden</div>' +
-      '<div style="font-size:14px;color:#94a3b8;margin-bottom:20px;">Keine Tickets entsprechen dem aktuellen Filter.</div>' +
-      '<button onclick="openTicketModal(-1)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket erstellen</button>' +
-      '</div>';
-  } else {
-    var rows = '';
-    gefiltert.forEach(function(t) {
-      var origIdx = t._origIdx !== undefined ? t._origIdx : tickets.indexOf(t);
-      var fotoHTML = t.foto
-        ? '<img src="'+t.foto+'" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;" onerror="this.style.display=\'none\'">'
-        : '<span style="color:#94a3b8;font-size:13px;">–</span>';
-      rows += '<tr style="border-bottom:1px solid #f1f5f9;transition:background 0.15s;" onmouseover="this.style.background=\'#fafbfc\'" onmouseout="this.style.background=\'white\'">' +
-        /* Priorität */
-        '<td style="padding:12px 14px;white-space:nowrap;">'+prioBadge(t.prio)+'</td>' +
-        /* Wohnung */
-        '<td style="padding:12px 14px;">' +
-          '<span style="font-size:13px;font-weight:600;color:#1e293b;">'+(t.wn||'–')+'</span>' +
-        '</td>' +
-        /* Beschreibung */
-        '<td style="padding:12px 14px;max-width:260px;">' +
-          '<div style="font-size:13px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px;" title="'+(t.pb||'')+'">'+(t.pb||'')+'</div>' +
-        '</td>' +
-        /* Handwerker */
-        '<td style="padding:12px 14px;font-size:13px;color:#374151;white-space:nowrap;">'+(t.hw && t.hw !== 'Nicht zugewiesen' ? t.hw : '<span style="color:#94a3b8;">–</span>')+'</td>' +
-        /* Erstellt */
-        '<td style="padding:12px 14px;font-size:12px;color:#94a3b8;white-space:nowrap;">'+fmtDate(t.datum||'')+'</td>' +
-        /* Status */
-        '<td style="padding:12px 14px;white-space:nowrap;">'+statusHTML(t, origIdx)+'</td>' +
-        /* Foto */
-        '<td style="padding:12px 14px;">'+fotoHTML+'</td>' +
-        /* Aktionen */
-        '<td style="padding:12px 14px;white-space:nowrap;">' +
-          '<div style="display:flex;gap:6px;">' +
-            '<button onclick="openTicketModal('+origIdx+')" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;font-family:inherit;">✏️</button>' +
-            '<button onclick="deleteTicket('+origIdx+')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;font-family:inherit;">🗑️</button>' +
-          '</div>' +
-        '</td>' +
-        '</tr>';
-    });
-    tableHTML = '<div style="overflow-x:auto;">' +
-      '<table style="width:100%;border-collapse:collapse;">' +
-        '<thead>' +
-          '<tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Priorität</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Wohnung</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Beschreibung</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Handwerker</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Erstellt</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Status</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Foto</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Aktionen</th>' +
-          '</tr>' +
-        '</thead>' +
-        '<tbody>'+rows+'</tbody>' +
-      '</table>' +
-      '</div>';
+  showModal('ticket-modal');
+}
+
+function saveTicketModal() {
+  var titel        = (document.getElementById('tm-titel').value        || '').trim();
+  var beschreibung = (document.getElementById('tm-beschreibung').value || '').trim();
+  var prioritaet   =  document.getElementById('tm-prioritaet').value   || 'Normal';
+  var status       =  document.getElementById('tm-status').value       || 'Offen';
+  var bereich      =  document.getElementById('tm-bereich').value      || 'Sonstiges';
+  var mieter       = (document.getElementById('tm-mieter').value       || '').trim();
+  var wohnung      = (document.getElementById('tm-wohnung').value      || '').trim();
+  var handwerker   = (document.getElementById('tm-handwerker').value   || '').trim();
+  var datum        =  document.getElementById('tm-datum').value        || today();
+  var kostenVal    =  document.getElementById('tm-kosten').value;
+  var kosten       = kostenVal !== '' ? parseFloat(kostenVal) : null;
+  var notizen      = (document.getElementById('tm-notizen').value      || '').trim();
+
+  var errEl = document.getElementById('tm-err');
+  if (!titel) {
+    if (errEl) errEl.textContent = 'Bitte Titel eingeben.';
+    return;
   }
 
-  /* ── Statistik-Zeile ─────────────────────────────── */
-  var total    = tickets.length;
-  var offen    = tickets.filter(function(t){ return t.status === 'Offen'; }).length;
-  var inArbeit = tickets.filter(function(t){ return t.status === 'In Bearbeitung'; }).length;
-  var erledigt = tickets.filter(function(t){ return t.status === 'Erledigt'; }).length;
-  var statsHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">' +
-    statKpi('Gesamt', total, '#6366f1', '📋') +
-    statKpi('Offen', offen, '#dc2626', '🔴') +
-    statKpi('In Bearbeitung', inArbeit, '#d97706', '⏳') +
-    statKpi('Erledigt', erledigt, '#16a34a', '✅') +
+  var tickets = getTickets();
+
+  if (editTicketId) {
+    var idx = tickets.findIndex(function(x){ return x.id == editTicketId; });
+    if (idx >= 0) {
+      tickets[idx] = {
+        id: editTicketId,
+        titel: titel, beschreibung: beschreibung, prioritaet: prioritaet,
+        status: status, bereich: bereich, mieter: mieter, wohnung: wohnung,
+        handwerker: handwerker, datum: datum, kosten: kosten, notizen: notizen
+      };
+    }
+  } else {
+    tickets.push({
+      id: Date.now(),
+      titel: titel, beschreibung: beschreibung, prioritaet: prioritaet,
+      status: status, bereich: bereich, mieter: mieter, wohnung: wohnung,
+      handwerker: handwerker, datum: datum, kosten: kosten, notizen: notizen
+    });
+  }
+
+  saveTickets(tickets);
+  addNotif('🎫', (editTicketId ? 'Ticket bearbeitet: ' : 'Ticket erstellt: ') + titel.substring(0, 30));
+  hideModal('ticket-modal');
+  render();
+}
+
+// ── View toggle ──────────────────────────────────────────────────
+function setView(v) {
+  currentView = v;
+  localStorage.setItem('tickets_view', v);
+  render();
+}
+
+// ── Drag & Drop ──────────────────────────────────────────────────
+function onDragStart(ev, id) {
+  dragTicketId = id;
+  ev.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragOver(ev, col) {
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  var colEl = document.getElementById('col-' + col.replace(/ /g, '-'));
+  if (colEl) colEl.style.background = col === 'Offen' ? '#fef2f2' : col === 'In Bearbeitung' ? '#fffbeb' : '#f0fdf4';
+}
+
+function onDragLeave(col) {
+  var colEl = document.getElementById('col-' + col.replace(/ /g, '-'));
+  if (colEl) colEl.style.background = '';
+}
+
+function onDrop(ev, targetStatus) {
+  ev.preventDefault();
+  onDragLeave(targetStatus);
+  if (!dragTicketId) return;
+  var tickets = getTickets();
+  var t = tickets.find(function(x){ return x.id == dragTicketId; });
+  if (t && t.status !== targetStatus) {
+    t.status = targetStatus;
+    saveTickets(tickets);
+    addNotif('🎫', 'Ticket verschoben: ' + (t.titel || '').substring(0, 30) + ' → ' + targetStatus);
+    render();
+  }
+  dragTicketId = null;
+}
+
+// ── Filter bar helpers ───────────────────────────────────────────
+function filterBtnStyle(active) {
+  return 'padding:7px 13px;border-radius:8px;border:1.5px solid ' +
+    (active ? '#2563eb' : '#e2e8f0') + ';background:' +
+    (active ? '#2563eb' : 'white') + ';color:' +
+    (active ? 'white' : '#374151') +
+    ';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;';
+}
+
+function selectStyle() {
+  return 'padding:7px 10px;border-radius:8px;border:1.5px solid #e2e8f0;background:white;color:#374151;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;outline:none;';
+}
+
+// ── KPI Cards ────────────────────────────────────────────────────
+function kpiCard(label, value, color, icon) {
+  return '<div style="background:white;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;border-left:4px solid ' + color + ';display:flex;align-items:center;gap:12px;">' +
+    '<span style="font-size:22px;opacity:0.75;">' + icon + '</span>' +
+    '<div>' +
+      '<div style="font-size:22px;font-weight:700;color:#1e293b;line-height:1;">' + value + '</div>' +
+      '<div style="font-size:11px;color:#94a3b8;margin-top:3px;font-weight:500;">' + label + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// ── Ticket Card (Kanban) ─────────────────────────────────────────
+function ticketCardHTML(t) {
+  var border = prioBorderColor(t.prioritaet || 'Normal');
+  var desc   = (t.beschreibung || '');
+  var descShort = desc.length > 80 ? desc.substring(0, 80) + '…' : desc;
+  var ns     = nextStatus(t.status || 'Offen');
+  var nextBtn = ns
+    ? '<button onclick="ticketNextStatus(' + t.id + ')" title="Weiter zu: ' + ns + '" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;">→ ' + ns + '</button>'
+    : '<span style="font-size:11px;color:#16a34a;font-weight:600;">✓ Abgeschlossen</span>';
+
+  return '<div draggable="true" ' +
+    'ondragstart="onDragStart(event,' + t.id + ')" ' +
+    'style="background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);border:1px solid #f1f5f9;border-left:4px solid ' + border + ';margin-bottom:10px;padding:14px 14px 12px;cursor:grab;transition:box-shadow 0.15s;" ' +
+    'onmousedown="this.style.cursor=\'grabbing\'" onmouseup="this.style.cursor=\'grab\'">' +
+
+    // Title + badges row
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
+      '<div style="font-size:13px;font-weight:700;color:#1e293b;line-height:1.3;flex:1;">' + (t.titel || '(kein Titel)') + '</div>' +
+      '<div style="display:flex;gap:4px;flex-shrink:0;">' + prioBadgeHTML(t.prioritaet || 'Normal') + '</div>' +
+    '</div>' +
+
+    // Description
+    (descShort ? '<div style="font-size:12px;color:#64748b;line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + descShort + '</div>' : '') +
+
+    // Meta info
+    '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px;">' +
+      (t.mieter || t.wohnung ? '<div style="font-size:11px;color:#64748b;">👤 ' + [t.mieter, t.wohnung].filter(Boolean).join(' – ') + '</div>' : '') +
+      (t.handwerker ? '<div style="font-size:11px;color:#64748b;">🔧 ' + t.handwerker + '</div>' : '') +
+      (t.bereich    ? '<div style="font-size:11px;color:#64748b;">📍 ' + t.bereich + '</div>'    : '') +
+      '<div style="font-size:11px;color:#94a3b8;">🕐 ' + relDate(t.datum) + '</div>' +
+    '</div>' +
+
+    // Action row
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;border-top:1px solid #f1f5f9;padding-top:10px;">' +
+      '<div style="display:flex;gap:5px;">' +
+        '<button onclick="openTicketModal(' + t.id + ')" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;" title="Bearbeiten">✏️</button>' +
+        '<button onclick="deleteTicket(' + t.id + ')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;" title="Löschen">🗑️</button>' +
+      '</div>' +
+      nextBtn +
+    '</div>' +
+  '</div>';
+}
+
+// ── Kanban Board ─────────────────────────────────────────────────
+function buildKanban(filtered) {
+  var cols = [
+    { key: 'Offen',          label: 'Offen',          color: '#dc2626', bg: '#fef2f2' },
+    { key: 'In Bearbeitung', label: 'In Bearbeitung', color: '#d97706', bg: '#fffbeb' },
+    { key: 'Erledigt',       label: 'Erledigt',        color: '#16a34a', bg: '#f0fdf4' }
+  ];
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;min-height:400px;">';
+
+  cols.forEach(function(col) {
+    var colTickets = filtered.filter(function(t){ return t.status === col.key; });
+    var colId = 'col-' + col.key.replace(/ /g, '-');
+
+    var cards = colTickets.length
+      ? colTickets.map(ticketCardHTML).join('')
+      : '<div style="text-align:center;padding:32px 12px;color:#cbd5e1;font-size:13px;">Keine Tickets</div>';
+
+    html +=
+      '<div style="display:flex;flex-direction:column;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">' +
+        // Column header
+        '<div style="background:' + col.bg + ';border-bottom:2px solid ' + col.color + ';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">' +
+          '<span style="font-size:13px;font-weight:700;color:' + col.color + ';">' + col.label + '</span>' +
+          '<span style="background:' + col.color + ';color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">' + colTickets.length + '</span>' +
+        '</div>' +
+        // Drop zone
+        '<div id="' + colId + '" ' +
+          'ondragover="onDragOver(event,\'' + col.key + '\')" ' +
+          'ondragleave="onDragLeave(\'' + col.key + '\')" ' +
+          'ondrop="onDrop(event,\'' + col.key + '\')" ' +
+          'style="flex:1;padding:12px;background:#fafbfc;min-height:180px;transition:background 0.2s;">' +
+          cards +
+        '</div>' +
+      '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+// ── List View ────────────────────────────────────────────────────
+function buildList(filtered) {
+  if (filtered.length === 0) {
+    return '<div style="text-align:center;padding:60px 20px;">' +
+      '<div style="font-size:48px;margin-bottom:12px;">🎫</div>' +
+      '<div style="font-size:16px;font-weight:600;color:#374151;margin-bottom:6px;">Keine Tickets gefunden</div>' +
+      '<div style="font-size:13px;color:#94a3b8;margin-bottom:20px;">Keine Tickets entsprechen dem aktuellen Filter.</div>' +
+      '<button onclick="openTicketModal(null)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket erstellen</button>' +
     '</div>';
+  }
 
-  /* ── Wohnungs-Optionen für Modal ─────────────────── */
-  var wohnungen = ['Allgemein'];
-  mieter.forEach(function(m){ if(m.wn && wohnungen.indexOf(m.wn) < 0) wohnungen.push(m.wn); });
-  var wnOptions = wohnungen.map(function(w){ return '<option value="'+w+'">'+w+'</option>'; }).join('');
-  var hwOptions = '<option value="Nicht zugewiesen">Nicht zugewiesen</option>' +
-    hw.map(function(h){ var n=(h.vn||'')+' '+(h.nn||''); return '<option value="'+n+'">'+n+'</option>'; }).join('');
+  var rows = filtered.map(function(t) {
+    var ns = nextStatus(t.status || 'Offen');
+    var nextBtn = ns
+      ? '<button onclick="ticketNextStatus(' + t.id + ')" style="font-size:11px;font-weight:600;padding:4px 9px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap;">→ ' + ns + '</button>'
+      : '';
+    var kosten = t.kosten != null ? t.kosten.toLocaleString('de-DE') + ' €' : '–';
 
-  /* ── Modal HTML ──────────────────────────────────── */
-  var modalContent =
-    '<div id="t-err" style="color:#dc2626;font-size:13px;margin-bottom:8px;min-height:18px;"></div>' +
-    formGroup('Wohnung',
-      '<select id="t-wn" style="'+inputStyle+'">'+wnOptions+'</select>',
-      'margin-bottom:12px;') +
-    formGroup('Beschreibung (Pflichtfeld)',
-      '<textarea id="t-pb" rows="3" placeholder="Beschreiben Sie das Problem..." style="'+inputStyle+'resize:vertical;"></textarea>',
-      'margin-bottom:12px;') +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
+    return '<tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background=\'#fafbfc\'" onmouseout="this.style.background=\'white\'">' +
+      '<td style="padding:11px 14px;border-left:3px solid ' + prioBorderColor(t.prioritaet || 'Normal') + ';">' +
+        '<div style="font-size:13px;font-weight:700;color:#1e293b;">' + (t.titel || '–') + '</div>' +
+        (t.beschreibung ? '<div style="font-size:11px;color:#64748b;margin-top:2px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.beschreibung + '</div>' : '') +
+      '</td>' +
+      '<td style="padding:11px 14px;">' + statusBadgeHTML(t.status || 'Offen') + '</td>' +
+      '<td style="padding:11px 14px;">' + prioBadgeHTML(t.prioritaet || 'Normal') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.bereich  || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.mieter   || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.wohnung  || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.handwerker || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + kosten + '</td>' +
+      '<td style="padding:11px 14px;font-size:11px;color:#94a3b8;white-space:nowrap;">' + relDate(t.datum) + '</td>' +
+      '<td style="padding:11px 14px;white-space:nowrap;">' +
+        '<div style="display:flex;gap:5px;align-items:center;">' +
+          '<button onclick="openTicketModal(' + t.id + ')" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;">✏️</button>' +
+          '<button onclick="deleteTicket(' + t.id + ')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;">🗑️</button>' +
+          nextBtn +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div style="overflow-x:auto;">' +
+    '<table style="width:100%;border-collapse:collapse;">' +
+      '<thead>' +
+        '<tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Titel</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Status</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Priorität</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Bereich</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Mieter</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Wohnung</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Handwerker</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">KV</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Erstellt</th>' +
+          '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Aktionen</th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+  '</div>';
+}
+
+// ── Modal HTML ───────────────────────────────────────────────────
+function buildModal() {
+  var content =
+    '<div id="tm-err" style="color:#dc2626;font-size:13px;margin-bottom:8px;min-height:18px;"></div>' +
+
+    formGroup('Titel *',
+      '<input id="tm-titel" type="text" placeholder="z.B. Wasserschaden Badezimmer" style="' + inputStyle + '">') +
+
+    formGroup('Beschreibung',
+      '<textarea id="tm-beschreibung" rows="3" placeholder="Beschreiben Sie das Problem..." style="' + inputStyle + 'resize:vertical;"></textarea>') +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">' +
       formGroup('Priorität',
-        '<select id="t-prio" style="'+inputStyle+'">' +
-          '<option value="Hoch">🔴 Hoch</option>' +
-          '<option value="Mittel" selected>🟡 Mittel</option>' +
-          '<option value="Niedrig">🟢 Niedrig</option>' +
+        '<select id="tm-prioritaet" style="' + inputStyle + '">' +
+          '<option value="Normal">Normal</option>' +
+          '<option value="Dringend">Dringend</option>' +
+          '<option value="Notfall">Notfall</option>' +
         '</select>') +
       formGroup('Status',
-        '<select id="t-status" style="'+inputStyle+'">' +
+        '<select id="tm-status" style="' + inputStyle + '">' +
           '<option value="Offen">Offen</option>' +
           '<option value="In Bearbeitung">In Bearbeitung</option>' +
           '<option value="Erledigt">Erledigt</option>' +
         '</select>') +
+      formGroup('Bereich',
+        '<select id="tm-bereich" style="' + inputStyle + '">' +
+          '<option value="Küche">Küche</option>' +
+          '<option value="Bad">Bad</option>' +
+          '<option value="Wohnzimmer">Wohnzimmer</option>' +
+          '<option value="Schlafzimmer">Schlafzimmer</option>' +
+          '<option value="Flur">Flur</option>' +
+          '<option value="Keller">Keller</option>' +
+          '<option value="Außenbereich">Außenbereich</option>' +
+          '<option value="Sonstiges">Sonstiges</option>' +
+        '</select>') +
     '</div>' +
-    formGroup('Handwerker',
-      '<select id="t-hw" style="'+inputStyle+'">'+hwOptions+'</select>',
-      'margin-bottom:12px;') +
-    formGroup('Foto-URL (optional)',
-      '<input id="t-foto" type="url" placeholder="https://..." style="'+inputStyle+'">',
-      'margin-bottom:16px;') +
-    '<button onclick="saveTicket()" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>';
 
-  var modalsHTML = modalHTML('t-modal', '<span id="t-modal-title">🎫 Ticket erstellen</span>', modalContent);
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0;">' +
+      formGroup('Mieter',
+        '<input id="tm-mieter" type="text" placeholder="Name des Mieters" style="' + inputStyle + '">') +
+      formGroup('Wohnung',
+        '<input id="tm-wohnung" type="text" placeholder="z.B. EG links / Whg. 3" style="' + inputStyle + '">') +
+    '</div>' +
 
-  var actionBtn = '<button onclick="openTicketModal(-1)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket erstellen</button>';
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0;">' +
+      formGroup('Handwerker zuweisen',
+        '<input id="tm-handwerker" type="text" placeholder="Name des Handwerkers" style="' + inputStyle + '">') +
+      formGroup('Datum',
+        '<input id="tm-datum" type="date" style="' + inputStyle + '">') +
+    '</div>' +
 
-  var mainHTML =
-    '<div style="max-width:1400px;margin:0 auto;">' +
-      statsHTML +
+    formGroup('Kostenvoranschlag (€)',
+      '<input id="tm-kosten" type="number" min="0" step="0.01" placeholder="0,00" style="' + inputStyle + '">') +
+
+    formGroup('Notizen',
+      '<textarea id="tm-notizen" rows="2" placeholder="Interne Notizen..." style="' + inputStyle + 'resize:vertical;"></textarea>') +
+
+    '<button onclick="saveTicketModal()" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px;">Speichern</button>';
+
+  return modalHTML('ticket-modal', '<span id="tm-title">Ticket erstellen</span>', content);
+}
+
+// ── Main render ──────────────────────────────────────────────────
+function render() {
+  var tickets  = getTickets();
+  var filtered = getFiltered();
+
+  // KPI
+  var total    = tickets.length;
+  var offen    = tickets.filter(function(t){ return t.status === 'Offen'; }).length;
+  var inArbeit = tickets.filter(function(t){ return t.status === 'In Bearbeitung'; }).length;
+  var erledigt = tickets.filter(function(t){ return t.status === 'Erledigt'; }).length;
+
+  var kpiRow =
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">' +
+      kpiCard('Gesamt',         total,    '#6366f1', '🎫') +
+      kpiCard('Offen',          offen,    '#dc2626', '🔴') +
+      kpiCard('In Bearbeitung', inArbeit, '#d97706', '⏳') +
+      kpiCard('Erledigt',       erledigt, '#16a34a', '✅') +
+    '</div>';
+
+  // Filter bar
+  var filterBar =
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px;">' +
+
+      // Text search
+      '<div style="position:relative;flex:1;min-width:180px;">' +
+        '<input type="text" id="filter-search" placeholder="🔍 Suchen..." value="' + filterText.replace(/"/g, '&quot;') + '" ' +
+          'oninput="filterText=this.value;render()" ' +
+          'style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;color:#374151;outline:none;box-sizing:border-box;">' +
+      '</div>' +
+
+      // Status filter
+      '<select onchange="filterStatus=this.value;render()" style="' + selectStyle() + '">' +
+        '<option value="alle"' + (filterStatus === 'alle' ? ' selected' : '') + '>Alle Status</option>' +
+        '<option value="Offen"' + (filterStatus === 'Offen' ? ' selected' : '') + '>Offen</option>' +
+        '<option value="In Bearbeitung"' + (filterStatus === 'In Bearbeitung' ? ' selected' : '') + '>In Bearbeitung</option>' +
+        '<option value="Erledigt"' + (filterStatus === 'Erledigt' ? ' selected' : '') + '>Erledigt</option>' +
+      '</select>' +
+
+      // Priorität filter
+      '<select onchange="filterPrio=this.value;render()" style="' + selectStyle() + '">' +
+        '<option value="alle"' + (filterPrio === 'alle' ? ' selected' : '') + '>Alle Prioritäten</option>' +
+        '<option value="Notfall"' + (filterPrio === 'Notfall' ? ' selected' : '') + '>Notfall</option>' +
+        '<option value="Dringend"' + (filterPrio === 'Dringend' ? ' selected' : '') + '>Dringend</option>' +
+        '<option value="Normal"' + (filterPrio === 'Normal' ? ' selected' : '') + '>Normal</option>' +
+      '</select>' +
+
+      // Bereich filter
+      '<select onchange="filterBereich=this.value;render()" style="' + selectStyle() + '">' +
+        '<option value="alle"' + (filterBereich === 'alle' ? ' selected' : '') + '>Alle Bereiche</option>' +
+        '<option value="Küche"' + (filterBereich === 'Küche' ? ' selected' : '') + '>Küche</option>' +
+        '<option value="Bad"' + (filterBereich === 'Bad' ? ' selected' : '') + '>Bad</option>' +
+        '<option value="Wohnzimmer"' + (filterBereich === 'Wohnzimmer' ? ' selected' : '') + '>Wohnzimmer</option>' +
+        '<option value="Schlafzimmer"' + (filterBereich === 'Schlafzimmer' ? ' selected' : '') + '>Schlafzimmer</option>' +
+        '<option value="Flur"' + (filterBereich === 'Flur' ? ' selected' : '') + '>Flur</option>' +
+        '<option value="Keller"' + (filterBereich === 'Keller' ? ' selected' : '') + '>Keller</option>' +
+        '<option value="Außenbereich"' + (filterBereich === 'Außenbereich' ? ' selected' : '') + '>Außenbereich</option>' +
+        '<option value="Sonstiges"' + (filterBereich === 'Sonstiges' ? ' selected' : '') + '>Sonstiges</option>' +
+      '</select>' +
+
+      // View toggle
+      '<div style="display:flex;gap:0;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;flex-shrink:0;">' +
+        '<button onclick="setView(\'kanban\')" style="padding:7px 13px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:' + (currentView === 'kanban' ? '#2563eb' : 'white') + ';color:' + (currentView === 'kanban' ? 'white' : '#374151') + ';">Kanban</button>' +
+        '<button onclick="setView(\'list\')"  style="padding:7px 13px;border:none;border-left:1px solid #e2e8f0;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:' + (currentView === 'list'   ? '#2563eb' : 'white') + ';color:' + (currentView === 'list'   ? 'white' : '#374151') + ';">Liste</button>' +
+      '</div>' +
+
+    '</div>';
+
+  // Board or list
+  var boardHTML;
+  if (currentView === 'kanban') {
+    if (filtered.length === 0 && tickets.length === 0) {
+      boardHTML = emptyState('🎫', 'Keine Tickets vorhanden', 'Erstellen Sie Ihr erstes Ticket für eine Schadensmeldung oder Support-Anfrage.', '+ Ticket erstellen', 'openTicketModal(null)');
+    } else {
+      boardHTML = buildKanban(filtered);
+    }
+  } else {
+    boardHTML = buildList(filtered);
+  }
+
+  // Empty kanban with tickets but all filtered out
+  if (currentView === 'kanban' && filtered.length === 0 && tickets.length > 0) {
+    boardHTML = '<div style="text-align:center;padding:48px 20px;color:#94a3b8;font-size:14px;">Keine Tickets entsprechen dem aktuellen Filter.</div>';
+  }
+
+  var mainContent =
+    '<div style="max-width:1600px;margin:0 auto;">' +
+      getTrialBanner() +
+      kpiRow +
       '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;">' +
-        filterHTML +
-        tableHTML +
+        filterBar +
+        boardHTML +
       '</div>' +
     '</div>';
 
-  renderLayout('tickets', 'Ticketverwaltung', actionBtn, mainHTML, modalsHTML);
+  var actionBtn =
+    '<button onclick="openTicketModal(null)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket erstellen</button>';
+
+  var modals = buildModal();
+
+  renderLayout('tickets', 'Tickets & Schadensmeldungen', actionBtn, mainContent, modals);
 }
 
-function statKpi(label, value, color, icon) {
-  return '<div style="background:white;border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;border-left:3px solid '+color+';display:flex;align-items:center;gap:10px;">' +
-    '<span style="font-size:20px;opacity:0.6;">'+icon+'</span>' +
-    '<div>' +
-      '<div style="font-size:20px;font-weight:700;color:#1e293b;line-height:1;">'+value+'</div>' +
-      '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">'+label+'</div>' +
-    '</div>' +
-    '</div>';
-}
-
+// ── Bootstrap ────────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, render);
+startPageListener(user.uid, render);
 </script>
 </body>
 </html>

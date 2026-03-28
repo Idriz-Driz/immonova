@@ -6,158 +6,668 @@
   <title>Zahlungen – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+checkAuth();
+checkTrial();
+
 var user = getUser();
+var activeTab = 'uebersicht';
+var filterSearch = '';
+var filterMonat = '';
+var filterTyp = '';
+var filterStatus = '';
+var editId = null;
 
-// Month navigation state (display only)
-var navDate = new Date();
-var navYear = navDate.getFullYear();
-var navMonth = navDate.getMonth(); // 0-based
-
-var MONATE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-
-function prevMonth() {
-  navMonth--;
-  if(navMonth < 0) { navMonth = 11; navYear--; }
-  render();
+// ── ID generator ────────────────────────────────────────────
+function generateId() {
+  return 'zhl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 }
 
-function nextMonth() {
-  navMonth++;
-  if(navMonth > 11) { navMonth = 0; navYear++; }
-  render();
+// ── Data helpers ─────────────────────────────────────────────
+function getZahlungen() {
+  return getData('in_zahlungen', []);
+}
+function saveZahlungen(arr) {
+  setData('in_zahlungen', arr);
+  syncToFirebase(user.uid);
 }
 
-function getMieter() { return getData(KEYS.mieter, DEFAULT_MIETER); }
-function saveMieter(arr) { setData(KEYS.mieter, arr); syncToFirebase(user.uid); }
-
-function markBezahlt(idx) {
-  var arr = getMieter();
-  if(!arr[idx]) return;
-  var m = arr[idx];
-  m.status = 'bezahlt';
-  addNotif('💰', 'Zahlung von ' + m.name + ' eingetragen');
-  saveMieter(arr);
-  render();
+// ── Format helpers ───────────────────────────────────────────
+function formatCurrency(n) {
+  return (n || 0).toLocaleString('de-DE') + ' \u20ac';
 }
 
-function markOffen(idx) {
-  var arr = getMieter();
-  if(!arr[idx]) return;
-  arr[idx].status = 'offen';
-  saveMieter(arr);
-  render();
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
 }
 
-function whatsappMahnung(tel, name, miete) {
-  var text = encodeURIComponent('Guten Tag ' + name + ',\n\nIhre Miete von €' + fmt(miete) + ' ist noch ausstehend. Bitte überweisen Sie den Betrag schnellstmöglich.\n\nMit freundlichen Grüßen\nIhr Vermieter');
-  window.open('https://wa.me/' + tel + '?text=' + text, '_blank');
-}
+// ── KPI calculation ──────────────────────────────────────────
+function calcKPIs(zahlungen) {
+  var now = new Date();
+  var thisMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
-function getFaelligTag() {
-  return String(navYear) + '-' + String(navMonth+1).padStart(2,'0') + '-01';
-}
+  var einnahmenMonat = 0;
+  var ausstehend = 0;
+  var ueberfaellig = 0;
+  var ausgaben = 0;
 
-function render() {
-  var mieter = getMieter();
-  var gesamt = mieter.reduce(function(s,m){ return s + (m.miete||0); }, 0);
-  var eingegangen = mieter.filter(function(m){ return m.status==='bezahlt'; }).reduce(function(s,m){ return s + (m.miete||0); }, 0);
-  var ausstehend = gesamt - eingegangen;
-  var bezahltAnz = mieter.filter(function(m){ return m.status==='bezahlt'; }).length;
-  var quote = gesamt > 0 ? Math.round((eingegangen/gesamt)*100) : 0;
-
-  var faelligStr = '01.' + String(navMonth+1).padStart(2,'0') + '.' + navYear;
-
-  // Month header
-  var headerHTML = '<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">'
-    + '<button onclick="prevMonth()" style="width:36px;height:36px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">‹</button>'
-    + '<div style="font-size:20px;font-weight:700;color:#0f172a;min-width:220px;text-align:center;">Zahlungsübersicht – ' + MONATE[navMonth] + ' ' + navYear + '</div>'
-    + '<button onclick="nextMonth()" style="width:36px;height:36px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">›</button>'
-    + '</div>';
-
-  // KPI cards
-  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">'
-    // Gesamt
-    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Gesamt Einnahmen</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#16a34a;">€ ' + fmt(gesamt) + '</div>'
-    + '<div style="font-size:12px;color:#94a3b8;margin-top:4px;">' + mieter.length + ' Mieteinheiten</div>'
-    + '</div>'
-    // Eingegangen
-    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Eingegangen</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#2563eb;">€ ' + fmt(eingegangen) + '</div>'
-    + '<div style="font-size:12px;color:#94a3b8;margin-top:4px;">' + bezahltAnz + ' von ' + mieter.length + ' Mietern</div>'
-    + '</div>'
-    // Ausstehend
-    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Ausstehend</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#dc2626;">€ ' + fmt(ausstehend) + '</div>'
-    + '<div style="margin-top:10px;background:#f1f5f9;border-radius:99px;height:6px;overflow:hidden;">'
-    + '<div style="height:100%;background:' + (quote>=80?'#16a34a':quote>=50?'#d97706':'#dc2626') + ';width:' + quote + '%;border-radius:99px;transition:width 0.4s;"></div>'
-    + '</div>'
-    + '<div style="font-size:11px;color:#64748b;margin-top:4px;">Zahlungsquote: ' + quote + '%</div>'
-    + '</div>'
-    + '</div>';
-
-  // Table
-  var tableHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<table style="width:100%;border-collapse:collapse;">'
-    + '<thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">'
-    + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Mieter</th>'
-    + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Wohnung</th>'
-    + '<th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Betrag</th>'
-    + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Fällig am</th>'
-    + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Status</th>'
-    + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Aktionen</th>'
-    + '</tr></thead><tbody>';
-
-  mieter.forEach(function(m, idx) {
-    var isBezahlt = m.status === 'bezahlt';
-    var rowBg = idx % 2 === 0 ? 'white' : '#fafbfc';
-    tableHTML += '<tr style="border-bottom:1px solid #f1f5f9;background:' + rowBg + ';" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'' + rowBg + '\'">'
-      + '<td style="padding:14px 16px;">'
-      + '<div style="display:flex;align-items:center;gap:10px;">'
-      + '<div style="width:34px;height:34px;background:#eff6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#2563eb;flex-shrink:0;">' + m.name.charAt(0) + '</div>'
-      + '<div><div style="font-size:14px;font-weight:600;color:#0f172a;">' + m.name + '</div>'
-      + (m.em ? '<div style="font-size:12px;color:#94a3b8;">' + m.em + '</div>' : '')
-      + '</div></div></td>'
-      + '<td style="padding:14px 16px;"><span style="background:#f1f5f9;color:#475569;font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;">' + m.wn + '</span></td>'
-      + '<td style="padding:14px 16px;text-align:right;font-size:15px;font-weight:700;color:#0f172a;">€ ' + fmt(m.miete) + '</td>'
-      + '<td style="padding:14px 16px;text-align:center;font-size:13px;color:#64748b;">' + faelligStr + '</td>'
-      + '<td style="padding:14px 16px;text-align:center;">'
-      + (isBezahlt
-        ? '<button onclick="markOffen(' + idx + ')" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Bezahlt</button>'
-        : '<button onclick="markBezahlt(' + idx + ')" style="background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✗ Offen</button>'
-      )
-      + '</td>'
-      + '<td style="padding:14px 16px;text-align:center;">'
-      + '<div style="display:flex;gap:6px;justify-content:center;">'
-      + (!isBezahlt ? '<button onclick="whatsappMahnung(\'' + m.tel + '\',\'' + m.name + '\',' + m.miete + ')" title="WhatsApp Mahnung senden" style="width:34px;height:34px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">💬</button>' : '')
-      + (isBezahlt ? '' : '<button onclick="markBezahlt(' + idx + ')" title="Als bezahlt markieren" style="width:34px;height:34px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">📩</button>')
-      + '</div></td></tr>';
+  zahlungen.forEach(function(z) {
+    if (z.richtung === 'Ausgabe') {
+      ausgaben += (z.betrag || 0);
+      return;
+    }
+    if (z.richtung === 'Einnahme') {
+      if (z.status === 'Eingegangen' && (z.datum || '').indexOf(thisMonth) === 0) {
+        einnahmenMonat += (z.betrag || 0);
+      }
+      if (z.status === 'Ausstehend') {
+        ausstehend += (z.betrag || 0);
+      }
+      if (z.status === 'Ueberfaellig' || z.status === '\u00dcberfällig') {
+        ueberfaellig += (z.betrag || 0);
+      }
+    }
   });
 
-  tableHTML += '</tbody></table>'
-    + '<div style="padding:14px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;display:flex;align-items:center;gap:6px;">'
-    + '<span style="font-weight:600;color:#0f172a;">Zahlungsquote:</span>'
-    + '<span>' + bezahltAnz + ' von ' + mieter.length + ' Mietern haben bezahlt</span>'
-    + '<span style="margin-left:auto;font-weight:700;color:' + (quote>=80?'#16a34a':quote>=50?'#d97706':'#dc2626') + ';">' + quote + '%</span>'
-    + '</div></div>';
-
-  var mainHTML = headerHTML + kpiHTML + tableHTML;
-
-  renderLayout('zahlungen', 'Zahlungen & Bank', '', mainHTML, '');
+  return { einnahmenMonat: einnahmenMonat, ausstehend: ausstehend, ueberfaellig: ueberfaellig, ausgaben: ausgaben };
 }
 
+// ── Filter function ──────────────────────────────────────────
+function applyFilters(zahlungen) {
+  var q = filterSearch.toLowerCase();
+  return zahlungen.filter(function(z) {
+    if (q) {
+      var haystack = ((z.beschreibung || '') + ' ' + (z.mieter || '') + ' ' + (z.iban || '')).toLowerCase();
+      if (haystack.indexOf(q) < 0) return false;
+    }
+    if (filterMonat) {
+      if ((z.datum || '').indexOf(filterMonat) !== 0) return false;
+    }
+    if (filterTyp) {
+      if ((z.richtung || '') !== filterTyp) return false;
+    }
+    if (filterStatus) {
+      if ((z.status || '') !== filterStatus) return false;
+    }
+    return true;
+  });
+}
+
+// ── Tab switch ───────────────────────────────────────────────
+function tabSwitch(tab) {
+  activeTab = tab;
+  render();
+}
+
+// ── Mark as paid ─────────────────────────────────────────────
+function markAsPaid(id) {
+  var arr = getZahlungen();
+  var z = arr.find(function(x) { return x.id === id; });
+  if (!z) return;
+  z.status = 'Eingegangen';
+  z.datum = z.datum || todayStr();
+  saveZahlungen(arr);
+  addNotif('\u{1F4B0}', 'Zahlung von ' + (z.mieter || z.beschreibung) + ' als eingegangen markiert');
+  render();
+}
+
+// ── Send WhatsApp reminder ────────────────────────────────────
+function sendReminder(mieterName, tel, betrag) {
+  var msg = 'Guten Tag ' + mieterName + ',\n\nIhre Mietzahlung in H\u00f6he von ' + formatCurrency(betrag) + ' ist noch ausstehend. Bitte \u00fcberweisen Sie den Betrag schnellstm\u00f6glich.\n\nVielen Dank und freundliche Gr\u00fc\u00dfe\nIhr Vermieter';
+  var tel2 = (tel || '').replace(/\s+/g, '').replace(/^\+/, '').replace(/^0/, '49');
+  window.open('https://wa.me/' + tel2 + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+// ── Copy IBAN ─────────────────────────────────────────────────
+function copyIBAN(iban) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(iban).then(function() { showToast('IBAN kopiert!'); });
+  } else {
+    var t = document.createElement('textarea');
+    t.value = iban;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand('copy');
+    document.body.removeChild(t);
+    showToast('IBAN kopiert!');
+  }
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.opacity = '1';
+  setTimeout(function() {
+    t.style.opacity = '0';
+    setTimeout(function() { t.style.display = 'none'; }, 400);
+  }, 2000);
+}
+
+// ── Delete zahlung ────────────────────────────────────────────
+function deleteZahlung(id) {
+  if (!confirm('Zahlung wirklich l\u00f6schen?')) return;
+  var arr = getZahlungen().filter(function(z) { return z.id !== id; });
+  saveZahlungen(arr);
+  addNotif('\ud83d\uddd1\ufe0f', 'Zahlung gel\u00f6scht');
+  render();
+}
+
+// ── Open modal for new zahlung ────────────────────────────────
+function openAddModal() {
+  editId = null;
+  document.getElementById('modal-title').textContent = 'Neue Zahlung';
+  document.getElementById('f-typ').value = 'Mietzahlung';
+  document.getElementById('f-richtung-ein').checked = true;
+  document.getElementById('f-mieter').value = '';
+  document.getElementById('f-betrag').value = '';
+  document.getElementById('f-datum').value = todayStr();
+  document.getElementById('f-faellig').value = '';
+  document.getElementById('f-status').value = 'Eingegangen';
+  document.getElementById('f-zahlungsart').value = 'Uberweisung';
+  document.getElementById('f-iban').value = '';
+  document.getElementById('f-notizen').value = '';
+  showModal('modal-zahlung');
+}
+
+// ── Open modal for edit ───────────────────────────────────────
+function openEditModal(id) {
+  var arr = getZahlungen();
+  var z = arr.find(function(x) { return x.id === id; });
+  if (!z) return;
+  editId = id;
+  document.getElementById('modal-title').textContent = 'Zahlung bearbeiten';
+  document.getElementById('f-typ').value = z.typ || 'Mietzahlung';
+  if (z.richtung === 'Ausgabe') {
+    document.getElementById('f-richtung-aus').checked = true;
+  } else {
+    document.getElementById('f-richtung-ein').checked = true;
+  }
+  document.getElementById('f-mieter').value = z.mieter || z.beschreibung || '';
+  document.getElementById('f-betrag').value = z.betrag || '';
+  document.getElementById('f-datum').value = z.datum || '';
+  document.getElementById('f-faellig').value = z.faellig || '';
+  document.getElementById('f-status').value = z.status || 'Eingegangen';
+  document.getElementById('f-zahlungsart').value = z.zahlungsart || 'Uberweisung';
+  document.getElementById('f-iban').value = z.iban || '';
+  document.getElementById('f-notizen').value = z.notizen || '';
+  showModal('modal-zahlung');
+}
+
+// ── Save zahlung ──────────────────────────────────────────────
+function saveZahlung() {
+  var typ = document.getElementById('f-typ').value;
+  var richtung = document.getElementById('f-richtung-ein').checked ? 'Einnahme' : 'Ausgabe';
+  var mieter = document.getElementById('f-mieter').value.trim();
+  var betrag = parseFloat(document.getElementById('f-betrag').value) || 0;
+  var datum = document.getElementById('f-datum').value;
+  var faellig = document.getElementById('f-faellig').value;
+  var status = document.getElementById('f-status').value;
+  var zahlungsart = document.getElementById('f-zahlungsart').value;
+  var iban = document.getElementById('f-iban').value.trim();
+  var notizen = document.getElementById('f-notizen').value.trim();
+
+  if (!mieter) { alert('Bitte Mieter / Beschreibung eingeben.'); return; }
+  if (!betrag) { alert('Bitte einen Betrag eingeben.'); return; }
+  if (!datum)  { alert('Bitte ein Datum w\u00e4hlen.'); return; }
+
+  var arr = getZahlungen();
+  if (editId) {
+    var idx = arr.findIndex(function(x) { return x.id === editId; });
+    if (idx >= 0) {
+      arr[idx] = { id: editId, typ: typ, richtung: richtung, mieter: mieter, beschreibung: mieter, betrag: betrag, datum: datum, faellig: faellig, status: status, zahlungsart: zahlungsart, iban: iban, notizen: notizen };
+    }
+    addNotif('\u270f\ufe0f', 'Zahlung aktualisiert: ' + mieter);
+  } else {
+    arr.push({ id: generateId(), typ: typ, richtung: richtung, mieter: mieter, beschreibung: mieter, betrag: betrag, datum: datum, faellig: faellig, status: status, zahlungsart: zahlungsart, iban: iban, notizen: notizen });
+    addNotif('\u{1F4B3}', 'Neue Zahlung: ' + mieter + ' – ' + formatCurrency(betrag));
+  }
+
+  saveZahlungen(arr);
+  hideModal('modal-zahlung');
+  render();
+}
+
+// ── Typ badge ─────────────────────────────────────────────────
+function typBadge(richtung, typ) {
+  if (richtung === 'Einnahme')     return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#f0fdf4;color:#16a34a;">+ Einnahme</span>';
+  if (richtung === 'Ausgabe')      return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#fef2f2;color:#dc2626;">− Ausgabe</span>';
+  if (typ === 'Kautionszahlung')   return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#eff6ff;color:#2563eb;">&#x1F512; Kaution</span>';
+  if (typ === 'R\u00fcckzahlung')  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#fff7ed;color:#ea580c;">&#x21A9; R\u00fcckzahlung</span>';
+  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#f1f5f9;color:#64748b;">' + (richtung || typ || '–') + '</span>';
+}
+
+function statusBadge(status) {
+  if (status === 'Eingegangen')
+    return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#f0fdf4;color:#16a34a;">&#x2713; Eingegangen</span>';
+  if (status === 'Ausstehend')
+    return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#fffbeb;color:#d97706;">&#x23F3; Ausstehend</span>';
+  if (status === 'Ueberfaellig' || status === '\u00dcberfällig')
+    return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#fef2f2;color:#dc2626;">&#x26A0; \u00dcberfällig</span>';
+  if (status === 'Storniert')
+    return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#f1f5f9;color:#64748b;">&#x2715; Storniert</span>';
+  return '<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#f1f5f9;color:#64748b;">' + (status || '–') + '</span>';
+}
+
+// ── Offene Zahlungen from Mieter data ─────────────────────────
+function getOffeneMieter() {
+  var mieter = getData(KEYS.mieter, []);
+  var zahlungen = getZahlungen();
+  var now = new Date();
+  var thisMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+  var paidThisMonth = {};
+  zahlungen.forEach(function(z) {
+    if (z.status === 'Eingegangen' && (z.datum || '').indexOf(thisMonth) === 0) {
+      paidThisMonth[z.mieter] = true;
+    }
+  });
+
+  var result = [];
+  mieter.forEach(function(m) {
+    if ((m.status || '') !== 'Aktiv') return;
+    var name = m.name || ((m.vn || '') + ' ' + (m.nn || '')).trim();
+    if (paidThisMonth[name]) return;
+    var faelligSeit = Math.floor((now - new Date(now.getFullYear(), now.getMonth(), 1)) / (1000 * 60 * 60 * 24));
+    result.push({
+      name: name,
+      wohnung: m.wn || m.wohnung || '–',
+      betrag: m.miete || 0,
+      tel: m.tel || '',
+      faelligSeit: faelligSeit
+    });
+  });
+  return result;
+}
+
+// ── Settings IBAN ─────────────────────────────────────────────
+function getEinstellungen() {
+  try { return JSON.parse(localStorage.getItem('in_settings')) || {}; }
+  catch(e) { return {}; }
+}
+
+// ── Monthly chart data (last 6 months) ───────────────────────
+function getMonthlyChartData() {
+  var zahlungen = getZahlungen();
+  var months = [];
+  var now = new Date();
+  for (var i = 5; i >= 0; i--) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    var label = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(-2);
+    months.push({ key: key, label: label, einnahmen: 0, ausgaben: 0 });
+  }
+  zahlungen.forEach(function(z) {
+    var m = (z.datum || '').substring(0, 7);
+    var entry = months.find(function(x) { return x.key === m; });
+    if (!entry) return;
+    if (z.richtung === 'Einnahme') entry.einnahmen += (z.betrag || 0);
+    else if (z.richtung === 'Ausgabe') entry.ausgaben += (z.betrag || 0);
+  });
+  return months;
+}
+
+// ── Render ────────────────────────────────────────────────────
+function render() {
+  var zahlungen = getZahlungen();
+  var kpi = calcKPIs(zahlungen);
+  var einstellungen = getEinstellungen();
+  var iban = einstellungen.iban || 'DE89 3704 0044 0532 0130 00';
+
+  // ── Action button ──
+  var actionBtn = '<button onclick="openAddModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px;">&#x2B; Neue Zahlung</button>';
+
+  // ── Trial banner ──
+  var trialBanner = getTrialBanner();
+
+  // ── KPI cards ──
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Einnahmen diesen Monat</div>'
+    + '<div style="font-size:24px;font-weight:700;color:#16a34a;">' + formatCurrency(kpi.einnahmenMonat) + '</div>'
+    + '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Eingegangene Zahlungen</div>'
+    + '</div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Ausstehend</div>'
+    + '<div style="font-size:24px;font-weight:700;color:#d97706;">' + formatCurrency(kpi.ausstehend) + '</div>'
+    + '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Noch nicht eingegangen</div>'
+    + '</div>'
+    + '<div style="background:white;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">\u00dcberfällig</div>'
+    + '<div style="font-size:24px;font-weight:700;color:#dc2626;">' + formatCurrency(kpi.ueberfaellig) + '</div>'
+    + '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Zahlungsrückstand</div>'
+    + '</div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #7c3aed;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Ausgaben</div>'
+    + '<div style="font-size:24px;font-weight:700;color:#7c3aed;">' + formatCurrency(kpi.ausgaben) + '</div>'
+    + '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Gesamt Kosten</div>'
+    + '</div>'
+    + '</div>';
+
+  // ── Filter bar ──
+  var nowStr = new Date().toISOString().slice(0, 7);
+  var filterHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">'
+    + '<input type="text" placeholder="&#x1F50D; Suchen..." value="' + filterSearch.replace(/"/g,'&quot;') + '" oninput="filterSearch=this.value;render()" style="flex:1;min-width:160px;padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;outline:none;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '<input type="month" value="' + filterMonat + '" onchange="filterMonat=this.value;render()" title="Monat filtern" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;outline:none;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '<select onchange="filterTyp=this.value;render()" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;outline:none;background:white;">'
+    + '<option value="" ' + (!filterTyp ? 'selected' : '') + '>Alle Typen</option>'
+    + '<option value="Einnahme" ' + (filterTyp === 'Einnahme' ? 'selected' : '') + '>Einnahme</option>'
+    + '<option value="Ausgabe" ' + (filterTyp === 'Ausgabe' ? 'selected' : '') + '>Ausgabe</option>'
+    + '</select>'
+    + '<select onchange="filterStatus=this.value;render()" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;outline:none;background:white;">'
+    + '<option value="" ' + (!filterStatus ? 'selected' : '') + '>Alle Status</option>'
+    + '<option value="Eingegangen" ' + (filterStatus === 'Eingegangen' ? 'selected' : '') + '>Eingegangen</option>'
+    + '<option value="Ausstehend" ' + (filterStatus === 'Ausstehend' ? 'selected' : '') + '>Ausstehend</option>'
+    + '<option value="Ueberfaellig" ' + (filterStatus === 'Ueberfaellig' ? 'selected' : '') + '>Überfällig</option>'
+    + '<option value="Storniert" ' + (filterStatus === 'Storniert' ? 'selected' : '') + '>Storniert</option>'
+    + '</select>'
+    + (filterSearch || filterMonat || filterTyp || filterStatus
+        ? '<button onclick="filterSearch=\'\';filterMonat=\'\';filterTyp=\'\';filterStatus=\'\';render()" style="padding:9px 14px;border:1.5px solid #fecaca;border-radius:9px;background:#fef2f2;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">&#x2715; Zurücksetzen</button>'
+        : '')
+    + '</div>';
+
+  // ── Tabs ──
+  var tabsHTML = '<div style="display:flex;gap:4px;margin-bottom:20px;background:white;border:1px solid #e2e8f0;border-radius:12px;padding:5px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">'
+    + tabBtn('uebersicht', '&#x1F4CA; Übersicht')
+    + tabBtn('transaktionen', '&#x1F4CB; Transaktionen')
+    + '</div>';
+
+  // ── Tab content ──
+  var tabContent = '';
+  if (activeTab === 'uebersicht') {
+    tabContent = renderUebersicht(zahlungen, iban);
+  } else {
+    tabContent = renderTransaktionen(zahlungen);
+  }
+
+  var mainHTML = trialBanner + kpiHTML + filterHTML + tabsHTML + tabContent;
+
+  renderLayout('zahlungen', 'Zahlungen & Bank', actionBtn, mainHTML, buildModals());
+
+  // Re-attach the toast container
+  var toast = document.createElement('div');
+  toast.id = 'toast';
+  toast.style.cssText = 'display:none;position:fixed;bottom:28px;right:28px;background:#0f172a;color:white;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:1;transition:opacity 0.4s;box-shadow:0 4px 16px rgba(0,0,0,0.2);';
+  document.body.appendChild(toast);
+}
+
+function tabBtn(id, label) {
+  var active = activeTab === id;
+  return '<button onclick="tabSwitch(\'' + id + '\')" style="flex:1;padding:9px 16px;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;'
+    + (active ? 'background:#2563eb;color:white;box-shadow:0 2px 8px rgba(37,99,235,0.25);' : 'background:transparent;color:#64748b;')
+    + '">' + label + '</button>';
+}
+
+// ── Übersicht Tab ─────────────────────────────────────────────
+function renderUebersicht(zahlungen, iban) {
+  var chartData = getMonthlyChartData();
+  var maxVal = 1;
+  chartData.forEach(function(m) {
+    if (m.einnahmen > maxVal) maxVal = m.einnahmen;
+    if (m.ausgaben > maxVal) maxVal = m.ausgaben;
+  });
+
+  var chartHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">'
+    + '<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">Monatliche Übersicht</div>'
+    + '<div style="font-size:12px;color:#94a3b8;margin-bottom:20px;">Letzte 6 Monate – Einnahmen vs. Ausgaben</div>'
+    + '<div style="display:flex;gap:16px;margin-bottom:10px;">'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;display:inline-block;"></span> Einnahmen</div>'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;display:inline-block;"></span> Ausgaben</div>'
+    + '</div>';
+
+  chartData.forEach(function(m) {
+    var ePct = Math.round((m.einnahmen / maxVal) * 100);
+    var aPct = Math.round((m.ausgaben / maxVal) * 100);
+    chartHTML += '<div style="margin-bottom:14px;">'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
+      + '<span style="font-size:12px;font-weight:600;color:#0f172a;">' + m.label + '</span>'
+      + '<span style="font-size:12px;color:#64748b;">' + formatCurrency(m.einnahmen) + ' / ' + formatCurrency(m.ausgaben) + '</span>'
+      + '</div>'
+      + '<div style="margin-bottom:4px;">'
+      + '<div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin-bottom:3px;">'
+      + '<div style="height:100%;background:#16a34a;width:' + ePct + '%;border-radius:99px;transition:width 0.6s;"></div>'
+      + '</div>'
+      + '<div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;">'
+      + '<div style="height:100%;background:#dc2626;width:' + aPct + '%;border-radius:99px;transition:width 0.6s;"></div>'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+  });
+
+  chartHTML += '</div>';
+
+  // ── Offene Zahlungen ──
+  var offene = getOffeneMieter();
+  var offeneHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+    + '<div>'
+    + '<div style="font-size:14px;font-weight:700;color:#0f172a;">Offene Zahlungen</div>'
+    + '<div style="font-size:12px;color:#94a3b8;margin-top:2px;">Mieter ohne Zahlungseingang diesen Monat</div>'
+    + '</div>'
+    + '<span style="background:#fef2f2;color:#dc2626;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">' + offene.length + ' offen</span>'
+    + '</div>';
+
+  if (offene.length === 0) {
+    offeneHTML += '<div style="text-align:center;padding:32px 20px;color:#94a3b8;">'
+      + '<div style="font-size:36px;margin-bottom:10px;">&#x1F389;</div>'
+      + '<div style="font-size:14px;font-weight:600;color:#16a34a;">Alle Mieter haben diesen Monat bezahlt!</div>'
+      + '</div>';
+  } else {
+    offene.forEach(function(m) {
+      var ueberfaellig = m.faelligSeit > 5;
+      offeneHTML += '<div style="display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid #f1f5f9;' + (ueberfaellig ? 'background:#fff8f8;margin:0 -22px;padding-left:22px;padding-right:22px;' : '') + '">'
+        + '<div style="width:38px;height:38px;background:#eff6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#2563eb;flex-shrink:0;">' + (m.name[0] || '?').toUpperCase() + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + m.name + '</div>'
+        + '<div style="font-size:12px;color:#94a3b8;">' + m.wohnung + '</div>'
+        + '</div>'
+        + '<div style="text-align:right;margin-right:16px;">'
+        + '<div style="font-size:14px;font-weight:700;color:#dc2626;">' + formatCurrency(m.betrag) + '</div>'
+        + '<div style="font-size:11px;color:' + (ueberfaellig ? '#dc2626' : '#94a3b8') + ';">Fällig seit ' + m.faelligSeit + ' Tagen</div>'
+        + '</div>'
+        + '<div style="display:flex;gap:7px;">'
+        + (m.tel ? '<button onclick="sendReminder(\'' + m.name.replace(/'/g,"\\'") + '\',\'' + (m.tel||'').replace(/'/g,"\\'") + '\',' + m.betrag + ')" title="Erinnerung via WhatsApp senden" style="padding:7px 12px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;color:#16a34a;cursor:pointer;font-family:inherit;white-space:nowrap;">&#x1F4AC; Erinnerung</button>' : '')
+        + '<button onclick="quickMarkPaid(\'' + m.name.replace(/'/g,"\\'") + '\',' + m.betrag + ')" style="padding:7px 12px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;font-family:inherit;white-space:nowrap;">&#x2713; Als gezahlt</button>'
+        + '</div>'
+        + '</div>';
+    });
+  }
+  offeneHTML += '</div>';
+
+  // ── Schnellüberweisung ──
+  var ibanFormatted = iban.replace(/(.{4})/g, '$1 ').trim();
+  var schnellHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">'
+    + '<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">&#x1F3E6; Schnellüberweisung</div>'
+    + '<div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Ihre Kontodaten für eingehende Überweisungen</div>'
+    + '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;">'
+    + '<div>'
+    + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">IBAN</div>'
+    + '<div style="font-size:16px;font-weight:700;color:#0f172a;letter-spacing:1px;font-family:monospace;">' + ibanFormatted + '</div>'
+    + '</div>'
+    + '<button onclick="copyIBAN(\'' + iban + '\')" title="IBAN kopieren" style="padding:9px 14px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;white-space:nowrap;">'
+    + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    + 'Kopieren</button>'
+    + '</div>'
+    + '<div style="margin-top:12px;font-size:12px;color:#94a3b8;">&#x2139;&#xFE0F; Tipp: Teilen Sie diese IBAN mit Ihren Mietern für einfache Überweisungen.</div>'
+    + '</div>';
+
+  return chartHTML + offeneHTML + schnellHTML;
+}
+
+// ── Quick mark paid from Übersicht ───────────────────────────
+function quickMarkPaid(mieterName, betrag) {
+  var arr = getZahlungen();
+  arr.push({
+    id: generateId(),
+    typ: 'Mietzahlung',
+    richtung: 'Einnahme',
+    mieter: mieterName,
+    beschreibung: mieterName,
+    betrag: betrag,
+    datum: todayStr(),
+    faellig: todayStr(),
+    status: 'Eingegangen',
+    zahlungsart: 'Uberweisung',
+    iban: '',
+    notizen: 'Schnell-Eingang (manuell)'
+  });
+  saveZahlungen(arr);
+  addNotif('\u{1F4B0}', 'Zahlung von ' + mieterName + ' als eingegangen markiert');
+  render();
+}
+
+// ── Transaktionen Tab ─────────────────────────────────────────
+function renderTransaktionen(zahlungen) {
+  var filtered = applyFilters(zahlungen);
+  filtered.sort(function(a, b) {
+    return (b.datum || '').localeCompare(a.datum || '');
+  });
+
+  var totalEin = 0, totalAus = 0;
+  filtered.forEach(function(z) {
+    if (z.richtung === 'Einnahme') totalEin += (z.betrag || 0);
+    else totalAus += (z.betrag || 0);
+  });
+
+  var html = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">';
+
+  if (filtered.length === 0) {
+    html += '<div style="padding:60px 20px;text-align:center;">'
+      + '<div style="font-size:44px;margin-bottom:12px;">&#x1F4B3;</div>'
+      + '<div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px;">Keine Transaktionen</div>'
+      + '<div style="font-size:13px;color:#94a3b8;">' + (filterSearch || filterMonat || filterTyp || filterStatus ? 'Keine Einträge für den gewählten Filter.' : 'Erstellen Sie Ihre erste Zahlung mit dem Button oben rechts.') + '</div>'
+      + '</div>';
+  } else {
+    html += '<table style="width:100%;border-collapse:collapse;">'
+      + '<thead><tr style="background:#f8fafc;border-bottom:1.5px solid #e2e8f0;">'
+      + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Datum</th>'
+      + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Mieter / Beschreibung</th>'
+      + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Typ</th>'
+      + '<th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Betrag</th>'
+      + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Status</th>'
+      + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Aktionen</th>'
+      + '</tr></thead><tbody>';
+
+    filtered.forEach(function(z, i) {
+      var isUeberfaellig = z.status === 'Ueberfaellig' || z.status === '\u00dcberfällig';
+      var rowBg = isUeberfaellig ? '#fff5f5' : (i % 2 === 0 ? 'white' : '#fafbfc');
+      var hoverBg = isUeberfaellig ? '#ffe8e8' : '#f0f9ff';
+      var betragColor = z.richtung === 'Einnahme' ? '#16a34a' : (z.richtung === 'Ausgabe' ? '#dc2626' : '#0f172a');
+      var betragPrefix = z.richtung === 'Einnahme' ? '+' : (z.richtung === 'Ausgabe' ? '−' : '');
+
+      html += '<tr style="border-bottom:1px solid #f1f5f9;background:' + rowBg + ';" '
+        + 'onmouseover="this.style.background=\'' + hoverBg + '\'" '
+        + 'onmouseout="this.style.background=\'' + rowBg + '\'">'
+        + '<td style="padding:13px 16px;font-size:13px;color:#64748b;">' + fmtDate(z.datum) + '</td>'
+        + '<td style="padding:13px 16px;">'
+        + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + (z.mieter || z.beschreibung || '–') + '</div>'
+        + (z.typ ? '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + z.typ + (z.zahlungsart ? ' · ' + z.zahlungsart : '') + '</div>' : '')
+        + '</td>'
+        + '<td style="padding:13px 16px;">' + typBadge(z.richtung, z.typ) + '</td>'
+        + '<td style="padding:13px 16px;text-align:right;font-size:14px;font-weight:700;color:' + betragColor + ';">' + betragPrefix + ' ' + formatCurrency(z.betrag) + '</td>'
+        + '<td style="padding:13px 16px;text-align:center;">' + statusBadge(z.status) + '</td>'
+        + '<td style="padding:13px 16px;">'
+        + '<div style="display:flex;gap:5px;justify-content:center;">'
+        + (z.status !== 'Eingegangen' ? '<button onclick="markAsPaid(\'' + z.id + '\')" title="Als eingegangen markieren" style="width:32px;height:32px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">&#x2714;</button>' : '')
+        + '<button onclick="openEditModal(\'' + z.id + '\')" title="Bearbeiten" style="width:32px;height:32px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">&#x270F;&#xFE0F;</button>'
+        + '<button onclick="deleteZahlung(\'' + z.id + '\')" title="Löschen" style="width:32px;height:32px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">&#x1F5D1;</button>'
+        + '</div>'
+        + '</td>'
+        + '</tr>';
+    });
+
+    html += '</tbody></table>'
+      + '<div style="padding:14px 20px;background:#f8fafc;border-top:1.5px solid #e2e8f0;display:flex;align-items:center;gap:24px;font-size:13px;">'
+      + '<span style="color:#64748b;">' + filtered.length + ' Einträge</span>'
+      + '<span style="margin-left:auto;display:flex;gap:20px;">'
+      + '<span>Einnahmen: <strong style="color:#16a34a;">' + formatCurrency(totalEin) + '</strong></span>'
+      + '<span>Ausgaben: <strong style="color:#dc2626;">' + formatCurrency(totalAus) + '</strong></span>'
+      + '<span>Netto: <strong style="color:' + (totalEin - totalAus >= 0 ? '#16a34a' : '#dc2626') + ';">' + (totalEin - totalAus >= 0 ? '+' : '') + formatCurrency(totalEin - totalAus) + '</strong></span>'
+      + '</span>'
+      + '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ── Build modals ──────────────────────────────────────────────
+function buildModals() {
+  var content = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Typ</label>'
+    + '<select id="f-typ" style="' + inputStyle + '">'
+    + '<option value="Mietzahlung">Mietzahlung</option>'
+    + '<option value="Kautionszahlung">Kautionszahlung</option>'
+    + '<option value="Nebenkosten">Nebenkosten</option>'
+    + '<option value="Reparatur">Reparatur</option>'
+    + '<option value="Sonstiges">Sonstiges</option>'
+    + '</select></div>'
+
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Richtung</label>'
+    + '<div style="display:flex;gap:16px;padding:10px 0;">'
+    + '<label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;"><input type="radio" id="f-richtung-ein" name="richtung" value="Einnahme" checked style="accent-color:#16a34a;"> <span style="color:#16a34a;font-weight:600;">Einnahme</span></label>'
+    + '<label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;"><input type="radio" id="f-richtung-aus" name="richtung" value="Ausgabe" style="accent-color:#dc2626;"> <span style="color:#dc2626;font-weight:600;">Ausgabe</span></label>'
+    + '</div></div>'
+    + '</div>'
+
+    + '<div style="margin-bottom:14px;"><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Mieter / Beschreibung</label>'
+    + '<input type="text" id="f-mieter" placeholder="z.B. Max Mustermann oder Reparatur Heizung" style="' + inputStyle + '"></div>'
+
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Betrag (€)</label>'
+    + '<input type="number" id="f-betrag" placeholder="0.00" min="0" step="0.01" style="' + inputStyle + '"></div>'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Datum</label>'
+    + '<input type="date" id="f-datum" style="' + inputStyle + '"></div>'
+    + '</div>'
+
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Fälligkeitsdatum</label>'
+    + '<input type="date" id="f-faellig" style="' + inputStyle + '"></div>'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Status</label>'
+    + '<select id="f-status" style="' + inputStyle + '">'
+    + '<option value="Eingegangen">Eingegangen</option>'
+    + '<option value="Ausstehend">Ausstehend</option>'
+    + '<option value="Ueberfaellig">Überfällig</option>'
+    + '<option value="Storniert">Storniert</option>'
+    + '</select></div>'
+    + '</div>'
+
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Zahlungsart</label>'
+    + '<select id="f-zahlungsart" style="' + inputStyle + '">'
+    + '<option value="Uberweisung">Überweisung</option>'
+    + '<option value="Lastschrift">Lastschrift</option>'
+    + '<option value="Bar">Bar</option>'
+    + '<option value="PayPal">PayPal</option>'
+    + '<option value="Sonstiges">Sonstiges</option>'
+    + '</select></div>'
+    + '<div><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">IBAN (optional)</label>'
+    + '<input type="text" id="f-iban" placeholder="DE89 3704 0044 …" style="' + inputStyle + '"></div>'
+    + '</div>'
+
+    + '<div style="margin-bottom:20px;"><label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">Notizen</label>'
+    + '<textarea id="f-notizen" rows="3" placeholder="Optionale Notizen …" style="' + inputStyle + 'resize:vertical;"></textarea></div>'
+
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;">'
+    + '<button onclick="hideModal(\'modal-zahlung\')" style="padding:10px 20px;border:1.5px solid #e2e8f0;border-radius:9px;background:white;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#64748b;">Abbrechen</button>'
+    + '<button onclick="saveZahlung()" style="padding:10px 22px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
+    + '</div>';
+
+  return modalHTML('modal-zahlung', '<span id="modal-title">Neue Zahlung</span>', content);
+}
+
+// ── Init ──────────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(user.uid, function() {
+  startPageListener(user.uid, render);
+  render();
+});
 </script>
 </body>
 </html>

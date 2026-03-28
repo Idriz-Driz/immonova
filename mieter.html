@@ -3,356 +3,573 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mieterverwaltung – ImmoNova</title>
+  <title>Mieter – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
-var user = getUser();
-var activeTab = 'mieter';
-var editIdx = -1;
+checkAuth();
+checkTrial();
 
-/* ── Hilfsfunktionen ─────────────────────────────────── */
-function getInitials(name) {
-  if(!name) return '?';
-  var p = name.trim().split(' ');
-  return p.length >= 2 ? (p[0][0]+p[p.length-1][0]).toUpperCase() : name[0].toUpperCase();
+var user = getUser();
+var activeTab = 'alle';
+var editId = null;
+var deleteId = null;
+var filterSearch = '';
+var filterObjekt = '';
+var filterStatus = '';
+
+/* ── ID generator ──────────────────────────────────────── */
+function generateId() {
+  return 'mn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 }
 
+/* ── Data helpers ──────────────────────────────────────── */
+function getMieter() {
+  return getData(KEYS.mieter, []);
+}
+
+/* ── Avatar color by first letter ──────────────────────── */
+function avatarColor(name) {
+  var colors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#ea580c'];
+  var ch = (name||'?').toUpperCase().charCodeAt(0);
+  return colors[ch % colors.length];
+}
+
+/* ── Initials ───────────────────────────────────────────── */
+function getInitials(vn, nn) {
+  var a = (vn||'').trim();
+  var b = (nn||'').trim();
+  if(a && b) return (a[0]+b[0]).toUpperCase();
+  if(a) return a.slice(0,2).toUpperCase();
+  return '?';
+}
+
+/* ── Score color ────────────────────────────────────────── */
 function scoreColor(s) {
-  if(s >= 80) return '#16a34a';
-  if(s >= 60) return '#d97706';
+  var n = parseInt(s)||0;
+  if(n >= 80) return '#16a34a';
+  if(n >= 60) return '#d97706';
   return '#dc2626';
 }
 
+/* ── Status badge ───────────────────────────────────────── */
+function statusBadge(status) {
+  if(status === 'Aktiv')      return '<span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#f0fdf4;color:#16a34a;">● Aktiv</span>';
+  if(status === 'Gekündigt')  return '<span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#fef2f2;color:#dc2626;">● Gekündigt</span>';
+  return '<span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#fffbeb;color:#d97706;">● Ausstehend</span>';
+}
+
+/* ── Kaution status badge ───────────────────────────────── */
+function kautionBadge(ks) {
+  if(ks === 'Gezahlt') return '<span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#f0fdf4;color:#16a34a;">✓ Gezahlt</span>';
+  return '<span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#fffbeb;color:#d97706;">⏳ Ausstehend</span>';
+}
+
+/* ── Tab switch ─────────────────────────────────────────── */
 function tabSwitch(tab) {
   activeTab = tab;
   render();
 }
 
-/* ── Toggle-Status ───────────────────────────────────── */
-function toggleStatus(idx) {
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
-  mieter[idx].status = mieter[idx].status === 'bezahlt' ? 'offen' : 'bezahlt';
-  setData(KEYS.mieter, mieter);
-  syncToFirebase(user.uid);
-  addNotif('💳', 'Status geändert: ' + (mieter[idx].name||'') + ' → ' + mieter[idx].status);
+/* ── Filter/search ──────────────────────────────────────── */
+function applyFilter(list) {
+  return list.filter(function(m) {
+    var name = ((m.vn||'') + ' ' + (m.nn||'')).toLowerCase();
+    var matchSearch = !filterSearch || name.indexOf(filterSearch.toLowerCase()) >= 0
+      || (m.wohnung||'').toLowerCase().indexOf(filterSearch.toLowerCase()) >= 0
+      || (m.objekt||'').toLowerCase().indexOf(filterSearch.toLowerCase()) >= 0
+      || (m.email||'').toLowerCase().indexOf(filterSearch.toLowerCase()) >= 0;
+    var matchObjekt = !filterObjekt || (m.objekt||'') === filterObjekt;
+    var matchStatus = !filterStatus || (m.status||'') === filterStatus;
+    return matchSearch && matchObjekt && matchStatus;
+  });
+}
+
+function onSearchInput(val) {
+  filterSearch = val;
   render();
 }
 
-/* ── Löschen ─────────────────────────────────────────── */
-function deleteMieter(idx) {
-  if(!confirm('Mieter wirklich löschen?')) return;
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
-  var name = mieter[idx].name || '';
-  mieter.splice(idx, 1);
-  setData(KEYS.mieter, mieter);
-  syncToFirebase(user.uid);
-  addNotif('🗑️', 'Mieter gelöscht: ' + name);
+function onObjektFilter(val) {
+  filterObjekt = val;
   render();
 }
 
-/* ── Modal öffnen ────────────────────────────────────── */
-function openMieterModal(idx) {
-  editIdx = idx;
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
-  if(idx >= 0 && mieter[idx]) {
-    var m = mieter[idx];
-    var nameParts = (m.name||'').split(' ');
-    document.getElementById('m-vn').value  = nameParts[0] || '';
-    document.getElementById('m-nn').value  = nameParts.slice(1).join(' ') || '';
-    document.getElementById('m-wn').value  = m.wn    || '';
-    document.getElementById('m-miete').value   = m.miete  || '';
-    document.getElementById('m-kau').value     = m.kau    || '';
-    document.getElementById('m-tel').value     = m.tel    || '';
-    document.getElementById('m-em').value      = m.em     || '';
-    document.getElementById('m-dat').value     = m.dat    || '';
-    document.getElementById('m-sco').value     = m.sco    || 80;
-    document.getElementById('m-status').value  = m.status || 'bezahlt';
-    document.getElementById('m-modal-title').textContent = '✏️ Mieter bearbeiten';
-  } else {
-    document.getElementById('m-vn').value  = '';
-    document.getElementById('m-nn').value  = '';
-    document.getElementById('m-wn').value  = '';
-    document.getElementById('m-miete').value   = '';
-    document.getElementById('m-kau').value     = '';
-    document.getElementById('m-tel').value     = '';
-    document.getElementById('m-em').value      = '';
-    document.getElementById('m-dat').value     = '';
-    document.getElementById('m-sco').value     = 80;
-    document.getElementById('m-status').value  = 'bezahlt';
-    document.getElementById('m-modal-title').textContent = '👥 Mieter hinzufügen';
-  }
-  document.getElementById('m-err').textContent = '';
-  showModal('m-modal');
+function onStatusFilter(val) {
+  filterStatus = val;
+  render();
 }
 
-/* ── Modal speichern ─────────────────────────────────── */
+/* ── Open modal ─────────────────────────────────────────── */
+function openModal(id) {
+  var el = document.getElementById(id);
+  if(el) el.style.display = 'flex';
+}
+
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if(el) el.style.display = 'none';
+}
+
+/* ── Open add modal ─────────────────────────────────────── */
+function openAddModal() {
+  editId = null;
+  document.getElementById('modal-title').textContent = '👥 Mieter hinzufügen';
+  document.getElementById('f-vn').value = '';
+  document.getElementById('f-nn').value = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-tel').value = '';
+  document.getElementById('f-wohnung').value = '';
+  document.getElementById('f-objekt').value = '';
+  document.getElementById('f-miete').value = '';
+  document.getElementById('f-kaution').value = '';
+  document.getElementById('f-mietbeginn').value = '';
+  document.getElementById('f-mietende').value = '';
+  document.getElementById('f-personen').value = '1';
+  document.getElementById('f-haustiere').checked = false;
+  document.getElementById('f-score').value = '80';
+  document.getElementById('f-status').value = 'Aktiv';
+  document.getElementById('f-notizen').value = '';
+  document.getElementById('f-err').textContent = '';
+  openModal('add-modal');
+}
+
+/* ── Open edit modal ────────────────────────────────────── */
+function openEditModal(id) {
+  var mieter = getMieter();
+  var m = null;
+  for(var i=0;i<mieter.length;i++){ if(mieter[i].id===id){ m=mieter[i]; break; } }
+  if(!m) return;
+  editId = id;
+  document.getElementById('modal-title').textContent = '✏️ Mieter bearbeiten';
+  document.getElementById('f-vn').value = m.vn||'';
+  document.getElementById('f-nn').value = m.nn||'';
+  document.getElementById('f-email').value = m.email||'';
+  document.getElementById('f-tel').value = m.tel||'';
+  document.getElementById('f-wohnung').value = m.wohnung||'';
+  document.getElementById('f-objekt').value = m.objekt||'';
+  document.getElementById('f-miete').value = m.miete||'';
+  document.getElementById('f-kaution').value = m.kaution||'';
+  document.getElementById('f-mietbeginn').value = m.mietbeginn||'';
+  document.getElementById('f-mietende').value = m.mietende||'';
+  document.getElementById('f-personen').value = m.personen||'1';
+  document.getElementById('f-haustiere').checked = !!m.haustiere;
+  document.getElementById('f-score').value = m.score||'80';
+  document.getElementById('f-status').value = m.status||'Aktiv';
+  document.getElementById('f-notizen').value = m.notizen||'';
+  document.getElementById('f-err').textContent = '';
+  openModal('add-modal');
+}
+
+/* ── Save mieter ────────────────────────────────────────── */
 function saveMieter() {
-  var vn     = (document.getElementById('m-vn').value||'').trim();
-  var nn     = (document.getElementById('m-nn').value||'').trim();
-  var wn     = (document.getElementById('m-wn').value||'').trim();
-  var miete  = parseFloat(document.getElementById('m-miete').value||'0');
-  var kau    = parseFloat(document.getElementById('m-kau').value||'0');
-  var tel    = (document.getElementById('m-tel').value||'').trim();
-  var em     = (document.getElementById('m-em').value||'').trim();
-  var dat    = document.getElementById('m-dat').value || '';
-  var sco    = parseInt(document.getElementById('m-sco').value||'80', 10);
-  var status = document.getElementById('m-status').value || 'bezahlt';
-  var errEl  = document.getElementById('m-err');
+  var vn       = (document.getElementById('f-vn').value||'').trim();
+  var nn       = (document.getElementById('f-nn').value||'').trim();
+  var email    = (document.getElementById('f-email').value||'').trim();
+  var tel      = (document.getElementById('f-tel').value||'').trim();
+  var wohnung  = (document.getElementById('f-wohnung').value||'').trim();
+  var objekt   = (document.getElementById('f-objekt').value||'').trim();
+  var miete    = parseFloat(document.getElementById('f-miete').value)||0;
+  var kaution  = parseFloat(document.getElementById('f-kaution').value)||0;
+  var mietbeginn = document.getElementById('f-mietbeginn').value||'';
+  var mietende   = document.getElementById('f-mietende').value||'';
+  var personen   = parseInt(document.getElementById('f-personen').value)||1;
+  var haustiere  = document.getElementById('f-haustiere').checked;
+  var score      = parseInt(document.getElementById('f-score').value)||80;
+  var status     = document.getElementById('f-status').value||'Aktiv';
+  var notizen    = (document.getElementById('f-notizen').value||'').trim();
+  var errEl      = document.getElementById('f-err');
 
-  if(!vn || !wn) { errEl.textContent = '⚠️ Bitte Name und Wohnung eingeben.'; return; }
-  if(!(miete > 0)) { errEl.textContent = '⚠️ Bitte gültige Kaltmiete eingeben.'; return; }
+  if(!vn) { errEl.textContent = '⚠️ Bitte Vorname eingeben.'; return; }
+  if(!wohnung) { errEl.textContent = '⚠️ Bitte Wohnung eingeben.'; return; }
+  if(!(miete > 0)) { errEl.textContent = '⚠️ Bitte gültige Monatsmiete eingeben.'; return; }
 
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
-  var name   = vn + (nn ? ' ' + nn : '');
-  var obj    = { name:name, wn:wn, miete:miete, kau:kau, tel:tel, em:em, dat:dat, sco:sco, status:status };
+  var mieterList = getMieter();
+  var now = new Date().toLocaleString('de-DE');
 
-  if(editIdx >= 0) {
-    mieter[editIdx] = obj;
+  if(editId) {
+    for(var i=0;i<mieterList.length;i++) {
+      if(mieterList[i].id === editId) {
+        var old = mieterList[i];
+        var hist = old.history || [];
+        hist.unshift({ ts: now, text: 'Mieter aktualisiert: ' + vn + ' ' + nn });
+        mieterList[i] = { id: editId, vn:vn, nn:nn, email:email, tel:tel, wohnung:wohnung, objekt:objekt,
+          miete:miete, kaution:kaution, kautionStatus: old.kautionStatus||'Ausstehend',
+          mietbeginn:mietbeginn, mietende:mietende, personen:personen, haustiere:haustiere,
+          score:score, status:status, notizen:notizen, history:hist };
+        break;
+      }
+    }
+    addNotif('✏️', 'Mieter aktualisiert: ' + vn + ' ' + nn);
   } else {
-    mieter.push(obj);
+    var newEntry = { id: generateId(), vn:vn, nn:nn, email:email, tel:tel, wohnung:wohnung, objekt:objekt,
+      miete:miete, kaution:kaution, kautionStatus:'Ausstehend',
+      mietbeginn:mietbeginn, mietende:mietende, personen:personen, haustiere:haustiere,
+      score:score, status:status, notizen:notizen,
+      history:[{ ts: now, text: 'Mieter angelegt: ' + vn + ' ' + nn }] };
+    mieterList.push(newEntry);
+    addNotif('👥', 'Neuer Mieter: ' + vn + ' ' + nn);
   }
 
-  setData(KEYS.mieter, mieter);
+  setData(KEYS.mieter, mieterList);
   syncToFirebase(user.uid);
-  addNotif('👥', 'Mieter ' + name + ' ' + (editIdx < 0 ? 'hinzugefügt' : 'aktualisiert'));
-  hideModal('m-modal');
+  closeModal('add-modal');
   render();
 }
 
-/* ── Render ──────────────────────────────────────────── */
-function render() {
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+/* ── Open delete confirm ────────────────────────────────── */
+function openDeleteModal(id) {
+  deleteId = id;
+  openModal('delete-modal');
+}
 
-  /* Tab-Leiste */
+/* ── Confirm delete ─────────────────────────────────────── */
+function confirmDelete() {
+  if(!deleteId) return;
+  var mieterList = getMieter();
+  var name = '';
+  mieterList = mieterList.filter(function(m) {
+    if(m.id === deleteId) { name = (m.vn||'') + ' ' + (m.nn||''); return false; }
+    return true;
+  });
+  setData(KEYS.mieter, mieterList);
+  syncToFirebase(user.uid);
+  addNotif('🗑️', 'Mieter gelöscht: ' + name.trim());
+  closeModal('delete-modal');
+  deleteId = null;
+  render();
+}
+
+/* ── Toggle kaution status ──────────────────────────────── */
+function toggleKautionStatus(id) {
+  var mieterList = getMieter();
+  for(var i=0;i<mieterList.length;i++) {
+    if(mieterList[i].id === id) {
+      var prev = mieterList[i].kautionStatus || 'Ausstehend';
+      mieterList[i].kautionStatus = prev === 'Gezahlt' ? 'Ausstehend' : 'Gezahlt';
+      var hist = mieterList[i].history || [];
+      hist.unshift({ ts: new Date().toLocaleString('de-DE'), text: 'Kaution markiert als: ' + mieterList[i].kautionStatus });
+      mieterList[i].history = hist;
+      break;
+    }
+  }
+  setData(KEYS.mieter, mieterList);
+  syncToFirebase(user.uid);
+  render();
+}
+
+/* ── Build KPI cards ────────────────────────────────────── */
+function buildKPIs(mieterList) {
+  var total = mieterList.length;
+  var aktiv = mieterList.filter(function(m){ return m.status === 'Aktiv'; }).length;
+  var gesamtMiete = 0;
+  for(var i=0;i<mieterList.length;i++) {
+    if(mieterList[i].status === 'Aktiv') gesamtMiete += (mieterList[i].miete||0);
+  }
+
+  var kpis = [
+    { ico:'👥', label:'Gesamt Mieter',          val: total,              color:'#2563eb', bg:'#eff6ff' },
+    { ico:'✅', label:'Aktive Mietverhältnisse', val: aktiv,             color:'#16a34a', bg:'#f0fdf4' },
+    { ico:'💶', label:'Gesamtmieteinnahmen',     val: fmt(gesamtMiete)+' €', color:'#7c3aed', bg:'#f5f3ff' }
+  ];
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px;">';
+  for(var k=0;k<kpis.length;k++) {
+    var kp = kpis[k];
+    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">';
+    html += '<div style="width:42px;height:42px;border-radius:11px;background:'+kp.bg+';display:flex;align-items:center;justify-content:center;font-size:20px;">'+kp.ico+'</div>';
+    html += '</div>';
+    html += '<div style="font-size:26px;font-weight:800;color:'+kp.color+';margin-bottom:4px;">'+kp.val+'</div>';
+    html += '<div style="font-size:12px;color:#64748b;font-weight:500;">'+kp.label+'</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+/* ── Build filter bar ───────────────────────────────────── */
+function buildFilterBar(mieterList) {
+  var objekte = [];
+  var seen = {};
+  for(var i=0;i<mieterList.length;i++) {
+    var ob = mieterList[i].objekt||'';
+    if(ob && !seen[ob]) { seen[ob]=true; objekte.push(ob); }
+  }
+
+  var objOpts = '<option value="">Alle Objekte</option>';
+  for(var j=0;j<objekte.length;j++) {
+    objOpts += '<option value="'+objekte[j]+'"'+(filterObjekt===objekte[j]?' selected':'')+'>'+objekte[j]+'</option>';
+  }
+
+  var statusOpts = '<option value="">Alle Status</option>'
+    + '<option value="Aktiv"'+(filterStatus==='Aktiv'?' selected':'')+'>Aktiv</option>'
+    + '<option value="Gekündigt"'+(filterStatus==='Gekündigt'?' selected':'')+'>Gekündigt</option>'
+    + '<option value="Ausstehend"'+(filterStatus==='Ausstehend'?' selected':'')+'>Ausstehend</option>';
+
+  return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);display:flex;flex-wrap:wrap;gap:12px;align-items:center;">'
+    + '<div style="flex:1;min-width:200px;position:relative;">'
+    + '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:#94a3b8;">🔍</span>'
+    + '<input type="text" value="'+filterSearch+'" oninput="onSearchInput(this.value)" placeholder="Name, Wohnung, Objekt suchen..." '
+    + 'style="width:100%;padding:9px 12px 9px 36px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;"'
+    + ' onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '</div>'
+    + '<select onchange="onObjektFilter(this.value)" style="padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:white;outline:none;cursor:pointer;">'
+    + objOpts
+    + '</select>'
+    + '<select onchange="onStatusFilter(this.value)" style="padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:white;outline:none;cursor:pointer;">'
+    + statusOpts
+    + '</select>'
+    + '</div>';
+}
+
+/* ── Build tabs ─────────────────────────────────────────── */
+function buildTabs() {
   function tabBtn(id, label) {
     var active = activeTab === id;
-    return '<button onclick="tabSwitch(\''+id+'\')" style="padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;' +
-      (active ? 'background:white;color:#1e293b;box-shadow:0 1px 3px rgba(0,0,0,0.12);' : 'background:transparent;color:#64748b;') +
-      '">'+label+'</button>';
+    return '<button onclick="tabSwitch(\''+id+'\')" style="padding:8px 20px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;'
+      + (active ? 'background:white;color:#1e293b;box-shadow:0 1px 3px rgba(0,0,0,0.12);' : 'background:transparent;color:#64748b;')
+      + '">'+label+'</button>';
   }
-  var tabsHTML = '<div style="display:inline-flex;gap:4px;background:#f1f5f9;padding:4px;border-radius:10px;margin-bottom:20px;">' +
-    tabBtn('mieter','Alle Mieter') +
-    tabBtn('kautionen','Kautionen') +
-    tabBtn('historie','Miethistorie') +
-    '</div>';
-
-  var contentHTML = '';
-
-  /* ═══ TAB 1: Alle Mieter ═══════════════════════════ */
-  if(activeTab === 'mieter') {
-    if(mieter.length === 0) {
-      contentHTML = '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">' +
-        '<div style="font-size:52px;margin-bottom:12px;">👥</div>' +
-        '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#374151;">Noch keine Mieter angelegt</div>' +
-        '<div style="font-size:14px;margin-bottom:20px;">Fügen Sie Ihren ersten Mieter hinzu.</div>' +
-        '<button onclick="openMieterModal(-1)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">+ Mieter hinzufügen</button>' +
-        '</div>';
-    } else {
-      var rows = '';
-      mieter.forEach(function(m, i) {
-        var sc  = m.status === 'bezahlt' ? '#16a34a' : '#dc2626';
-        var sb  = m.status === 'bezahlt' ? '#f0fdf4' : '#fef2f2';
-        var sco = m.sco || 0;
-        var scoColor = scoreColor(sco);
-        var waText = encodeURIComponent('Sehr geehrte/r '+m.name+', Ihre Miete für '+(m.wn||'')+' in Höhe von €'+(m.miete||'')+' ist noch ausstehend. Bitte um baldige Überweisung.');
-        var waBtn = m.tel
-          ? '<a href="https://wa.me/'+m.tel.replace(/\D/g,'')+('?text='+waText)+'" target="_blank" style="display:inline-flex;align-items:center;gap:3px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;padding:5px 9px;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;font-family:inherit;">📲</a>'
-          : '';
-        rows += '<tr style="border-bottom:1px solid #f1f5f9;">' +
-          /* Avatar+Name */
-          '<td style="padding:12px 14px;white-space:nowrap;">' +
-            '<div style="display:flex;align-items:center;gap:10px;">' +
-              '<div style="width:36px;height:36px;border-radius:50%;background:'+sc+';color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">'+getInitials(m.name)+'</div>' +
-              '<div>' +
-                '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+(m.name||'')+'</div>' +
-                '<div style="font-size:11px;color:#94a3b8;">'+(m.em||'')+'</div>' +
-              '</div>' +
-            '</div>' +
-          '</td>' +
-          /* Wohnung */
-          '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+(m.wn||'')+'</td>' +
-          /* Kaltmiete */
-          '<td style="padding:12px 14px;font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;">€'+fmt(m.miete||0)+'</td>' +
-          /* Kaution */
-          '<td style="padding:12px 14px;font-size:13px;color:#374151;white-space:nowrap;">€'+fmt(m.kau||0)+'</td>' +
-          /* Telefon */
-          '<td style="padding:12px 14px;font-size:13px;color:#374151;white-space:nowrap;">'+(m.tel||'–')+'</td>' +
-          /* Score */
-          '<td style="padding:12px 14px;min-width:80px;">' +
-            '<div style="font-size:13px;font-weight:600;color:'+scoColor+';margin-bottom:3px;">'+sco+'</div>' +
-            '<div style="background:#f1f5f9;border-radius:3px;height:5px;width:60px;">' +
-              '<div style="background:'+scoColor+';height:5px;border-radius:3px;width:'+sco+'%;"></div>' +
-            '</div>' +
-          '</td>' +
-          /* Status-Button */
-          '<td style="padding:12px 14px;white-space:nowrap;">' +
-            '<button onclick="toggleStatus('+i+')" style="background:'+sb+';color:'+sc+';border:1.5px solid '+sc+';border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">' +
-              (m.status==='bezahlt'?'✅ Bezahlt':'❌ Offen') +
-            '</button>' +
-          '</td>' +
-          /* Einzug */
-          '<td style="padding:12px 14px;font-size:12px;color:#94a3b8;white-space:nowrap;">'+fmtDate(m.dat||'')+'</td>' +
-          /* Aktionen */
-          '<td style="padding:12px 14px;white-space:nowrap;">' +
-            '<div style="display:flex;gap:6px;align-items:center;">' +
-              waBtn +
-              '<button onclick="openMieterModal('+i+')" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;font-family:inherit;">✏️</button>' +
-              '<button onclick="deleteMieter('+i+')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;font-family:inherit;">🗑️</button>' +
-            '</div>' +
-          '</td>' +
-          '</tr>';
-      });
-      contentHTML = '<div style="overflow-x:auto;">' +
-        '<table style="width:100%;border-collapse:collapse;">' +
-          '<thead>' +
-            '<tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Avatar & Name</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Wohnung</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Kaltmiete</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Kaution</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Telefon</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Score</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Status</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Einzug</th>' +
-              '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Aktionen</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>'+rows+'</tbody>' +
-        '</table>' +
-        '</div>';
-    }
-  }
-
-  /* ═══ TAB 2: Kautionen ══════════════════════════════ */
-  if(activeTab === 'kautionen') {
-    if(mieter.length === 0) {
-      contentHTML = '<div style="text-align:center;padding:60px 20px;color:#94a3b8;font-size:14px;">Keine Mieter vorhanden</div>';
-    } else {
-      var kRows = '';
-      mieter.forEach(function(m) {
-        var korrekt = (m.kau||0) >= (m.miete||0)*3;
-        var hinterlegt = (m.kau||0) > 0;
-        kRows += '<tr style="border-bottom:1px solid #f1f5f9;">' +
-          '<td style="padding:12px 14px;font-size:13px;font-weight:600;color:#1e293b;">'+(m.name||'')+'</td>' +
-          '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+(m.wn||'')+'</td>' +
-          '<td style="padding:12px 14px;font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;">€'+fmt(m.miete||0)+'</td>' +
-          '<td style="padding:12px 14px;font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;">€'+fmt(m.kau||0)+'</td>' +
-          '<td style="padding:12px 14px;">' +
-            (korrekt
-              ? '<span style="font-size:12px;font-weight:600;color:#16a34a;">✅ Korrekt</span>'
-              : '<span style="font-size:12px;font-weight:600;color:#dc2626;">⚠️ Zu niedrig</span>') +
-          '</td>' +
-          '<td style="padding:12px 14px;">' +
-            (hinterlegt
-              ? '<span style="font-size:12px;font-weight:600;padding:3px 9px;background:#f0fdf4;color:#16a34a;border-radius:20px;">✅ Hinterlegt</span>'
-              : '<span style="font-size:12px;font-weight:600;padding:3px 9px;background:#fef2f2;color:#dc2626;border-radius:20px;">❌ Fehlt</span>') +
-          '</td>' +
-          '</tr>';
-      });
-      contentHTML = '<div style="overflow-x:auto;">' +
-        '<table style="width:100%;border-collapse:collapse;">' +
-          '<thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Mieter</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Wohnung</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Kaltmiete</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Kaution</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">3× Monatsmiete?</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Status</th>' +
-          '</tr></thead>' +
-          '<tbody>'+kRows+'</tbody>' +
-        '</table></div>';
-    }
-  }
-
-  /* ═══ TAB 3: Miethistorie ═══════════════════════════ */
-  if(activeTab === 'historie') {
-    var monate = [];
-    var d = new Date();
-    for(var i=5; i>=0; i--) {
-      var m2 = new Date(d.getFullYear(), d.getMonth()-i, 1);
-      monate.push(m2.toLocaleDateString('de-DE',{month:'short', year:'2-digit'}));
-    }
-    if(mieter.length === 0) {
-      contentHTML = '<div style="text-align:center;padding:60px 20px;color:#94a3b8;font-size:14px;">Keine Mieter vorhanden</div>';
-    } else {
-      var hRows = '';
-      mieter.forEach(function(m) {
-        hRows += '<tr style="border-bottom:1px solid #f1f5f9;">' +
-          '<td style="padding:12px 14px;font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<div style="width:28px;height:28px;border-radius:50%;background:'+(m.status==='bezahlt'?'#16a34a':'#dc2626')+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">'+getInitials(m.name)+'</div>' +
-              (m.name||'') +
-            '</div>' +
-          '</td>';
-        for(var k=0; k<6; k++) {
-          var histStatus = m.hist && m.hist[k] !== undefined ? m.hist[k] : 'bezahlt';
-          var isBez = histStatus === 'bezahlt';
-          hRows += '<td style="padding:12px 14px;text-align:center;">' +
-            '<span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:'+(isBez?'#f0fdf4':'#fef2f2')+';color:'+(isBez?'#16a34a':'#dc2626')+';white-space:nowrap;">' +
-              (isBez?'bezahlt':'offen') +
-            '</span>' +
-            '</td>';
-        }
-        hRows += '</tr>';
-      });
-      contentHTML = '<div style="overflow-x:auto;">' +
-        '<table style="width:100%;border-collapse:collapse;">' +
-          '<thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Mieter</th>' +
-            monate.map(function(mn){ return '<th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;white-space:nowrap;">'+mn+'</th>'; }).join('') +
-          '</tr></thead>' +
-          '<tbody>'+hRows+'</tbody>' +
-        '</table></div>';
-    }
-  }
-
-  /* ── Modal HTML ──────────────────────────────────── */
-  var modalContent =
-    '<div id="m-err" style="color:#dc2626;font-size:13px;margin-bottom:8px;min-height:18px;"></div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
-      formGroup('Vorname','<input id="m-vn" type="text" placeholder="Max" style="'+inputStyle+'">') +
-      formGroup('Nachname','<input id="m-nn" type="text" placeholder="Mustermann" style="'+inputStyle+'">') +
-    '</div>' +
-    formGroup('Wohnung (z.B. 1 OG)','<input id="m-wn" type="text" placeholder="1 OG" style="'+inputStyle+'">','margin-bottom:12px;') +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
-      formGroup('Kaltmiete (€)','<input id="m-miete" type="number" min="0" placeholder="750" style="'+inputStyle+'">') +
-      formGroup('Kaution (€)','<input id="m-kau" type="number" min="0" placeholder="2250" style="'+inputStyle+'">') +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
-      formGroup('Telefon','<input id="m-tel" type="tel" placeholder="+49 170 1234567" style="'+inputStyle+'">') +
-      formGroup('E-Mail','<input id="m-em" type="email" placeholder="max@example.com" style="'+inputStyle+'">') +
-    '</div>' +
-    formGroup('Einzugsdatum','<input id="m-dat" type="date" style="'+inputStyle+'">','margin-bottom:12px;') +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
-      formGroup('Mieter-Score (1–100)','<input id="m-sco" type="number" min="1" max="100" value="80" style="'+inputStyle+'">') +
-      formGroup('Status','<select id="m-status" style="'+inputStyle+'"><option value="bezahlt">Bezahlt</option><option value="offen">Offen</option></select>') +
-    '</div>' +
-    '<button onclick="saveMieter()" style="width:100%;background:#16a34a;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>';
-
-  var modalsHTML = modalHTML('m-modal', '<span id="m-modal-title">👥 Mieter hinzufügen</span>', modalContent);
-
-  var actionBtn = '<button onclick="openMieterModal(-1)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Mieter hinzufügen</button>';
-
-  var mainHTML =
-    '<div style="max-width:1400px;margin:0 auto;">' +
-      tabsHTML +
-      '<div style="background:white;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;">' +
-        contentHTML +
-      '</div>' +
-    '</div>';
-
-  renderLayout('mieter', 'Mieterverwaltung', actionBtn, mainHTML, modalsHTML);
+  return '<div style="display:inline-flex;gap:4px;background:#f1f5f9;padding:4px;border-radius:10px;margin-bottom:20px;">'
+    + tabBtn('alle','Alle Mieter')
+    + tabBtn('kautionen','Kautionen')
+    + tabBtn('historie','Miethistorie')
+    + '</div>';
 }
 
+/* ── Tab: Alle Mieter ───────────────────────────────────── */
+function buildAlleMieter(list) {
+  if(list.length === 0) {
+    return emptyState('👥','Keine Mieter gefunden','Legen Sie Ihren ersten Mieter an oder passen Sie den Filter an.','+ Mieter hinzufügen','openAddModal()');
+  }
+
+  var cards = '';
+  for(var i=0;i<list.length;i++) {
+    var m = list[i];
+    var fullName = ((m.vn||'') + ' ' + (m.nn||'')).trim();
+    var initials = getInitials(m.vn, m.nn);
+    var aColor = avatarColor(m.vn||'?');
+    var sc = parseInt(m.score)||0;
+    var scColor = scoreColor(sc);
+
+    var tel = (m.tel||'').replace(/\s/g,'').replace(/^00/,'+').replace(/^\+49/,'+49');
+    var waMsg = encodeURIComponent('Sehr geehrte/r '+fullName+', hiermit erinnern wir Sie an die ausstehende Mietzahlung für die Wohnung '+( m.wohnung||'')+' in Höhe von '+fmt(m.miete||0)+' €. Bitte überweisen Sie den Betrag baldmöglichst. Mit freundlichen Grüßen, Ihre Hausverwaltung');
+    var waHref = m.tel ? 'https://wa.me/'+tel.replace(/[^0-9+]/g,'')+('?text='+waMsg) : '#';
+    var waStyle = m.tel ? 'cursor:pointer;' : 'opacity:0.4;cursor:not-allowed;pointer-events:none;';
+
+    cards += '<div style="background:white;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:0;">';
+
+    /* Card header: avatar + name + status */
+    cards += '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">';
+    cards += '<div style="width:48px;height:48px;border-radius:50%;background:'+aColor+';color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0;">'+initials+'</div>';
+    cards += '<div style="flex:1;min-width:0;">';
+    cards += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fullName+'</div>';
+    cards += '<div style="font-size:12px;color:#64748b;margin-top:2px;">'+( m.wohnung||'–')+' · '+(m.objekt||'–')+'</div>';
+    cards += '</div>';
+    cards += statusBadge(m.status||'Ausstehend');
+    cards += '</div>';
+
+    /* Divider */
+    cards += '<div style="height:1px;background:#f1f5f9;margin-bottom:14px;"></div>';
+
+    /* Details grid */
+    cards += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">';
+    cards += '<div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Miete</div>';
+    cards += '<div style="font-size:15px;font-weight:700;color:#1e293b;">'+fmt(m.miete||0)+' € <span style="font-size:11px;font-weight:400;color:#94a3b8;">/ Monat</span></div></div>';
+    cards += '<div><div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Mietbeginn</div>';
+    cards += '<div style="font-size:13px;font-weight:600;color:#374151;">'+fmtDate(m.mietbeginn||'')+'</div></div>';
+    cards += '</div>';
+
+    /* Score bar */
+    cards += '<div style="margin-bottom:14px;">';
+    cards += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">';
+    cards += '<span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Mieter-Score</span>';
+    cards += '<span style="font-size:13px;font-weight:700;color:'+scColor+';">'+sc+' / 100</span>';
+    cards += '</div>';
+    cards += '<div style="height:7px;background:#f1f5f9;border-radius:99px;overflow:hidden;">';
+    cards += '<div style="height:100%;width:'+Math.min(sc,100)+'%;background:'+scColor+';border-radius:99px;transition:width 0.5s;"></div>';
+    cards += '</div>';
+    cards += '</div>';
+
+    /* Action buttons */
+    cards += '<div style="display:flex;gap:7px;flex-wrap:wrap;">';
+    cards += '<a href="'+waHref+'" target="_blank" title="WhatsApp Mahnung" style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;text-decoration:none;'+waStyle+'">📲 Mahnung</a>';
+    cards += '<button onclick="openEditModal(\''+m.id+'\')" title="Bearbeiten" style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Bearbeiten</button>';
+    cards += '<button onclick="openDeleteModal(\''+m.id+'\')" title="Löschen" style="display:inline-flex;align-items:center;gap:5px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Löschen</button>';
+    cards += '</div>';
+
+    cards += '</div>';
+  }
+
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;">' + cards + '</div>';
+}
+
+/* ── Tab: Kautionen ─────────────────────────────────────── */
+function buildKautionen(list) {
+  if(list.length === 0) {
+    return emptyState('🔐','Keine Kautionen','Kautionsdaten werden nach Anlegen von Mietern angezeigt.','','');
+  }
+
+  var rows = '';
+  for(var i=0;i<list.length;i++) {
+    var m = list[i];
+    var fullName = ((m.vn||'') + ' ' + (m.nn||'')).trim();
+    var ks = m.kautionStatus || 'Ausstehend';
+    var mietende = m.mietende ? fmtDate(m.mietende) : '–';
+    rows += '<tr style="border-bottom:1px solid #f1f5f9;">';
+    rows += '<td style="padding:12px 14px;">'
+      + '<div style="display:flex;align-items:center;gap:9px;">'
+      + '<div style="width:32px;height:32px;border-radius:50%;background:'+avatarColor(m.vn||'?')+';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">'+getInitials(m.vn,m.nn)+'</div>'
+      + '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+fullName+'</div>'
+      + '</div></td>';
+    rows += '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+(m.wohnung||'–')+'</td>';
+    rows += '<td style="padding:12px 14px;font-size:13px;font-weight:700;color:#1e293b;">'+fmt(m.kaution||0)+' €</td>';
+    rows += '<td style="padding:12px 14px;">'+kautionBadge(ks)+'</td>';
+    rows += '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+mietende+'</td>';
+    rows += '<td style="padding:12px 14px;">'
+      + '<button onclick="toggleKautionStatus(\''+m.id+'\')" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:white;color:#374151;cursor:pointer;font-family:inherit;">Umschalten</button>'
+      + '</td>';
+    rows += '</tr>';
+  }
+
+  return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    + '<div style="overflow-x:auto;">'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">'
+    + '<th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Mieter</th>'
+    + '<th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Wohnung</th>'
+    + '<th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Kaution (€)</th>'
+    + '<th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Status</th>'
+    + '<th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Rückgabe-Datum</th>'
+    + '<th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Aktion</th>'
+    + '</tr></thead>'
+    + '<tbody>'+rows+'</tbody>'
+    + '</table></div></div>';
+}
+
+/* ── Tab: Miethistorie ──────────────────────────────────── */
+function buildHistorie(list) {
+  var events = [];
+  for(var i=0;i<list.length;i++) {
+    var m = list[i];
+    var fullName = ((m.vn||'') + ' ' + (m.nn||'')).trim();
+    var hist = m.history || [];
+    for(var j=0;j<hist.length;j++) {
+      events.push({ ts: hist[j].ts||'', text: hist[j].text||'', name: fullName, aColor: avatarColor(m.vn||'?'), initials: getInitials(m.vn,m.nn) });
+    }
+  }
+
+  if(events.length === 0) {
+    return emptyState('📋','Keine Miethistorie','Änderungen werden hier protokolliert','','');
+  }
+
+  /* Sort by timestamp descending (string compare works for de-DE locale too, best effort) */
+  events.sort(function(a,b){ return b.ts.localeCompare(a.ts); });
+
+  var items = '';
+  for(var k=0;k<events.length;k++) {
+    var ev = events[k];
+    items += '<div style="display:flex;align-items:flex-start;gap:13px;padding:14px 0;border-bottom:1px solid #f1f5f9;">';
+    items += '<div style="width:34px;height:34px;border-radius:50%;background:'+ev.aColor+';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">'+ev.initials+'</div>';
+    items += '<div style="flex:1;">';
+    items += '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+ev.name+'</div>';
+    items += '<div style="font-size:13px;color:#374151;margin-top:2px;">'+ev.text+'</div>';
+    items += '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">'+ev.ts+'</div>';
+    items += '</div></div>';
+  }
+
+  return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:0 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    + '<div style="padding:14px 0;border-bottom:2px solid #e2e8f0;font-size:13px;font-weight:700;color:#0f172a;">📋 Verlauf aller Mietänderungen</div>'
+    + items
+    + '</div>';
+}
+
+/* ── Main render ────────────────────────────────────────── */
+function render() {
+  var allMieter = getMieter();
+  var filtered  = applyFilter(allMieter);
+
+  var tabContent = '';
+  if(activeTab === 'alle')      tabContent = buildAlleMieter(filtered);
+  if(activeTab === 'kautionen') tabContent = buildKautionen(filtered);
+  if(activeTab === 'historie')  tabContent = buildHistorie(filtered);
+
+  /* ── Add/Edit Modal ───────────────────────────────────── */
+  var addModalBody =
+    '<div id="f-err" style="color:#dc2626;font-size:13px;margin-bottom:10px;min-height:18px;"></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Vorname *','<input id="f-vn" type="text" placeholder="Max" style="'+inputStyle+'">')
+    + formGroup('Nachname','<input id="f-nn" type="text" placeholder="Mustermann" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('E-Mail','<input id="f-email" type="email" placeholder="max@example.com" style="'+inputStyle+'">')
+    + formGroup('Telefon','<input id="f-tel" type="tel" placeholder="+49 170 1234567" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Wohnung * (z.B. 1 OG)','<input id="f-wohnung" type="text" placeholder="1 OG" style="'+inputStyle+'">')
+    + formGroup('Objekt / Gebäude','<input id="f-objekt" type="text" placeholder="Hauptstraße 15" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Monatliche Miete (€) *','<input id="f-miete" type="number" min="0" step="0.01" placeholder="750" style="'+inputStyle+'">')
+    + formGroup('Kaution (€)','<input id="f-kaution" type="number" min="0" step="0.01" placeholder="2250" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Mietbeginn','<input id="f-mietbeginn" type="date" style="'+inputStyle+'">')
+    + formGroup('Mietende (optional)','<input id="f-mietende" type="date" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Anzahl Personen','<input id="f-personen" type="number" min="1" max="20" value="1" style="'+inputStyle+'">')
+    + formGroup('Score (1–100)','<input id="f-score" type="number" min="1" max="100" value="80" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Status','<select id="f-status" style="'+inputStyle+'"><option value="Aktiv">Aktiv</option><option value="Gekündigt">Gekündigt</option><option value="Ausstehend">Ausstehend</option></select>')
+    + '<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;padding-top:24px;">'
+    + '<input id="f-haustiere" type="checkbox" style="width:16px;height:16px;cursor:pointer;accent-color:#2563eb;">'
+    + '<label for="f-haustiere" style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;">Haustiere vorhanden</label>'
+    + '</div>'
+    + '</div>'
+    + formGroup('Notizen','<textarea id="f-notizen" rows="3" placeholder="Besonderheiten, Anmerkungen..." style="'+inputStyle+';resize:vertical;min-height:70px;"></textarea>')
+    + '<div style="display:flex;gap:10px;margin-top:8px;">'
+    + '<button onclick="saveMieter()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
+    + '<button onclick="closeModal(\'add-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>';
+
+  /* ── Delete Modal ─────────────────────────────────────── */
+  var deleteModalBody =
+    '<div style="text-align:center;padding:10px 0 4px;">'
+    + '<div style="font-size:44px;margin-bottom:14px;">🗑️</div>'
+    + '<div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:8px;">Mieter wirklich löschen?</div>'
+    + '<div style="font-size:13px;color:#64748b;margin-bottom:24px;">Diese Aktion kann nicht rückgängig gemacht werden.</div>'
+    + '<div style="display:flex;gap:10px;justify-content:center;">'
+    + '<button onclick="confirmDelete()" style="padding:11px 28px;background:#dc2626;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Ja, löschen</button>'
+    + '<button onclick="closeModal(\'delete-modal\')" style="padding:11px 28px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div></div>';
+
+  var modalsHTML =
+    modalHTML('add-modal', '<span id="modal-title">👥 Mieter hinzufügen</span>', addModalBody)
+    + modalHTML('delete-modal', 'Mieter löschen', deleteModalBody);
+
+  var actionBtn = '<button onclick="openAddModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Mieter hinzufügen</button>';
+
+  var mainHTML =
+    getTrialBanner()
+    + buildKPIs(allMieter)
+    + buildFilterBar(allMieter)
+    + buildTabs()
+    + tabContent;
+
+  renderLayout('mieter', '👥 Mieter', actionBtn, mainHTML, modalsHTML);
+}
+
+/* ── Boot ───────────────────────────────────────────────── */
 initFirebase();
-loadFromFirebase(user.uid, render);
+startPageListener(user.uid, render);
 </script>
 </body>
 </html>

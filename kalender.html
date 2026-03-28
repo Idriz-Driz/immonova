@@ -5,286 +5,746 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terminkalender – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="shared.js"></script>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+// ===== KALENDER PAGE =====
+
+if (!checkAuth()) { window.location.href = 'login.html'; }
+if (!checkTrial()) { window.location.href = 'upgrade.html'; }
+initFirebase();
+
+// ─── STATE ────────────────────────────────────────────────
 var user = getUser();
+var termine = [];
+var currentYear = new Date().getFullYear();
+var currentMonth = new Date().getMonth(); // 0-based
+var currentView = 'monat'; // 'monat' or 'woche'
+var currentWeekStart = getMonday(new Date());
+var editingId = null;
 
-var _calMonth = new Date().getMonth();
-var _calYear  = new Date().getFullYear();
-var _editId   = null;
-
-var KAT_COLORS = {
-  wartung:     { bg:'#dbeafe', text:'#2563eb', dot:'#2563eb', label:'Wartung',      icon:'🔧' },
-  uebergabe:   { bg:'#dcfce7', text:'#16a34a', dot:'#16a34a', label:'Übergabe',     icon:'🔑' },
-  zahlung:     { bg:'#fef9c3', text:'#d97706', dot:'#d97706', label:'Zahlung',       icon:'💳' },
-  besichtigung:{ bg:'#ede9fe', text:'#7c3aed', dot:'#7c3aed', label:'Besichtigung', icon:'👁️' },
-  sonstiges:   { bg:'#f1f5f9', text:'#64748b', dot:'#64748b', label:'Sonstiges',    icon:'📌' }
+// ─── CONSTANTS ────────────────────────────────────────────
+var FARBEN = {
+  blau:   '#2563eb',
+  gruen:  '#16a34a',
+  orange: '#ea580c',
+  rot:    '#dc2626',
+  lila:   '#7c3aed',
+  grau:   '#64748b'
 };
 
-var MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-var DAYS   = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+var FARBEN_LABELS = {
+  blau: 'Blau', gruen: 'Grün', orange: 'Orange', rot: 'Rot', lila: 'Lila', grau: 'Grau'
+};
 
-function pad2(n){ return n<10?'0'+n:''+n; }
+var TYP_ICONS = {
+  'Besichtigung':          '👁️',
+  'Handwerker-Termin':     '🔧',
+  'Mieterbesprechung':     '👥',
+  'Eigentümerversammlung': '🏢',
+  'Wartung':               '⚙️',
+  'Sonstiges':             '📅'
+};
 
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+var WOCHENTAGE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+var MONATE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+var HOURS = [8,9,10,11,12,13,14,15,16,17,18,19,20];
 
-function render(){
-  var actionBtn = '<button onclick="openAddModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Termin anlegen</button>';
+// Mini month navigator state
+var miniYear = new Date().getFullYear();
+var miniMonth = new Date().getMonth();
 
-  var mainHTML =
-    '<div style="display:flex;gap:20px;align-items:flex-start;">'
-    // Left: calendar
-    +'<div style="flex:1;min-width:0;">'
-    +  '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);">'
-    +    '<div id="cal-nav" style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;"></div>'
-    +    '<div style="display:grid;grid-template-columns:repeat(7,1fr);background:#f8fafc;border-bottom:1px solid #e2e8f0;">'
-    +    DAYS.map(function(d){
-           return '<div style="text-align:center;font-size:11px;font-weight:700;color:#64748b;padding:10px 0;letter-spacing:0.5px;">'+d+'</div>';
-         }).join('')
-    +    '</div>'
-    +    '<div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);"></div>'
-    +  '</div>'
-    +'</div>'
-    // Right: upcoming
-    +'<div style="width:308px;flex-shrink:0;">'
-    +  '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);">'
-    +    '<div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">'
-    +      '<span style="font-size:16px;">🗓️</span>'
-    +      '<span style="font-size:14px;font-weight:700;color:#0f172a;">Nächste Termine</span>'
-    +    '</div>'
-    +    '<div id="upcoming-list" style="max-height:calc(100vh - 160px);overflow-y:auto;"></div>'
-    +  '</div>'
-    +'</div>'
-    +'</div>';
-
-  // Modal form
-  var katOpts = Object.keys(KAT_COLORS).map(function(k){
-    return '<option value="'+k+'">'+KAT_COLORS[k].icon+' '+KAT_COLORS[k].label+'</option>';
-  }).join('');
-
-  var modalContent =
-    formGroup('Titel *','<input id="k-ttl" type="text" placeholder="z.B. Heizungswartung..." '+inputStyle+'>')
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +formGroup('Datum *','<input id="k-dat" type="date" '+inputStyle+'>')
-    +formGroup('Uhrzeit (optional)','<input id="k-zt" type="time" '+inputStyle+'>')
-    +'</div>'
-    +formGroup('Kategorie','<select id="k-kat" '+inputStyle+'>'+katOpts+'</select>')
-    +formGroup('Notiz','<textarea id="k-not" rows="3" placeholder="Optionale Notizen..." style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>')
-    +'<div id="k-del-wrap" style="display:none;margin-bottom:12px;">'
-    +'<button onclick="deleteTermin()" style="width:100%;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Termin löschen</button>'
-    +'</div>'
-    +'<div style="display:flex;gap:10px;">'
-    +'<button onclick="saveTermin()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'<button onclick="hideModal(\'k-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'</div>';
-
-  renderLayout('kalender','Terminkalender',actionBtn,mainHTML,modalHTML('k-modal','📅 Termin',modalContent));
-  renderCalendar();
-  renderUpcoming();
+// ─── DATE HELPERS ─────────────────────────────────────────
+function getMonday(d) {
+  var day = d.getDay();
+  var diff = (day === 0) ? -6 : 1 - day;
+  var m = new Date(d);
+  m.setDate(d.getDate() + diff);
+  m.setHours(0,0,0,0);
+  return m;
 }
 
-function renderCalendar(){
-  var navEl  = document.getElementById('cal-nav');
-  var gridEl = document.getElementById('cal-grid');
-  if(!navEl||!gridEl) return;
+function dateKey(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2,'0');
+  var day = String(d.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + day;
+}
 
-  navEl.innerHTML =
-    '<button onclick="_calPrev()" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#0f172a;">← Zurück</button>'
-    +'<span style="font-size:16px;font-weight:700;color:#0f172a;">'+MONTHS[_calMonth]+' '+_calYear+'</span>'
-    +'<div style="display:flex;gap:8px;">'
-    +'<button onclick="_calToday()" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#16a34a;">Heute</button>'
-    +'<button onclick="_calNext()" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#0f172a;">Weiter →</button>'
-    +'</div>';
+function isToday(d) {
+  return dateKey(d) === dateKey(new Date());
+}
 
-  var termine  = getData(KEYS.termine, []);
-  var todayStr = today();
+function fmtDateDE(str) {
+  if (!str) return '';
+  var p = str.split('-');
+  if (p.length < 3) return str;
+  return p[2] + '.' + p[1] + '.' + p[0];
+}
 
-  // Build cells
-  var firstWeekday = new Date(_calYear, _calMonth, 1).getDay(); // 0=Sun
-  var offset = firstWeekday === 0 ? 6 : firstWeekday - 1; // convert to Mon-based
-  var daysInMonth    = new Date(_calYear, _calMonth+1, 0).getDate();
-  var daysInPrevMon  = new Date(_calYear, _calMonth, 0).getDate();
+function fmtTime(t) {
+  if (!t) return '';
+  return t.slice(0, 5);
+}
 
-  var cells = [];
-  for(var i=offset-1;i>=0;i--)  cells.push({d:daysInPrevMon-i, cur:false});
-  for(var d=1;d<=daysInMonth;d++) cells.push({d:d, cur:true});
-  while(cells.length<42)         cells.push({d:cells.length-offset-daysInMonth+1, cur:false});
+function eventFarbe(ev) {
+  return FARBEN[ev.farbe] || FARBEN.blau;
+}
+
+// ─── DATA HELPERS ─────────────────────────────────────────
+function getEventsForDay(date) {
+  var key = dateKey(date);
+  return termine.filter(function(t) { return t.datum === key; })
+    .sort(function(a, b) {
+      var av = a.ganztaegig ? '00:00' : (a.von || '00:00');
+      var bv = b.ganztaegig ? '00:00' : (b.von || '00:00');
+      return av.localeCompare(bv);
+    });
+}
+
+function getUpcoming() {
+  var todayStr = dateKey(new Date());
+  return termine
+    .filter(function(t) { return t.datum >= todayStr; })
+    .sort(function(a, b) {
+      if (a.datum !== b.datum) return a.datum.localeCompare(b.datum);
+      return (a.von || '00:00').localeCompare(b.von || '00:00');
+    })
+    .slice(0, 10);
+}
+
+// ─── RENDER HELPERS ───────────────────────────────────────
+function makeEventPill(ev, stopProp) {
+  var col = eventFarbe(ev);
+  var ico = TYP_ICONS[ev.typ] || '📅';
+  var timeLabel = ev.ganztaegig ? 'Ganztägig' : (ev.von ? fmtTime(ev.von) : '');
+  var clickAttr = stopProp
+    ? 'onclick="event.stopPropagation();openEditModal(\'' + ev.id + '\')"'
+    : 'onclick="openEditModal(\'' + ev.id + '\')"';
+  return '<div ' + clickAttr + ' title="' + (ev.titel || '').replace(/"/g,'&quot;') + '"'
+    + ' style="background:' + col + '22;border-left:3px solid ' + col + ';color:' + col + ';font-size:10px;font-weight:600;'
+    + 'padding:2px 5px;border-radius:0 4px 4px 0;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;"'
+    + ' onmouseover="this.style.opacity=\'0.75\'" onmouseout="this.style.opacity=\'1\'">'
+    + ico + ' ' + (timeLabel ? timeLabel + ' ' : '') + (ev.titel || '–')
+    + '</div>';
+}
+
+// ─── MONTH VIEW ───────────────────────────────────────────
+function renderMonth(year, month) {
+  currentYear = year;
+  currentMonth = month;
+
+  var hdr = document.getElementById('cal-header-title');
+  if (hdr) hdr.textContent = MONATE[month] + ' ' + year;
+
+  var grid = document.getElementById('cal-grid');
+  if (!grid) return;
+
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(7,1fr)';
+  grid.style.gap = '3px';
+
+  var firstDay = new Date(year, month, 1);
+  var startDow = firstDay.getDay();
+  var startOffset = (startDow === 0) ? 6 : startDow - 1;
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var prevMonthDays = new Date(year, month, 0).getDate();
 
   var html = '';
-  cells.forEach(function(cell,idx){
-    var dateStr='', dayTerms=[];
-    if(cell.cur){
-      dateStr = _calYear+'-'+pad2(_calMonth+1)+'-'+pad2(cell.d);
-      dayTerms = termine.filter(function(t){return t.dat===dateStr;});
-    }
-    var isToday   = cell.cur && dateStr===todayStr;
-    var isPast    = cell.cur && dateStr<todayStr;
-    var isWeekend = idx%7>=5;
-    var bRight    = idx%7<6  ? '1px solid #f1f5f9':'none';
-    var bBottom   = idx<35   ? '1px solid #f1f5f9':'none';
-    var bgCell    = isWeekend&&cell.cur?'#fefefe' : (!cell.cur?'#fafafa':'white');
 
-    html += '<div'+(cell.cur?' onclick="cellClick(\''+dateStr+'\')"':'')
-      +' style="min-height:100px;padding:7px;border-right:'+bRight+';border-bottom:'+bBottom+';background:'+bgCell+';'+(cell.cur?'cursor:pointer;':'')+'"'
-      +(cell.cur?' onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\''+bgCell+'\'"':'')+' >';
+  // Day-of-week headers
+  WOCHENTAGE.forEach(function(w) {
+    html += '<div style="text-align:center;font-size:11px;font-weight:700;color:#64748b;'
+          + 'text-transform:uppercase;letter-spacing:0.5px;padding:8px 0;">' + w + '</div>';
+  });
 
-    // Day number badge
-    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:3px;">';
-    if(isToday){
-      html += '<span style="background:#2563eb;color:white;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">'+cell.d+'</span>';
+  var totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+  var dayNum = 1;
+  var nextNum = 1;
+
+  for (var i = 0; i < totalCells; i++) {
+    var isCurrentMonth, displayDay, displayDate;
+    if (i < startOffset) {
+      isCurrentMonth = false;
+      displayDay = prevMonthDays - startOffset + i + 1;
+      displayDate = new Date(year, month - 1, displayDay);
+    } else if (dayNum <= daysInMonth) {
+      isCurrentMonth = true;
+      displayDay = dayNum;
+      displayDate = new Date(year, month, dayNum);
+      dayNum++;
     } else {
-      html += '<span style="font-size:12px;font-weight:'+(cell.cur?'600':'400')+';color:'+(cell.cur?(isPast?'#94a3b8':'#0f172a'):'#cbd5e1')+';padding:2px 4px;">'+cell.d+'</span>';
+      isCurrentMonth = false;
+      displayDay = nextNum;
+      displayDate = new Date(year, month + 1, nextNum);
+      nextNum++;
+    }
+
+    var isTodayCell = isToday(displayDate);
+    var dateStr = dateKey(displayDate);
+    var dayEvents = getEventsForDay(displayDate);
+
+    var cellBg = isTodayCell ? '#eff6ff' : 'white';
+    var cellBorder = isTodayCell ? '2px solid #2563eb' : '1px solid #e2e8f0';
+    var numColor = isCurrentMonth ? (isTodayCell ? '#2563eb' : '#1e293b') : '#c8d3e0';
+    var numWeight = isTodayCell ? '800' : (isCurrentMonth ? '600' : '400');
+
+    html += '<div onclick="openAddModal(\'' + dateStr + '\')"'
+          + ' style="background:' + cellBg + ';border:' + cellBorder + ';border-radius:8px;padding:6px 7px;'
+          + 'min-height:90px;cursor:pointer;overflow:hidden;transition:background 0.1s;"'
+          + ' onmouseover="this.style.background=\'' + (isTodayCell ? '#dbeafe' : '#f8fafc') + '\'"'
+          + ' onmouseout="this.style.background=\'' + cellBg + '\'">';
+
+    // Day number
+    html += '<div style="font-size:13px;font-weight:' + numWeight + ';color:' + numColor + ';margin-bottom:4px;">';
+    if (isTodayCell) {
+      html += '<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;'
+            + 'background:#2563eb;color:white;border-radius:50%;font-size:12px;font-weight:700;">' + displayDay + '</span>';
+    } else {
+      html += displayDay;
     }
     html += '</div>';
 
     // Event pills
-    if(cell.cur){
-      var visible = dayTerms.slice(0,3);
-      var extra   = dayTerms.length-3;
-      visible.forEach(function(t){
-        var kc = KAT_COLORS[t.kat]||KAT_COLORS.sonstiges;
-        html += '<div onclick="event.stopPropagation();openEditModal(\''+t.id+'\')"'
-          +' title="'+esc(t.ttl)+'"'
-          +' style="background:'+kc.bg+';color:'+kc.text+';font-size:10px;font-weight:600;padding:2px 6px;border-radius:5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;border-left:2px solid '+kc.dot+';">'
-          +(t.zt?t.zt+' ':'')+esc(t.ttl)
-          +'</div>';
-      });
-      if(extra>0){
-        html += '<div style="font-size:10px;color:#64748b;font-weight:600;padding:1px 4px;">+'+extra+' weitere</div>';
-      }
+    var shown = dayEvents.slice(0, 3);
+    var more = dayEvents.length - 3;
+    shown.forEach(function(ev) { html += makeEventPill(ev, true); });
+    if (more > 0) {
+      html += '<div style="font-size:10px;color:#2563eb;font-weight:600;padding-left:4px;cursor:default;">+'
+            + more + ' mehr</div>';
     }
-    html += '</div>';
-  });
 
-  gridEl.innerHTML = html;
+    html += '</div>';
+  }
+
+  grid.innerHTML = html;
+  renderUpcoming();
+  renderMiniMonth();
 }
 
-function renderUpcoming(){
-  var listEl = document.getElementById('upcoming-list');
-  if(!listEl) return;
-  var alle    = getData(KEYS.termine,[]);
-  var todStr  = today();
-  var coming  = alle
-    .filter(function(t){return t.dat>=todStr;})
-    .sort(function(a,b){return (a.dat+(a.zt||'')) < (b.dat+(b.zt||'')) ? -1:1;})
-    .slice(0,10);
+// ─── WEEK VIEW ────────────────────────────────────────────
+function renderWeek(weekStart) {
+  currentWeekStart = weekStart;
 
-  if(!coming.length){
-    listEl.innerHTML = '<div style="padding:28px;text-align:center;color:#94a3b8;font-size:13px;">Keine bevorstehenden Termine</div>';
+  var weekDays = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    weekDays.push(d);
+  }
+
+  var hdr = document.getElementById('cal-header-title');
+  if (hdr) {
+    hdr.textContent = fmtDateDE(dateKey(weekDays[0])) + ' – ' + fmtDateDE(dateKey(weekDays[6]));
+  }
+
+  var grid = document.getElementById('cal-grid');
+  if (!grid) return;
+
+  grid.style.gridTemplateColumns = '';
+  grid.style.gap = '0';
+
+  var html = '<div style="display:grid;grid-template-columns:52px repeat(7,1fr);border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">';
+
+  // Header row
+  html += '<div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:6px 0;"></div>';
+  weekDays.forEach(function(d, i) {
+    var isT = isToday(d);
+    html += '<div style="background:' + (isT ? '#eff6ff' : '#f8fafc') + ';border-bottom:1px solid #e2e8f0;'
+          + (i < 6 ? 'border-right:1px solid #e2e8f0;' : '')
+          + 'padding:8px 4px;text-align:center;">'
+          + '<div style="font-size:11px;font-weight:600;color:#64748b;">' + WOCHENTAGE[i] + '</div>'
+          + '<div style="font-size:' + (isT ? '15' : '14') + 'px;font-weight:' + (isT ? '800' : '600') + ';color:' + (isT ? '#2563eb' : '#1e293b') + ';">' + d.getDate() + '</div>'
+          + '</div>';
+  });
+
+  // Hour rows
+  var now = new Date();
+  HOURS.forEach(function(hour) {
+    var hourStr = String(hour).padStart(2,'0') + ':00';
+    html += '<div style="border-bottom:1px solid #f1f5f9;border-right:1px solid #e2e8f0;padding:4px 4px 0;'
+          + 'font-size:10px;color:#94a3b8;text-align:right;min-height:52px;line-height:1.2;">' + hourStr + '</div>';
+
+    weekDays.forEach(function(d, i) {
+      var dateStr = dateKey(d);
+      var cellEvents = getEventsForDay(d).filter(function(ev) {
+        if (ev.ganztaegig) return hour === 8;
+        if (!ev.von) return hour === 8;
+        return parseInt(ev.von.split(':')[0]) === hour;
+      });
+
+      html += '<div onclick="openAddModal(\'' + dateStr + '\')"'
+            + ' style="border-bottom:1px solid #f1f5f9;' + (i < 6 ? 'border-right:1px solid #e2e8f0;' : '')
+            + 'padding:2px;min-height:52px;position:relative;cursor:pointer;background:white;"'
+            + ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">';
+
+      // Current time red line
+      if (isToday(d) && now.getHours() === hour) {
+        var pct = (now.getMinutes() / 60) * 100;
+        html += '<div style="position:absolute;left:0;right:0;top:' + pct + '%;height:2px;background:#dc2626;z-index:2;pointer-events:none;">'
+              + '<div style="position:absolute;left:-4px;top:-4px;width:8px;height:8px;background:#dc2626;border-radius:50%;"></div>'
+              + '</div>';
+      }
+
+      cellEvents.forEach(function(ev) {
+        var col = eventFarbe(ev);
+        var ico = TYP_ICONS[ev.typ] || '📅';
+        var timeLabel = ev.ganztaegig ? 'Ganztägig' : (fmtTime(ev.von) + (ev.bis ? ' – ' + fmtTime(ev.bis) : ''));
+        html += '<div onclick="event.stopPropagation();openEditModal(\'' + ev.id + '\')"'
+              + ' style="background:' + col + ';color:white;border-radius:5px;padding:3px 6px;font-size:11px;font-weight:600;'
+              + 'margin-bottom:2px;cursor:pointer;overflow:hidden;"'
+              + ' onmouseover="this.style.opacity=\'0.85\'" onmouseout="this.style.opacity=\'1\'">'
+              + ico + ' ' + (ev.titel || '–')
+              + '<div style="font-size:10px;font-weight:400;opacity:0.9;">' + timeLabel + '</div>'
+              + '</div>';
+      });
+
+      html += '</div>';
+    });
+  });
+
+  html += '</div>';
+  grid.innerHTML = html;
+  renderUpcoming();
+  renderMiniMonth();
+}
+
+// ─── UPCOMING SIDEBAR ─────────────────────────────────────
+function renderUpcoming() {
+  var el = document.getElementById('upcoming-list');
+  if (!el) return;
+  var items = getUpcoming();
+  if (items.length === 0) {
+    el.innerHTML = '<div style="font-size:13px;color:#94a3b8;text-align:center;padding:16px 0;">Keine kommenden Termine</div>';
     return;
   }
-  listEl.innerHTML = coming.map(function(t){
-    var kc = KAT_COLORS[t.kat]||KAT_COLORS.sonstiges;
-    return '<div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="openEditModal(\''+t.id+'\')" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
-      +'<div style="width:36px;height:36px;background:'+kc.bg+';border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+kc.icon+'</div>'
-      +'<div style="flex:1;min-width:0;">'
-      +  '<div style="font-size:13px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">'+esc(t.ttl)+'</div>'
-      +  '<div style="font-size:11px;color:#64748b;margin-bottom:4px;">'+fmtDate(t.dat)+(t.zt?' · '+t.zt:'')+'</div>'
-      +  '<span style="display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:'+kc.bg+';color:'+kc.text+';">'+kc.label+'</span>'
-      +'</div>'
-      +'<button onclick="event.stopPropagation();_delTermin(\''+t.id+'\')" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:15px;padding:4px;border-radius:6px;" onmouseover="this.style.color=\'#dc2626\'" onmouseout="this.style.color=\'#94a3b8\'">🗑️</button>'
-      +'</div>';
+  el.innerHTML = items.map(function(ev) {
+    var col = eventFarbe(ev);
+    var ico = TYP_ICONS[ev.typ] || '📅';
+    var timeStr = ev.ganztaegig ? 'Ganztägig' : (ev.von ? fmtTime(ev.von) : '');
+    return '<div onclick="openEditModal(\'' + ev.id + '\')"'
+         + ' style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;border-radius:6px;"'
+         + ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'transparent\'">'
+         + '<div style="width:10px;height:10px;background:' + col + ';border-radius:50%;margin-top:4px;flex-shrink:0;"></div>'
+         + '<div style="flex:1;min-width:0;">'
+         + '<div style="font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+         + ico + ' ' + (ev.titel || '–')
+         + '</div>'
+         + '<div style="font-size:11px;color:#64748b;">'
+         + fmtDateDE(ev.datum) + (timeStr ? ' · ' + timeStr : '')
+         + '</div>'
+         + '</div></div>';
   }).join('');
 }
 
-function cellClick(dateStr){
-  _editId = null;
-  document.getElementById('k-ttl').value='';
-  document.getElementById('k-dat').value=dateStr;
-  document.getElementById('k-zt').value='';
-  document.getElementById('k-kat').value='sonstiges';
-  document.getElementById('k-not').value='';
-  document.getElementById('k-del-wrap').style.display='none';
-  // Update modal title
-  var hdr = document.querySelector('#k-modal [style*="font-size:16px"]');
-  if(hdr) hdr.textContent='📅 Neuer Termin';
-  showModal('k-modal');
-}
+// ─── MINI MONTH NAVIGATOR ─────────────────────────────────
+function renderMiniMonth() {
+  var el = document.getElementById('mini-month-nav');
+  if (!el) return;
 
-function openAddModal(){
-  _editId = null;
-  document.getElementById('k-ttl').value='';
-  document.getElementById('k-dat').value=today();
-  document.getElementById('k-zt').value='';
-  document.getElementById('k-kat').value='sonstiges';
-  document.getElementById('k-not').value='';
-  document.getElementById('k-del-wrap').style.display='none';
-  var hdr = document.querySelector('#k-modal [style*="font-size:16px"]');
-  if(hdr) hdr.textContent='📅 Termin anlegen';
-  showModal('k-modal');
-}
+  var firstDay = new Date(miniYear, miniMonth, 1);
+  var startDow = firstDay.getDay();
+  var startOffset = (startDow === 0) ? 6 : startDow - 1;
+  var daysInMonth = new Date(miniYear, miniMonth + 1, 0).getDate();
+  var todayStr = dateKey(new Date());
 
-function openEditModal(id){
-  var termine = getData(KEYS.termine,[]);
-  var t = termine.find(function(x){return x.id===id;});
-  if(!t) return;
-  _editId = id;
-  document.getElementById('k-ttl').value = t.ttl||'';
-  document.getElementById('k-dat').value = t.dat||'';
-  document.getElementById('k-zt').value  = t.zt||'';
-  document.getElementById('k-kat').value = t.kat||'sonstiges';
-  document.getElementById('k-not').value = t.not||'';
-  document.getElementById('k-del-wrap').style.display='block';
-  var hdr = document.querySelector('#k-modal [style*="font-size:16px"]');
-  if(hdr) hdr.textContent='📅 Termin bearbeiten';
-  showModal('k-modal');
-}
+  var html = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+  html += '<button onclick="miniPrev()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:17px;padding:2px 5px;line-height:1;">‹</button>';
+  html += '<span style="font-size:12px;font-weight:700;color:#1e293b;">' + MONATE[miniMonth].slice(0,3) + ' ' + miniYear + '</span>';
+  html += '<button onclick="miniNext()" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:17px;padding:2px 5px;line-height:1;">›</button>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center;">';
 
-function saveTermin(){
-  var ttl = (document.getElementById('k-ttl').value||'').trim();
-  var dat = document.getElementById('k-dat').value;
-  var zt  = document.getElementById('k-zt').value;
-  var kat = document.getElementById('k-kat').value;
-  var not = (document.getElementById('k-not').value||'').trim();
-  if(!ttl){ alert('Bitte einen Titel eingeben.'); return; }
-  if(!dat){ alert('Bitte ein Datum wählen.'); return; }
+  WOCHENTAGE.forEach(function(w) {
+    html += '<div style="font-size:10px;font-weight:600;color:#94a3b8;padding:2px 0;">' + w + '</div>';
+  });
 
-  var termine = getData(KEYS.termine,[]);
-  if(_editId){
-    termine = termine.map(function(t){ if(t.id===_editId){t.ttl=ttl;t.dat=dat;t.zt=zt;t.kat=kat;t.not=not;} return t; });
-    addNotif('📅','Termin geändert: '+ttl);
-  } else {
-    termine.push({id:'ter_'+Date.now(),ttl:ttl,dat:dat,zt:zt,kat:kat,not:not});
-    addNotif('📅','Termin: '+ttl);
+  for (var p = 0; p < startOffset; p++) {
+    html += '<div></div>';
   }
-  setData(KEYS.termine,termine);
+
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dStr = miniYear + '-' + String(miniMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var isT = (dStr === todayStr);
+    var hasTerm = termine.some(function(t) { return t.datum === dStr; });
+    var bg = isT ? '#2563eb' : 'transparent';
+    var fc = isT ? 'white' : '#1e293b';
+    html += '<div onclick="miniSelectDay(\'' + dStr + '\')"'
+          + ' style="cursor:pointer;padding:3px 2px;border-radius:5px;font-size:11px;font-weight:' + (isT?'700':'500') + ';'
+          + 'background:' + bg + ';color:' + fc + ';position:relative;"'
+          + ' onmouseover="this.style.background=\'' + (isT ? '#1d4ed8' : '#f1f5f9') + '\'"'
+          + ' onmouseout="this.style.background=\'' + bg + '\'">'
+          + d
+          + (hasTerm ? '<span style="position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:4px;height:4px;'
+            + 'background:' + (isT ? 'white' : '#2563eb') + ';border-radius:50%;display:block;"></span>' : '')
+          + '</div>';
+  }
+
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+function miniPrev() {
+  miniMonth--;
+  if (miniMonth < 0) { miniMonth = 11; miniYear--; }
+  renderMiniMonth();
+}
+
+function miniNext() {
+  miniMonth++;
+  if (miniMonth > 11) { miniMonth = 0; miniYear++; }
+  renderMiniMonth();
+}
+
+function miniSelectDay(dateStr) {
+  var parts = dateStr.split('-');
+  currentYear = parseInt(parts[0]);
+  currentMonth = parseInt(parts[1]) - 1;
+  miniYear = currentYear;
+  miniMonth = currentMonth;
+  if (currentView === 'monat') {
+    renderMonth(currentYear, currentMonth);
+  } else {
+    currentWeekStart = getMonday(new Date(dateStr + 'T00:00:00'));
+    renderWeek(currentWeekStart);
+  }
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────
+function prevPeriod() {
+  if (currentView === 'monat') {
+    currentMonth--;
+    if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+    miniYear = currentYear; miniMonth = currentMonth;
+    renderMonth(currentYear, currentMonth);
+  } else {
+    var d = new Date(currentWeekStart);
+    d.setDate(d.getDate() - 7);
+    renderWeek(d);
+  }
+}
+
+function nextPeriod() {
+  if (currentView === 'monat') {
+    currentMonth++;
+    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+    miniYear = currentYear; miniMonth = currentMonth;
+    renderMonth(currentYear, currentMonth);
+  } else {
+    var d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + 7);
+    renderWeek(d);
+  }
+}
+
+function goToday() {
+  var now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth();
+  miniYear = currentYear;
+  miniMonth = currentMonth;
+  if (currentView === 'monat') {
+    renderMonth(currentYear, currentMonth);
+  } else {
+    currentWeekStart = getMonday(now);
+    renderWeek(currentWeekStart);
+  }
+}
+
+function switchView(v) {
+  currentView = v;
+  var btnM = document.getElementById('btn-view-monat');
+  var btnW = document.getElementById('btn-view-woche');
+  var activeS  = 'background:#2563eb;color:white;border:1px solid #2563eb;border-radius:7px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;';
+  var inactiveS = 'background:white;color:#64748b;border:1px solid #e2e8f0;border-radius:7px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;';
+  if (btnM) btnM.style.cssText = (v === 'monat' ? activeS : inactiveS);
+  if (btnW) btnW.style.cssText = (v === 'woche' ? activeS : inactiveS);
+  if (v === 'monat') {
+    renderMonth(currentYear, currentMonth);
+  } else {
+    currentWeekStart = getMonday(new Date(currentYear, currentMonth, 1));
+    renderWeek(currentWeekStart);
+  }
+}
+
+// ─── MODAL LOGIC ──────────────────────────────────────────
+function openAddModal(dateStr) {
+  editingId = null;
+  var titleEl = document.getElementById('modal-title-label');
+  if (titleEl) titleEl.textContent = 'Neuer Termin';
+  var delBtn = document.getElementById('btn-delete-termin');
+  if (delBtn) delBtn.style.display = 'none';
+  resetForm();
+  if (dateStr) {
+    var datEl = document.getElementById('f-datum');
+    if (datEl) datEl.value = dateStr;
+  }
+  showModal('termin-modal');
+}
+
+function openEditModal(id) {
+  var ev = termine.find(function(t) { return t.id === id; });
+  if (!ev) return;
+  editingId = id;
+  var titleEl = document.getElementById('modal-title-label');
+  if (titleEl) titleEl.textContent = 'Termin bearbeiten';
+  var delBtn = document.getElementById('btn-delete-termin');
+  if (delBtn) delBtn.style.display = 'inline-flex';
+  fillForm(ev);
+  showModal('termin-modal');
+}
+
+function resetForm() {
+  var fields = {
+    'f-titel': '', 'f-datum': '', 'f-von': '', 'f-bis': '',
+    'f-typ': 'Sonstiges', 'f-farbe': 'blau',
+    'f-beschreibung': '', 'f-ort': '', 'f-erinnerung': 'Keine',
+    'f-person': '', 'f-wiederholen': 'Nie'
+  };
+  Object.keys(fields).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = fields[id];
+  });
+  var g = document.getElementById('f-ganztaegig');
+  if (g) g.checked = false;
+  updateFarbePreview();
+}
+
+function fillForm(ev) {
+  var map = {
+    'f-titel': ev.titel, 'f-datum': ev.datum, 'f-von': ev.von, 'f-bis': ev.bis,
+    'f-typ': ev.typ, 'f-farbe': ev.farbe, 'f-beschreibung': ev.beschreibung,
+    'f-ort': ev.ort, 'f-erinnerung': ev.erinnerung,
+    'f-person': ev.person, 'f-wiederholen': ev.wiederholen
+  };
+  Object.keys(map).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = map[id] || '';
+  });
+  var g = document.getElementById('f-ganztaegig');
+  if (g) g.checked = !!ev.ganztaegig;
+  updateFarbePreview();
+}
+
+function updateFarbePreview() {
+  var sel = document.getElementById('f-farbe');
+  var prev = document.getElementById('farbe-preview');
+  if (!sel || !prev) return;
+  prev.style.background = FARBEN[sel.value] || FARBEN.blau;
+}
+
+function saveTermin() {
+  var titel = (document.getElementById('f-titel').value || '').trim();
+  var datum = document.getElementById('f-datum').value;
+  if (!titel) { alert('Bitte Titel eingeben.'); return; }
+  if (!datum) { alert('Bitte Datum auswählen.'); return; }
+
+  var ev = {
+    id:           editingId || ('ter_' + Date.now()),
+    titel:        titel,
+    datum:        datum,
+    von:          document.getElementById('f-von').value || '',
+    bis:          document.getElementById('f-bis').value || '',
+    ganztaegig:   document.getElementById('f-ganztaegig').checked,
+    typ:          document.getElementById('f-typ').value || 'Sonstiges',
+    farbe:        document.getElementById('f-farbe').value || 'blau',
+    beschreibung: document.getElementById('f-beschreibung').value || '',
+    ort:          document.getElementById('f-ort').value || '',
+    erinnerung:   document.getElementById('f-erinnerung').value || 'Keine',
+    person:       document.getElementById('f-person').value || '',
+    wiederholen:  document.getElementById('f-wiederholen').value || 'Nie'
+  };
+
+  if (editingId) {
+    var idx = termine.findIndex(function(t) { return t.id === editingId; });
+    if (idx >= 0) termine[idx] = ev; else termine.push(ev);
+  } else {
+    termine.push(ev);
+  }
+
+  setData(KEYS.termine, termine);
   syncToFirebase(user.uid);
-  hideModal('k-modal');
-  var d = new Date(dat);
-  _calMonth = d.getMonth();
-  _calYear  = d.getFullYear();
-  renderCalendar();
-  renderUpcoming();
-  _editId = null;
+  addNotif('📅', (editingId ? 'Termin bearbeitet: ' : 'Neuer Termin: ') + titel);
+  hideModal('termin-modal');
+  editingId = null;
+  refreshView();
 }
 
-function deleteTermin(){
-  if(!_editId||!confirm('Termin wirklich löschen?')) return;
-  _delTermin(_editId);
-  hideModal('k-modal');
-}
-
-function _delTermin(id){
-  if(!confirm('Termin wirklich löschen?')) return;
-  var termine = getData(KEYS.termine,[]).filter(function(t){return t.id!==id;});
-  setData(KEYS.termine,termine);
+function deleteTermin() {
+  if (!editingId) return;
+  var ev = termine.find(function(t) { return t.id === editingId; });
+  if (!confirm('Termin "' + (ev ? ev.titel : '') + '" wirklich löschen?')) return;
+  termine = termine.filter(function(t) { return t.id !== editingId; });
+  setData(KEYS.termine, termine);
   syncToFirebase(user.uid);
-  renderCalendar();
-  renderUpcoming();
+  addNotif('🗑️', 'Termin gelöscht: ' + (ev ? ev.titel : ''));
+  hideModal('termin-modal');
+  editingId = null;
+  refreshView();
 }
 
-function _calPrev(){ _calMonth--; if(_calMonth<0){_calMonth=11;_calYear--;} renderCalendar(); }
-function _calNext(){ _calMonth++; if(_calMonth>11){_calMonth=0;_calYear++;} renderCalendar(); }
-function _calToday(){ var n=new Date(); _calMonth=n.getMonth(); _calYear=n.getFullYear(); renderCalendar(); }
+function refreshView() {
+  if (currentView === 'monat') {
+    renderMonth(currentYear, currentMonth);
+  } else {
+    renderWeek(currentWeekStart);
+  }
+}
 
-initFirebase();
-loadFromFirebase(user.uid, render);
+// ─── PAGE BUILD ───────────────────────────────────────────
+function buildPage() {
+  var actionBtn = '<button onclick="openAddModal(\'\')" style="background:#2563eb;color:white;border:none;border-radius:9px;'
+    + 'padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;">'
+    + '<span style="font-size:16px;line-height:1;">+</span> Termin erstellen</button>';
+
+  // Calendar header controls
+  var calHeader = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">'
+    + '<div style="display:flex;align-items:center;gap:8px;">'
+    + '<button onclick="prevPeriod()" style="background:white;border:1px solid #e2e8f0;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:17px;color:#1e293b;font-weight:700;line-height:1;">‹</button>'
+    + '<span id="cal-header-title" style="font-size:16px;font-weight:700;color:#1e293b;min-width:180px;text-align:center;">'
+    + MONATE[currentMonth] + ' ' + currentYear + '</span>'
+    + '<button onclick="nextPeriod()" style="background:white;border:1px solid #e2e8f0;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:17px;color:#1e293b;font-weight:700;line-height:1;">›</button>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;">'
+    + '<button onclick="goToday()" style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;color:#1e293b;font-family:inherit;">Heute</button>'
+    + '<button id="btn-view-monat" onclick="switchView(\'monat\')" style="background:#2563eb;color:white;border:1px solid #2563eb;border-radius:7px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Monat</button>'
+    + '<button id="btn-view-woche" onclick="switchView(\'woche\')" style="background:white;color:#64748b;border:1px solid #e2e8f0;border-radius:7px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Woche</button>'
+    + '</div>'
+    + '</div>';
+
+  var calArea = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    + '<div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>'
+    + '</div>';
+
+  var sidebar = '<div style="width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;">'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">'
+    + '<div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:12px;">📋 Kommende Termine</div>'
+    + '<div id="upcoming-list"></div>'
+    + '</div>'
+    + '<div id="mini-month-nav"></div>'
+    + '</div>';
+
+  var mainContent = getTrialBanner()
+    + '<div style="display:flex;gap:20px;align-items:flex-start;">'
+    + '<div style="flex:1;min-width:0;">' + calHeader + calArea + '</div>'
+    + sidebar
+    + '</div>';
+
+  // ─── MODAL FORM FIELDS ────────────────────────────────
+  var typOptions = Object.keys(TYP_ICONS).map(function(t) {
+    return '<option value="' + t + '">' + TYP_ICONS[t] + ' ' + t + '</option>';
+  }).join('');
+
+  var farbenOptions = Object.keys(FARBEN_LABELS).map(function(k) {
+    return '<option value="' + k + '">' + FARBEN_LABELS[k] + '</option>';
+  }).join('');
+
+  var modalFields = ''
+
+    // Titel
+    + formGroup('Titel *',
+        '<input type="text" id="f-titel" placeholder="z.B. Besichtigung Müller" style="' + inputStyle + '">')
+
+    // Datum + Ganztägig
+    + '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:14px;align-items:end;">'
+    + formGroup('Datum *', '<input type="date" id="f-datum" style="' + inputStyle + '">', 'margin-bottom:0;')
+    + '<div style="display:flex;align-items:center;gap:8px;padding-bottom:3px;white-space:nowrap;">'
+    + '<input type="checkbox" id="f-ganztaegig" style="width:16px;height:16px;accent-color:#2563eb;cursor:pointer;">'
+    + '<label for="f-ganztaegig" style="font-size:13px;font-weight:500;color:#64748b;cursor:pointer;">Ganztägig</label>'
+    + '</div>'
+    + '</div>'
+
+    // Uhrzeit von / bis
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + formGroup('Uhrzeit von', '<input type="time" id="f-von" style="' + inputStyle + '">', 'margin-bottom:0;')
+    + formGroup('bis',         '<input type="time" id="f-bis" style="' + inputStyle + '">', 'margin-bottom:0;')
+    + '</div>'
+
+    // Typ + Farbe
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + formGroup('Typ', '<select id="f-typ" style="' + inputStyle + '">' + typOptions + '</select>', 'margin-bottom:0;')
+    + formGroup('Farbe',
+        '<div style="display:flex;align-items:center;gap:8px;">'
+        + '<div id="farbe-preview" style="width:20px;height:20px;border-radius:50%;background:#2563eb;flex-shrink:0;border:2px solid #e2e8f0;"></div>'
+        + '<select id="f-farbe" onchange="updateFarbePreview()" style="' + inputStyle + 'flex:1;">' + farbenOptions + '</select>'
+        + '</div>', 'margin-bottom:0;')
+    + '</div>'
+
+    // Ort + Person
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + formGroup('Ort / Adresse',   '<input type="text" id="f-ort"    placeholder="z.B. Hauptstr. 12" style="' + inputStyle + '">', 'margin-bottom:0;')
+    + formGroup('Mieter / Person', '<input type="text" id="f-person" placeholder="z.B. Max Müller"   style="' + inputStyle + '">', 'margin-bottom:0;')
+    + '</div>'
+
+    // Erinnerung + Wiederholen
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'
+    + formGroup('Erinnerung',
+        '<select id="f-erinnerung" style="' + inputStyle + '">'
+        + '<option value="Keine">Keine</option>'
+        + '<option value="30 Min vorher">30 Min vorher</option>'
+        + '<option value="1 Std vorher">1 Std vorher</option>'
+        + '<option value="1 Tag vorher">1 Tag vorher</option>'
+        + '</select>', 'margin-bottom:0;')
+    + formGroup('Wiederholen',
+        '<select id="f-wiederholen" style="' + inputStyle + '">'
+        + '<option value="Nie">Nie</option>'
+        + '<option value="Täglich">Täglich</option>'
+        + '<option value="Wöchentlich">Wöchentlich</option>'
+        + '<option value="Monatlich">Monatlich</option>'
+        + '</select>', 'margin-bottom:0;')
+    + '</div>'
+
+    // Beschreibung
+    + formGroup('Beschreibung',
+        '<textarea id="f-beschreibung" rows="3" placeholder="Notizen zum Termin..." style="' + inputStyle + 'resize:vertical;min-height:70px;"></textarea>')
+
+    // Buttons row
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:10px;">'
+    + '<button id="btn-delete-termin" onclick="deleteTermin()" style="display:none;align-items:center;gap:6px;'
+    + 'background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:10px 16px;'
+    + 'font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Löschen</button>'
+    + '<div style="display:flex;gap:8px;margin-left:auto;">'
+    + '<button onclick="hideModal(\'termin-modal\')" style="background:white;border:1px solid #e2e8f0;border-radius:9px;'
+    + 'padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;color:#64748b;font-family:inherit;">Abbrechen</button>'
+    + '<button onclick="saveTermin()" style="background:#2563eb;color:white;border:none;border-radius:9px;'
+    + 'padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
+    + '</div>'
+    + '</div>';
+
+  var terminModal = '<div id="termin-modal" onclick="if(event.target===this)this.style.display=\'none\'"'
+    + ' style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;'
+    + 'z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
+    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:580px;max-height:90vh;'
+    + 'overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);animation:fadeIn 0.15s ease;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+    + '<div id="modal-title-label" style="font-size:16px;font-weight:700;color:#0f172a;">Neuer Termin</div>'
+    + '<button onclick="hideModal(\'termin-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;'
+    + 'color:#94a3b8;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;">✕</button>'
+    + '</div>'
+    + modalFields
+    + '</div></div>';
+
+  renderLayout('kalender', '📅 Terminkalender', actionBtn, mainContent, terminModal);
+  termine = getData(KEYS.termine, []);
+  renderMonth(currentYear, currentMonth);
+}
+
+// ─── INIT ─────────────────────────────────────────────────
+buildPage();
+
+loadFromFirebase(user.uid, function() {
+  termine = getData(KEYS.termine, []);
+  refreshView();
+  startPageListener(user.uid, function() {
+    termine = getData(KEYS.termine, []);
+    refreshView();
+  });
+});
 </script>
 </body>
 </html>

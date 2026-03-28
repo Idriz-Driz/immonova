@@ -6,210 +6,425 @@
   <title>Aufgaben – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+checkAuth();
+checkTrial();
+
 var user = getUser();
-var activeTab = 'offen';
+var activeFilter = 'alle';
 var editId = null;
 
+// ─── DATA HELPERS ────────────────────────────────────────────
 function getAufgaben() { return getData(KEYS.aufgaben, []); }
-function saveAufgaben(arr) { setData(KEYS.aufgaben, arr); syncToFirebase(user.uid); }
 
-function prVal(p) { return p==='hoch'?3:p==='mittel'?2:1; }
+function saveAufgaben(arr) {
+  setData(KEYS.aufgaben, arr);
+  syncToFirebase(user.uid);
+}
+
+// ─── SORT ────────────────────────────────────────────────────
+function prioritaetRank(p) {
+  if (p === 'Hoch')    return 1;
+  if (p === 'Normal')  return 2;
+  if (p === 'Niedrig') return 3;
+  return 4;
+}
 
 function sortAufgaben(arr) {
-  var t = today();
-  return arr.slice().sort(function(a,b){
-    var aOver = !a.done && a.dat && a.dat < t ? 1 : 0;
-    var bOver = !b.done && b.dat && b.dat < t ? 1 : 0;
-    if(aOver !== bOver) return bOver - aOver;
-    if(prVal(a.pr) !== prVal(b.pr)) return prVal(b.pr) - prVal(a.pr);
-    if(a.dat && b.dat) return a.dat < b.dat ? -1 : a.dat > b.dat ? 1 : 0;
-    if(a.dat) return -1;
-    if(b.dat) return 1;
+  return arr.slice().sort(function(a, b) {
+    var pr = prioritaetRank(a.prioritaet) - prioritaetRank(b.prioritaet);
+    if (pr !== 0) return pr;
+    if (a.faellig && b.faellig) {
+      if (a.faellig < b.faellig) return -1;
+      if (a.faellig > b.faellig) return 1;
+    }
+    if (a.faellig) return -1;
+    if (b.faellig) return 1;
     return 0;
   });
 }
 
-function toggleDone(id) {
+// ─── FILTER LOGIC ────────────────────────────────────────────
+function getWeekBounds() {
+  var now = new Date();
+  var day = now.getDay(); // 0=Sun
+  var mon = new Date(now);
+  mon.setDate(now.getDate() - ((day === 0 ? 7 : day) - 1));
+  var sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  function fmt(d) {
+    var m = d.getMonth() + 1;
+    var dd = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+  }
+  return { mon: fmt(mon), sun: fmt(sun) };
+}
+
+function filterAufgaben(arr, filter) {
+  var t = today();
+  var week = getWeekBounds();
+  if (filter === 'alle')        return arr;
+  if (filter === 'heute')       return arr.filter(function(a) { return a.faellig === t; });
+  if (filter === 'woche')       return arr.filter(function(a) { return a.faellig && a.faellig >= week.mon && a.faellig <= week.sun; });
+  if (filter === 'ueberfaellig') return arr.filter(function(a) { return !a.erledigt && a.faellig && a.faellig < t; });
+  if (filter === 'erledigt')    return arr.filter(function(a) { return a.erledigt; });
+  return arr;
+}
+
+// ─── TOGGLE ERLEDIGT ─────────────────────────────────────────
+function toggleErledigt(id) {
   var arr = getAufgaben();
-  var a = arr.find(function(x){ return x.id === id; });
-  if(!a) return;
-  a.done = !a.done;
-  if(a.done) addNotif('✅', 'Aufgabe erledigt: ' + a.txt.substring(0,30));
+  var a = arr.find(function(x) { return x.id === id; });
+  if (!a) return;
+  a.erledigt = !a.erledigt;
+  a.status = a.erledigt ? 'Erledigt' : 'Offen';
+  if (a.erledigt) addNotif('✅', 'Aufgabe erledigt: ' + (a.titel || '').substring(0, 40));
   saveAufgaben(arr);
   render();
 }
 
+// ─── DELETE ──────────────────────────────────────────────────
 function deleteAufgabe(id) {
-  var arr = getAufgaben().filter(function(x){ return x.id !== id; });
+  if (!confirm('Aufgabe wirklich löschen?')) return;
+  var arr = getAufgaben().filter(function(x) { return x.id !== id; });
   saveAufgaben(arr);
   render();
 }
 
-function addAufgabeQuick() {
-  var txtEl = document.getElementById('q-txt');
-  var txt = txtEl.value.trim();
-  if(!txt) { txtEl.focus(); return; }
-  var pr = document.getElementById('q-pr').value;
-  var dat = document.getElementById('q-dat').value;
+// ─── QUICK ADD ───────────────────────────────────────────────
+function quickAdd() {
+  var el = document.getElementById('quick-titel');
+  var titel = (el ? el.value : '').trim();
+  if (!titel) { if (el) el.focus(); return; }
   var arr = getAufgaben();
-  arr.push({ id: Date.now(), txt: txt, pr: pr, dat: dat, done: false });
+  arr.push({
+    id:          Date.now(),
+    titel:       titel,
+    beschreibung:'',
+    prioritaet:  'Normal',
+    faellig:     '',
+    kategorie:   'Allgemein',
+    zugewiesen:  '',
+    erinnerung:  '',
+    status:      'Offen',
+    erledigt:    false,
+    createdAt:   new Date().toISOString()
+  });
   saveAufgaben(arr);
-  txtEl.value = '';
-  document.getElementById('q-dat').value = '';
+  el.value = '';
   render();
+}
+
+// ─── OPEN MODAL ──────────────────────────────────────────────
+function openNewModal() {
+  editId = null;
+  document.getElementById('m-titel').value = '';
+  document.getElementById('m-beschreibung').value = '';
+  document.getElementById('m-prioritaet').value = 'Normal';
+  document.getElementById('m-faellig').value = '';
+  document.getElementById('m-kategorie').value = 'Allgemein';
+  document.getElementById('m-zugewiesen').value = '';
+  document.getElementById('m-erinnerung').value = '';
+  document.getElementById('m-status').value = 'Offen';
+  document.getElementById('modal-title-text').textContent = 'Neue Aufgabe';
+  showModal('aufgabe-modal');
 }
 
 function openEditModal(id) {
+  var arr = getAufgaben();
+  var a = arr.find(function(x) { return x.id === id; });
+  if (!a) return;
   editId = id;
-  var arr = getAufgaben();
-  var a = arr.find(function(x){ return x.id === id; });
-  if(!a) return;
-  document.getElementById('e-txt').value = a.txt;
-  document.getElementById('e-pr').value = a.pr;
-  document.getElementById('e-dat').value = a.dat || '';
-  document.getElementById('auf-modal-title').textContent = 'Aufgabe bearbeiten';
-  showModal('auf-modal');
+  document.getElementById('m-titel').value        = a.titel        || '';
+  document.getElementById('m-beschreibung').value = a.beschreibung || '';
+  document.getElementById('m-prioritaet').value   = a.prioritaet   || 'Normal';
+  document.getElementById('m-faellig').value      = a.faellig      || '';
+  document.getElementById('m-kategorie').value    = a.kategorie    || 'Allgemein';
+  document.getElementById('m-zugewiesen').value   = a.zugewiesen   || '';
+  document.getElementById('m-erinnerung').value   = a.erinnerung   || '';
+  document.getElementById('m-status').value       = a.status       || 'Offen';
+  document.getElementById('modal-title-text').textContent = 'Aufgabe bearbeiten';
+  showModal('aufgabe-modal');
 }
 
-function openNewModal() {
-  editId = null;
-  document.getElementById('e-txt').value = '';
-  document.getElementById('e-pr').value = 'mittel';
-  document.getElementById('e-dat').value = '';
-  document.getElementById('auf-modal-title').textContent = 'Neue Aufgabe';
-  showModal('auf-modal');
-}
-
+// ─── SAVE MODAL ──────────────────────────────────────────────
 function saveModal() {
-  var txt = document.getElementById('e-txt').value.trim();
-  if(!txt) return;
-  var pr = document.getElementById('e-pr').value;
-  var dat = document.getElementById('e-dat').value;
-  var arr = getAufgaben();
-  if(editId) {
-    var a = arr.find(function(x){ return x.id === editId; });
-    if(a) { a.txt = txt; a.pr = pr; a.dat = dat; }
-  } else {
-    arr.push({ id: Date.now(), txt: txt, pr: pr, dat: dat, done: false });
+  var titel = document.getElementById('m-titel').value.trim();
+  if (!titel) {
+    document.getElementById('m-titel').focus();
+    document.getElementById('m-titel').style.borderColor = '#dc2626';
+    return;
   }
+  var status    = document.getElementById('m-status').value;
+  var erledigt  = status === 'Erledigt';
+  var arr = getAufgaben();
+
+  if (editId) {
+    var a = arr.find(function(x) { return x.id === editId; });
+    if (a) {
+      a.titel        = titel;
+      a.beschreibung = document.getElementById('m-beschreibung').value.trim();
+      a.prioritaet   = document.getElementById('m-prioritaet').value;
+      a.faellig      = document.getElementById('m-faellig').value;
+      a.kategorie    = document.getElementById('m-kategorie').value;
+      a.zugewiesen   = document.getElementById('m-zugewiesen').value.trim();
+      a.erinnerung   = document.getElementById('m-erinnerung').value;
+      a.status       = status;
+      a.erledigt     = erledigt;
+    }
+  } else {
+    arr.push({
+      id:          Date.now(),
+      titel:       titel,
+      beschreibung: document.getElementById('m-beschreibung').value.trim(),
+      prioritaet:  document.getElementById('m-prioritaet').value,
+      faellig:     document.getElementById('m-faellig').value,
+      kategorie:   document.getElementById('m-kategorie').value,
+      zugewiesen:  document.getElementById('m-zugewiesen').value.trim(),
+      erinnerung:  document.getElementById('m-erinnerung').value,
+      status:      status,
+      erledigt:    erledigt,
+      createdAt:   new Date().toISOString()
+    });
+    addNotif('📋', 'Neue Aufgabe: ' + titel.substring(0, 40));
+  }
+
   saveAufgaben(arr);
   editId = null;
-  hideModal('auf-modal');
+  hideModal('aufgabe-modal');
   render();
 }
 
-function setTab(t) {
-  activeTab = t;
+// ─── SET FILTER ──────────────────────────────────────────────
+function setFilter(f) {
+  activeFilter = f;
   render();
 }
 
+// ─── RENDER ──────────────────────────────────────────────────
 function render() {
-  var all = getAufgaben();
-  var t = today();
-  var offen = sortAufgaben(all.filter(function(a){ return !a.done; }));
-  var erledigt = sortAufgaben(all.filter(function(a){ return a.done; }));
-  var ueberfaellig = offen.filter(function(a){ return a.dat && a.dat < t; });
+  var all  = getAufgaben();
+  var t    = today();
 
-  var prBadge = {
-    hoch: '<span style="background:#fef2f2;color:#dc2626;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Hoch</span>',
-    mittel: '<span style="background:#fffbeb;color:#d97706;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Mittel</span>',
-    niedrig: '<span style="background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Niedrig</span>'
-  };
+  // KPI counts
+  var gesamt      = all.length;
+  var offen       = all.filter(function(a) { return !a.erledigt; }).length;
+  var heuteFaellig = all.filter(function(a) { return a.faellig === t && !a.erledigt; }).length;
 
-  // Stats bar
-  var statsHTML = '<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<span style="font-size:22px;">📋</span>'
-    + '<div><div style="font-size:22px;font-weight:700;color:#0f172a;line-height:1;">' + offen.length + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Offen</div></div></div>'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<span style="font-size:22px;">✅</span>'
-    + '<div><div style="font-size:22px;font-weight:700;color:#16a34a;line-height:1;">' + erledigt.length + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Erledigt</div></div></div>'
-    + '<div style="background:white;border:1px solid #fecaca;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<span style="font-size:22px;">⚠️</span>'
-    + '<div><div style="font-size:22px;font-weight:700;color:#dc2626;line-height:1;">' + ueberfaellig.length + '</div><div style="font-size:12px;color:#dc2626;font-weight:600;margin-top:2px;">Überfällig</div></div></div>'
+  // ── KPI ROW ────────────────────────────────────────────────
+  var kpiHTML = '<div style="display:flex;gap:14px;margin-bottom:22px;flex-wrap:wrap;">'
+    + kpiCard('📋', 'Gesamt Aufgaben', gesamt, '#2563eb', '#eff6ff')
+    + kpiCard('🔓', 'Offen', offen, '#d97706', '#fffbeb')
+    + kpiCard('📅', 'Heute fällig', heuteFaellig, '#dc2626', '#fef2f2')
     + '</div>';
 
-  // Quick add bar
-  var quickHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<input id="q-txt" type="text" placeholder="Neue Aufgabe..." onkeydown="if(event.key===\'Enter\')addAufgabeQuick()" style="flex:1;min-width:180px;padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#0f172a;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
-    + '<select id="q-pr" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;outline:none;background:white;cursor:pointer;color:#0f172a;">'
-    + '<option value="hoch">🔴 Hoch</option><option value="mittel" selected>🟡 Mittel</option><option value="niedrig">🟢 Niedrig</option>'
-    + '</select>'
-    + '<input id="q-dat" type="date" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;outline:none;color:#0f172a;">'
-    + '<button onclick="addAufgabeQuick()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Hinzufügen</button>'
+  // ── QUICK-ADD BAR ──────────────────────────────────────────
+  var quickHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,0.05);">'
+    + '<input id="quick-titel" type="text" placeholder="Schnell eine Aufgabe hinzufügen …"'
+    + ' onkeydown="if(event.key===\'Enter\')quickAdd()"'
+    + ' style="flex:1;min-width:200px;padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#0f172a;"'
+    + ' onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '<button onclick="quickAdd()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Aufgabe hinzufügen</button>'
     + '</div>';
 
-  // Tabs
-  var tabsHTML = '<div style="display:flex;gap:4px;margin-bottom:18px;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:4px;width:fit-content;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<button onclick="setTab(\'offen\')" style="padding:7px 20px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:' + (activeTab==='offen'?'#2563eb':'transparent') + ';color:' + (activeTab==='offen'?'white':'#64748b') + ';transition:all 0.15s;">Offene Aufgaben (' + offen.length + ')</button>'
-    + '<button onclick="setTab(\'erledigt\')" style="padding:7px 20px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:' + (activeTab==='erledigt'?'#2563eb':'transparent') + ';color:' + (activeTab==='erledigt'?'white':'#64748b') + ';transition:all 0.15s;">Erledigt (' + erledigt.length + ')</button>'
-    + '</div>';
+  // ── FILTER TABS ────────────────────────────────────────────
+  var tabs = [
+    { key: 'alle',         label: 'Alle' },
+    { key: 'heute',        label: 'Heute' },
+    { key: 'woche',        label: 'Diese Woche' },
+    { key: 'ueberfaellig', label: 'Überfällig' },
+    { key: 'erledigt',     label: 'Erledigt' }
+  ];
+  var tabsHTML = '<div style="display:flex;gap:4px;margin-bottom:22px;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:4px;width:fit-content;box-shadow:0 1px 3px rgba(0,0,0,0.05);flex-wrap:wrap;">';
+  tabs.forEach(function(tab) {
+    var active = activeFilter === tab.key;
+    tabsHTML += '<button onclick="setFilter(\'' + tab.key + '\')" style="padding:7px 18px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;'
+      + 'background:' + (active ? '#2563eb' : 'transparent') + ';'
+      + 'color:' + (active ? 'white' : '#64748b') + ';'
+      + 'transition:all 0.15s;">' + tab.label + '</button>';
+  });
+  tabsHTML += '</div>';
 
-  // List
-  var listItems = activeTab === 'offen' ? offen : erledigt;
+  // ── TASK LIST ──────────────────────────────────────────────
+  var filtered = filterAufgaben(all, activeFilter);
+  var sorted   = sortAufgaben(filtered);
+
   var listHTML = '';
-  if(listItems.length === 0) {
-    listHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:56px 24px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-      + '<div style="font-size:44px;margin-bottom:14px;">' + (activeTab==='offen'?'🎉':'📭') + '</div>'
-      + '<div style="font-size:16px;font-weight:600;color:#0f172a;margin-bottom:6px;">' + (activeTab==='offen'?'Keine offenen Aufgaben!':'Noch nichts erledigt.') + '</div>'
-      + '<div style="font-size:13px;color:#94a3b8;">' + (activeTab==='offen'?'Füge neue Aufgaben über die Zeile oben hinzu.':'Erledigte Aufgaben erscheinen hier.') + '</div>'
-      + '</div>';
+  if (sorted.length === 0) {
+    listHTML = emptyState('✅', 'Keine Aufgaben gefunden', 'Füge eine neue Aufgabe hinzu oder wähle einen anderen Filter.', '+ Neue Aufgabe', 'openNewModal()');
   } else {
-    listHTML = '<div style="display:flex;flex-direction:column;gap:8px;">';
-    listItems.forEach(function(a) {
-      var isOver = !a.done && a.dat && a.dat < t;
-      var borderLeft = isOver ? '4px solid #dc2626' : (a.done ? '4px solid #16a34a' : '4px solid #e2e8f0');
-      var rowBg = a.done ? '#f8fafc' : 'white';
-      var txtStyle = a.done ? 'text-decoration:line-through;color:#94a3b8;' : 'color:#0f172a;font-weight:500;';
-      listHTML += '<div style="background:' + rowBg + ';border:1px solid #e2e8f0;border-left:' + borderLeft + ';border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.08)\'" onmouseout="this.style.boxShadow=\'none\'">'
-        + '<div onclick="toggleDone(' + a.id + ')" style="width:22px;height:22px;border-radius:50%;border:2px solid ' + (a.done?'#16a34a':'#cbd5e1') + ';background:' + (a.done?'#16a34a':'white') + ';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.15s;" title="' + (a.done?'Als offen markieren':'Als erledigt markieren') + '">'
-        + (a.done ? '<span style="color:white;font-size:12px;font-weight:700;">✓</span>' : '')
-        + '</div>'
-        + '<div style="flex:1;min-width:0;">'
-        + '<div style="' + txtStyle + 'font-size:14px;margin-bottom:5px;">' + a.txt + '</div>'
-        + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">'
-        + (prBadge[a.pr] || '')
-        + (a.dat ? '<span style="font-size:12px;color:#64748b;">📅 ' + fmtDate(a.dat) + '</span>' : '')
-        + (isOver ? '<span style="background:#fef2f2;color:#dc2626;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;">Überfällig</span>' : '')
-        + '</div></div>'
-        + '<div style="display:flex;gap:6px;flex-shrink:0;">'
-        + (!a.done ? '<button onclick="openEditModal(' + a.id + ')" style="width:32px;height:32px;border-radius:8px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;" title="Bearbeiten">✏️</button>' : '')
-        + '<button onclick="deleteAufgabe(' + a.id + ')" style="width:32px;height:32px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;" title="Löschen">🗑</button>'
-        + '</div></div>';
+    // Group by Priorität
+    var groups = [
+      { key: 'Hoch',    label: 'Hoch',    dot: '#dc2626', bg: '#fef2f2' },
+      { key: 'Normal',  label: 'Normal',  dot: '#d97706', bg: '#fffbeb' },
+      { key: 'Niedrig', label: 'Niedrig', dot: '#16a34a', bg: '#f0fdf4' }
+    ];
+    groups.forEach(function(g) {
+      var items = sorted.filter(function(a) { return a.prioritaet === g.key; });
+      if (items.length === 0) return;
+      listHTML += '<div style="margin-bottom:20px;">';
+      listHTML += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+        + '<div style="width:10px;height:10px;border-radius:50%;background:' + g.dot + ';flex-shrink:0;"></div>'
+        + '<span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Priorität: ' + g.label + '</span>'
+        + '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">(' + items.length + ')</span>'
+        + '</div>';
+      listHTML += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      items.forEach(function(a) {
+        listHTML += renderTaskItem(a, t);
+      });
+      listHTML += '</div></div>';
     });
-    listHTML += '</div>';
+    // Tasks with no/unknown priority
+    var ungrouped = sorted.filter(function(a) { return a.prioritaet !== 'Hoch' && a.prioritaet !== 'Normal' && a.prioritaet !== 'Niedrig'; });
+    if (ungrouped.length > 0) {
+      listHTML += '<div style="margin-bottom:20px;">';
+      listHTML += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+        + '<div style="width:10px;height:10px;border-radius:50%;background:#94a3b8;flex-shrink:0;"></div>'
+        + '<span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Sonstige</span>'
+        + '</div>';
+      listHTML += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      ungrouped.forEach(function(a) { listHTML += renderTaskItem(a, t); });
+      listHTML += '</div></div>';
+    }
   }
 
-  var mainHTML = statsHTML + quickHTML + tabsHTML + listHTML;
+  var mainContent = getTrialBanner() + kpiHTML + quickHTML + tabsHTML + listHTML;
 
-  var modalsHTML = '<div id="auf-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
-    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
-    + '<div id="auf-modal-title" style="font-size:16px;font-weight:700;">Neue Aufgabe</div>'
-    + '<button onclick="hideModal(\'auf-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;">✕</button>'
-    + '</div>'
-    + formGroup('Aufgabentext', '<input id="e-txt" type="text" placeholder="Was ist zu tun?" ' + inputStyle + '>')
-    + formGroup('Priorität', '<select id="e-pr" ' + inputStyle + '><option value="hoch">🔴 Hoch</option><option value="mittel">🟡 Mittel</option><option value="niedrig">🟢 Niedrig</option></select>')
-    + formGroup('Fälligkeitsdatum', '<input id="e-dat" type="date" ' + inputStyle + '>')
-    + '<div style="display:flex;gap:10px;margin-top:20px;">'
-    + '<button onclick="saveModal()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
-    + '<button onclick="hideModal(\'auf-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div></div></div>';
+  // ── ACTION BUTTON ─────────────────────────────────────────
+  var actionBtn = '<button onclick="openNewModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Neue Aufgabe</button>';
 
-  var actionBtn = '<button onclick="openNewModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Aufgabe hinzufügen</button>';
+  // ── MODAL ─────────────────────────────────────────────────
+  var modals = buildModal();
 
-  renderLayout('aufgaben', 'Aufgaben', actionBtn, mainHTML, modalsHTML);
+  renderLayout('aufgaben', 'Aufgaben', actionBtn, mainContent, modals);
 }
 
+// ─── KPI CARD HELPER ─────────────────────────────────────────
+function kpiCard(ico, label, value, color, bg) {
+  return '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px 22px;display:flex;align-items:center;gap:14px;min-width:160px;box-shadow:0 1px 4px rgba(0,0,0,0.05);flex:1;max-width:220px;">'
+    + '<div style="width:44px;height:44px;border-radius:11px;background:' + bg + ';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">' + ico + '</div>'
+    + '<div>'
+    + '<div style="font-size:26px;font-weight:700;color:' + color + ';line-height:1.1;">' + value + '</div>'
+    + '<div style="font-size:12px;color:#64748b;margin-top:3px;font-weight:500;">' + label + '</div>'
+    + '</div></div>';
+}
+
+// ─── TASK ITEM HELPER ────────────────────────────────────────
+function renderTaskItem(a, t) {
+  var isOverdue = !a.erledigt && a.faellig && a.faellig < t;
+  var isToday   = a.faellig === t;
+  var isDone    = a.erledigt;
+
+  // Priority dot color
+  var dotColor = a.prioritaet === 'Hoch' ? '#dc2626' : a.prioritaet === 'Niedrig' ? '#16a34a' : '#d97706';
+
+  // Fällig badge
+  var faelligBadge = '';
+  if (a.faellig) {
+    var badgeStyle, badgeText;
+    if (isOverdue) {
+      badgeStyle = 'background:#fef2f2;color:#dc2626;border:1px solid #fecaca;';
+      badgeText  = '⚠ ' + fmtDate(a.faellig);
+    } else if (isToday) {
+      badgeStyle = 'background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;';
+      badgeText  = '📅 Heute';
+    } else {
+      badgeStyle = 'background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;';
+      badgeText  = '📅 ' + fmtDate(a.faellig);
+    }
+    faelligBadge = '<span style="' + badgeStyle + 'font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;">' + badgeText + '</span>';
+  }
+
+  // Kategorie badge
+  var katBadge = a.kategorie
+    ? '<span style="background:#f1f5f9;color:#475569;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;">' + a.kategorie + '</span>'
+    : '';
+
+  // Status badge
+  var statusColors = { 'Offen': 'background:#fffbeb;color:#d97706;', 'In Bearbeitung': 'background:#eff6ff;color:#2563eb;', 'Erledigt': 'background:#f0fdf4;color:#16a34a;' };
+  var statusBadge = '<span style="' + (statusColors[a.status] || statusColors['Offen']) + 'font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;">' + (a.status || 'Offen') + '</span>';
+
+  // Zugewiesen
+  var zugewiesen = a.zugewiesen
+    ? '<span style="font-size:12px;color:#64748b;">👤 ' + a.zugewiesen + '</span>'
+    : '';
+
+  // Title style
+  var titleStyle = isDone
+    ? 'text-decoration:line-through;color:#94a3b8;font-size:14px;font-weight:500;'
+    : 'color:#0f172a;font-size:14px;font-weight:600;';
+
+  // Card border
+  var borderLeft = isOverdue ? '4px solid #dc2626' : isDone ? '4px solid #16a34a' : '4px solid #e2e8f0';
+  var cardOpacity = isDone ? 'opacity:0.6;' : '';
+
+  return '<div style="background:white;border:1px solid #e2e8f0;border-left:' + borderLeft + ';border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:14px;' + cardOpacity + 'transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.08)\'" onmouseout="this.style.boxShadow=\'none\'">'
+    // Checkbox
+    + '<div onclick="toggleErledigt(' + a.id + ')" title="' + (isDone ? 'Als offen markieren' : 'Als erledigt markieren') + '" style="width:22px;height:22px;border-radius:6px;border:2px solid ' + (isDone ? '#16a34a' : '#cbd5e1') + ';background:' + (isDone ? '#16a34a' : 'white') + ';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:1px;accent-color:#2563eb;transition:all 0.15s;">'
+    + (isDone ? '<span style="color:white;font-size:13px;font-weight:700;line-height:1;">✓</span>' : '')
+    + '</div>'
+    // Content
+    + '<div style="flex:1;min-width:0;">'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">'
+    + '<div style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;"></div>'
+    + '<span style="' + titleStyle + 'flex:1;min-width:0;">' + (a.titel || '') + '</span>'
+    + '</div>'
+    + (a.beschreibung ? '<div style="font-size:12px;color:#64748b;margin-bottom:8px;line-height:1.5;">' + a.beschreibung + '</div>' : '')
+    + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+    + faelligBadge
+    + katBadge
+    + statusBadge
+    + zugewiesen
+    + '</div>'
+    + '</div>'
+    // Action buttons
+    + '<div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">'
+    + '<button onclick="openEditModal(' + a.id + ')" title="Bearbeiten" style="width:32px;height:32px;border-radius:8px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.12s;" onmouseover="this.style.background=\'#eff6ff\'" onmouseout="this.style.background=\'white\'">✏️</button>'
+    + '<button onclick="deleteAufgabe(' + a.id + ')" title="Löschen" style="width:32px;height:32px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.12s;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fef2f2\'">🗑️</button>'
+    + '</div>'
+    + '</div>';
+}
+
+// ─── MODAL HTML ──────────────────────────────────────────────
+function buildModal() {
+  return '<div id="aufgabe-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.48);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
+    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.22);animation:fadeIn 0.15s ease;">'
+    // Header
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">'
+    + '<div id="modal-title-text" style="font-size:17px;font-weight:700;color:#0f172a;">Neue Aufgabe</div>'
+    + '<button onclick="hideModal(\'aufgabe-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background 0.12s;" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'none\'">✕</button>'
+    + '</div>'
+    // Fields
+    + formGroup('Titel *', '<input id="m-titel" type="text" placeholder="Aufgabentitel …" ' + inputStyle + '>')
+    + formGroup('Beschreibung', '<textarea id="m-beschreibung" placeholder="Optionale Beschreibung …" rows="3" ' + inputStyle + ' style="resize:vertical;"></textarea>')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Priorität', '<select id="m-prioritaet" ' + inputStyle + '><option value="Hoch">🔴 Hoch</option><option value="Normal" selected>🟡 Normal</option><option value="Niedrig">🟢 Niedrig</option></select>')
+    + formGroup('Status', '<select id="m-status" ' + inputStyle + '><option value="Offen">Offen</option><option value="In Bearbeitung">In Bearbeitung</option><option value="Erledigt">Erledigt</option></select>')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Fälligkeitsdatum', '<input id="m-faellig" type="date" ' + inputStyle + '>')
+    + formGroup('Kategorie', '<select id="m-kategorie" ' + inputStyle + '><option value="Allgemein">Allgemein</option><option value="Mieter">Mieter</option><option value="Objekt">Objekt</option><option value="Finanzen">Finanzen</option><option value="Behörde">Behörde</option><option value="Sonstiges">Sonstiges</option></select>')
+    + '</div>'
+    + formGroup('Zugewiesen an', '<input id="m-zugewiesen" type="text" placeholder="Name der zuständigen Person …" ' + inputStyle + '>')
+    + formGroup('Erinnerung (optional)', '<input id="m-erinnerung" type="datetime-local" ' + inputStyle + '>')
+    // Buttons
+    + '<div style="display:flex;gap:10px;margin-top:22px;">'
+    + '<button onclick="saveModal()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">Speichern</button>'
+    + '<button onclick="hideModal(\'aufgabe-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#e2e8f0\'" onmouseout="this.style.background=\'#f1f5f9\'">Abbrechen</button>'
+    + '</div>'
+    + '</div></div>';
+}
+
+// ─── INIT ────────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(user.uid, function() {
+  startPageListener(user.uid, render);
+});
 </script>
 </body>
 </html>
