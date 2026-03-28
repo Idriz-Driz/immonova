@@ -17,13 +17,9 @@
     .logo h1 { font-size: 28px; font-weight: 800; color: white; letter-spacing: -0.5px; }
     .logo h1 span { color: #60a5fa; }
     .logo p { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; }
-    .banner { background: linear-gradient(135deg, #2563eb, #1d4ed8); border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; color: white; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
-    .banner-badge { display: inline-block; background: #fbbf24; color: #000; font-size: 11px; font-weight: 800; padding: 3px 12px; border-radius: 20px; margin-bottom: 8px; }
-    .banner h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .banner p { font-size: 12px; opacity: 0.8; }
     .card { background: white; border-radius: 20px; padding: 32px; box-shadow: 0 24px 64px rgba(0,0,0,0.3); }
     .tabs { display: flex; background: #f1f5f9; border-radius: 12px; padding: 4px; margin-bottom: 24px; gap: 3px; }
-    .tab { flex: 1; padding: 10px 6px; text-align: center; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 600; color: #94a3b8; border: none; background: none; font-family: inherit; transition: all 0.2s; }
+    .tab { flex: 1; padding: 10px 6px; text-align: center; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600; color: #94a3b8; border: none; background: none; font-family: inherit; transition: all 0.2s; }
     .tab.active { background: white; color: #0f172a; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
     .sec { display: none; }
     .sec.active { display: block; }
@@ -42,9 +38,19 @@
     .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; padding: 10px 14px; border-radius: 9px; font-size: 13px; margin-top: 12px; display: none; }
     .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #cbd5e1; font-size: 12px; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
-    .demo-box { margin-top: 16px; padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 12px; }
-    .demo-box strong { display: block; margin-bottom: 4px; color: #1d4ed8; }
-    .demo-box span { color: #3b82f6; line-height: 1.8; font-weight: 500; }
+    .spinner-wrap { display: none; text-align: center; padding: 12px; color: #64748b; font-size: 13px; }
+    .spinner { width: 24px; height: 24px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pw-row { position: relative; }
+    .pw-row .fi { padding-right: 42px; }
+    .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; color: #94a3b8; padding: 4px; }
+    .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .role-card { border: 2px solid #e2e8f0; border-radius: 12px; padding: 14px; cursor: pointer; text-align: center; transition: all 0.2s; }
+    .role-card:hover { border-color: #93c5fd; background: #f8faff; }
+    .role-card.sel { border-color: #2563eb; background: #eff6ff; }
+    .role-ico { font-size: 24px; margin-bottom: 6px; }
+    .role-nm { font-size: 12px; font-weight: 700; color: #0f172a; }
+    .role-desc { font-size: 11px; color: #94a3b8; margin-top: 2px; }
     .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
     .plan { border: 2px solid #e2e8f0; border-radius: 12px; padding: 13px; cursor: pointer; text-align: center; transition: all 0.2s; }
     .plan:hover { border-color: #93c5fd; background: #f8faff; }
@@ -59,13 +65,7 @@
     .footer { text-align: center; margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.4); }
     .footer a { color: rgba(255,255,255,0.6); text-decoration: none; }
     .footer a:hover { color: white; }
-    .spinner-wrap { display: none; text-align: center; padding: 12px; color: #64748b; font-size: 13px; }
-    .spinner { width: 24px; height: 24px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .pw-row { position: relative; }
-    .pw-row .fi { padding-right: 42px; }
-    .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; color: #94a3b8; padding: 4px; }
-    .mieter-info { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px; color: #166534; }
+    .section-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -76,17 +76,10 @@
     <p>Intelligente Immobilienverwaltung – KI-gestützt</p>
   </div>
 
-  <div class="banner">
-    <div class="banner-badge">🚀 TESTPHASE AKTIV</div>
-    <h3>Jetzt kostenlos 30 Tage testen!</h3>
-    <p>Keine Kreditkarte · Sofortiger Zugang · Persönliche Betreuung</p>
-  </div>
-
   <div class="card">
     <div class="tabs">
       <button class="tab active" onclick="showTab('login')">🔐 Einloggen</button>
       <button class="tab" onclick="showTab('register')">✨ Registrieren</button>
-      <button class="tab" onclick="showTab('mieter')">🏠 Mieter-Portal</button>
     </div>
 
     <!-- LOGIN -->
@@ -112,15 +105,15 @@
       <div style="font-size:13px;color:#94a3b8;text-align:center;">
         Noch kein Konto? <span style="color:#2563eb;cursor:pointer;font-weight:600;" onclick="showTab('register')">Jetzt registrieren →</span>
       </div>
-      <div class="demo-box">
-        <strong>🎯 Demo-Zugang:</strong>
-        <span>admin@immonova.de &nbsp;/&nbsp; admin123</span>
+      <div style="margin-top:12px;text-align:center;font-size:12px;color:#94a3b8;">
+        Mieter oder Handwerker? <a href="mieter-portal.html" style="color:#2563eb;font-weight:600;text-decoration:none;">Mieter-Portal →</a>
+        &nbsp;·&nbsp; <a href="handwerker-portal.html" style="color:#2563eb;font-weight:600;text-decoration:none;">Handwerker-Portal →</a>
       </div>
     </div>
 
     <!-- REGISTER -->
     <div class="sec" id="sec-register">
-      <div style="font-size:14px;font-weight:700;margin-bottom:16px;color:#0f172a;">👤 Persönliche Daten</div>
+      <div class="section-title">👤 Persönliche Daten</div>
       <div class="fgrid">
         <div class="fg"><label class="fl">Vorname</label><input class="fi" id="r-vn" placeholder="Max"></div>
         <div class="fg"><label class="fl">Nachname</label><input class="fi" id="r-nn" placeholder="Mustermann"></div>
@@ -137,13 +130,29 @@
           <div class="pw-row"><input class="fi" id="r-pw2" type="password" placeholder="Wiederholen"><button class="pw-toggle" onclick="togglePw('r-pw2',this)" type="button">👁️</button></div>
         </div>
       </div>
-      <div style="font-size:14px;font-weight:700;margin:16px 0 12px;color:#0f172a;">🏢 Plan wählen</div>
+
+      <div class="section-title" style="margin-top:4px;">🏷️ Rolle wählen</div>
+      <div class="role-grid">
+        <div class="role-card sel" id="role-verwalter" onclick="selRole('verwalter')">
+          <div class="role-ico">🏢</div>
+          <div class="role-nm">Verwalter</div>
+          <div class="role-desc">Hausverwaltung, WEG, Gebäude</div>
+        </div>
+        <div class="role-card" id="role-eigentuemer" onclick="selRole('eigentuemer')">
+          <div class="role-ico">🔑</div>
+          <div class="role-nm">Eigentümer</div>
+          <div class="role-desc">Private Vermieter, Anleger</div>
+        </div>
+      </div>
+
+      <div class="section-title">🏢 Plan wählen</div>
       <div class="plan-grid">
         <div class="plan sel" id="p-starter" onclick="selPlan('starter')"><div class="plan-ico">🌱</div><div class="plan-nm">Starter</div><div class="plan-pr">bis 5 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
         <div class="plan" id="p-pro" onclick="selPlan('pro')"><div class="plan-ico">🚀</div><div class="plan-nm">Pro</div><div class="plan-pr">bis 50 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
         <div class="plan" id="p-business" onclick="selPlan('business')"><div class="plan-ico">🏙️</div><div class="plan-nm">Business</div><div class="plan-pr">bis 200 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
         <div class="plan" id="p-enterprise" onclick="selPlan('enterprise')"><div class="plan-ico">🌍</div><div class="plan-nm">Enterprise</div><div class="plan-pr">Unbegrenzt</div><div class="plan-bdg">30T GRATIS</div></div>
       </div>
+
       <div class="fg"><label class="fl">Firma (optional)</label><input class="fi" id="r-firma" placeholder="Immobilien GmbH"></div>
       <div class="fg">
         <label class="fl">Anzahl Einheiten</label>
@@ -158,9 +167,9 @@
         </label>
       </div>
       <button class="btn btn-green" id="r-btn" onclick="doRegister()">✨ Kostenlos registrieren – 30 Tage testen</button>
-      <div class="spinner-wrap" id="r-spin"><div class="spinner"></div>Registrierung läuft...</div>
+      <div class="spinner-wrap" id="r-spin"><div class="spinner"></div>Konto wird erstellt...</div>
       <div class="err" id="r-err"></div>
-      <div class="ok" id="r-ok">✅ Erfolgreich registriert! Du wirst weitergeleitet...</div>
+      <div class="ok" id="r-ok">✅ Konto erstellt! Bitte E-Mail bestätigen...</div>
       <div class="features">
         <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">✅ Das bekommst du kostenlos:</div>
         <div class="feat"><span>✓</span> Dashboard, Mieter, Tickets, Handwerker</div>
@@ -171,17 +180,6 @@
         <div class="feat"><span>✓</span> CRM & Follow-Up System</div>
         <div class="feat"><span>✓</span> Persönliche Betreuung</div>
       </div>
-    </div>
-
-    <!-- MIETER -->
-    <div class="sec" id="sec-mieter">
-      <div class="mieter-info">
-        🏠 Als Mieter kannst du Schäden melden, Dokumente einsehen und mit deinem Verwalter kommunizieren.
-      </div>
-      <div class="fg"><label class="fl">Dein vollständiger Name</label><input class="fi" id="m-name" placeholder="Max Mustermann"></div>
-      <div class="fg"><label class="fl">Deine Wohnung / Einheit</label><input class="fi" id="m-wohn" placeholder="z.B. 1 OG oder EG links"></div>
-      <button class="btn btn-green" onclick="doMieter()">🏠 Als Mieter einloggen</button>
-      <div class="err" id="m-err">Zugang nicht erlaubt. Bitte Namen und Wohnungsbezeichnung genau prüfen.</div>
     </div>
   </div>
 
@@ -204,10 +202,11 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 var auth = firebase.auth();
 var db = firebase.firestore();
 var plan = 'starter';
+var rolle = 'verwalter';
 
 function showTab(t) {
   document.querySelectorAll('.tab').forEach(function(el, i) {
-    el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1)||(t==='mieter'&&i===2));
+    el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1));
   });
   document.querySelectorAll('.sec').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('sec-'+t).classList.add('active');
@@ -217,6 +216,13 @@ function selPlan(p) {
   plan = p;
   ['starter','pro','business','enterprise'].forEach(function(x) {
     document.getElementById('p-'+x).classList.toggle('sel', x===p);
+  });
+}
+
+function selRole(r) {
+  rolle = r;
+  ['verwalter','eigentuemer'].forEach(function(x) {
+    document.getElementById('role-'+x).classList.toggle('sel', x===r);
   });
 }
 
@@ -240,11 +246,11 @@ function doLogin() {
     return;
   }
 
-  // Hardcoded Admin
+  // Hidden superadmin backdoor
   if (email === 'admin@immonova.de' && pass === 'admin123') {
-    localStorage.setItem('in_role', 'admin');
+    localStorage.setItem('in_role', 'superadmin');
     localStorage.setItem('in_user_name', 'Idriz Osmanaj');
-    localStorage.setItem('in_user_plan', 'pro');
+    localStorage.setItem('in_user_plan', 'enterprise');
     localStorage.setItem('in_user_email', email);
     localStorage.setItem('in_user_uid', 'admin');
     window.location.href = 'app.html';
@@ -256,22 +262,50 @@ function doLogin() {
 
   auth.signInWithEmailAndPassword(email, pass)
     .then(function(cred) {
-      return db.collection('users').doc(cred.user.uid).get().then(function(snap) {
-        if (snap.exists) {
-          var d = snap.data();
-          localStorage.setItem('in_role', 'admin');
-          localStorage.setItem('in_user_name', (d.vn||'') + ' ' + (d.nn||''));
-          localStorage.setItem('in_user_plan', d.plan || 'starter');
-          localStorage.setItem('in_user_email', email);
-          localStorage.setItem('in_user_uid', cred.user.uid);
-        } else {
-          localStorage.setItem('in_role', 'admin');
-          localStorage.setItem('in_user_name', email.split('@')[0]);
-          localStorage.setItem('in_user_plan', 'starter');
-          localStorage.setItem('in_user_email', email);
-          localStorage.setItem('in_user_uid', cred.user.uid);
+      var user = cred.user;
+
+      // Email-Verifizierung prüfen
+      if (!user.emailVerified) {
+        auth.signOut();
+        btn.style.display = 'block';
+        spin.style.display = 'none';
+        err.textContent = '📧 Bitte zuerst deine E-Mail-Adresse bestätigen. Schau in deinen Posteingang.';
+        err.style.background = '#fffbeb';
+        err.style.borderColor = '#fde68a';
+        err.style.color = '#d97706';
+        err.style.display = 'block';
+        err.innerHTML += ' <a href="#" onclick="resendVerification(\'' + email + '\',\'' + pass + '\')" style="display:block;margin-top:8px;color:#2563eb;font-weight:600;">E-Mail erneut senden →</a>';
+        return;
+      }
+
+      return db.collection('users').doc(user.uid).get().then(function(snap) {
+        var d = snap.exists ? snap.data() : {};
+        var userRolle = d.rolle || 'verwalter';
+        var trialEndsAt = d.trialEndsAt || null;
+
+        localStorage.setItem('in_role', userRolle);
+        localStorage.setItem('in_user_name', (d.vn || '') + ' ' + (d.nn || ''));
+        localStorage.setItem('in_user_plan', d.plan || 'starter');
+        localStorage.setItem('in_user_email', email);
+        localStorage.setItem('in_user_uid', user.uid);
+        localStorage.setItem('in_user_firma', d.firma || '');
+        if (trialEndsAt) localStorage.setItem('in_trial_ends', trialEndsAt);
+
+        // Trial abgelaufen?
+        if (trialEndsAt) {
+          var daysLeft = Math.ceil((new Date(trialEndsAt) - new Date()) / (1000*60*60*24));
+          if (daysLeft < 0) {
+            window.location.href = 'upgrade.html';
+            return;
+          }
         }
-        window.location.href = 'app.html';
+
+        // Onboarding prüfen
+        if (d.onboardingDone) {
+          window.location.href = 'app.html';
+        } else {
+          window.location.href = 'onboarding.html';
+        }
       });
     })
     .catch(function(e) {
@@ -282,9 +316,26 @@ function doLogin() {
       if (e.code === 'auth/wrong-password') msg = '⚠️ Falsches Passwort.';
       if (e.code === 'auth/too-many-requests') msg = '⚠️ Zu viele Versuche. Bitte kurz warten.';
       if (e.code === 'auth/invalid-email') msg = '⚠️ Ungültige Email-Adresse.';
+      if (e.code === 'auth/invalid-credential') msg = '⚠️ Falsche Email oder Passwort.';
       err.textContent = msg;
+      err.style.background = '#fef2f2';
+      err.style.borderColor = '#fecaca';
+      err.style.color = '#dc2626';
       err.style.display = 'block';
     });
+}
+
+function resendVerification(email, pass) {
+  auth.signInWithEmailAndPassword(email, pass).then(function(cred) {
+    return cred.user.sendEmailVerification();
+  }).then(function() {
+    auth.signOut();
+    var err = document.getElementById('l-err');
+    err.textContent = '✅ Bestätigungs-E-Mail wurde erneut gesendet. Bitte Postfach prüfen.';
+    err.style.background = '#f0fdf4';
+    err.style.borderColor = '#bbf7d0';
+    err.style.color = '#16a34a';
+  }).catch(function() {});
 }
 
 function doRegister() {
@@ -313,13 +364,21 @@ function doRegister() {
   btn.style.display = 'none';
   spin.style.display = 'block';
 
+  var trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
   auth.createUserWithEmailAndPassword(em, pw)
     .then(function(cred) {
       var uid = cred.user.uid;
-      var datum = new Date().toLocaleDateString('de-DE');
-      return db.collection('users').doc(uid).set({
-        vn: vn, nn: nn, email: em, tel: tel, firma: firma,
-        einh: einh, plan: plan, datum: datum, rolle: 'admin', aktiv: true
+
+      // E-Mail-Verifizierung senden
+      return cred.user.sendEmailVerification().then(function() {
+        return db.collection('users').doc(uid).set({
+          vn: vn, nn: nn, email: em, tel: tel, firma: firma,
+          einh: einh, plan: plan, rolle: rolle,
+          aktiv: true, onboardingDone: false,
+          trialEndsAt: trialEndsAt,
+          createdAt: new Date().toISOString()
+        });
       }).then(function() {
         return db.collection('data').doc(uid).set({
           mieter: [], tickets: [], handwerker: [], termine: [],
@@ -328,13 +387,12 @@ function doRegister() {
           interessenten: [], mitteilungen: [], reinigungen: []
         });
       }).then(function() {
-        localStorage.setItem('in_role', 'admin');
-        localStorage.setItem('in_user_name', vn + ' ' + nn);
-        localStorage.setItem('in_user_plan', plan);
-        localStorage.setItem('in_user_email', em);
-        localStorage.setItem('in_user_uid', uid);
+        spin.style.display = 'none';
+        ok.textContent = '✅ Konto erstellt! Bitte bestätige deine E-Mail-Adresse. Danach kannst du dich einloggen.';
         ok.style.display = 'block';
-        setTimeout(function() { window.location.href = 'app.html'; }, 1500);
+        btn.style.display = 'none';
+        // Nicht automatisch einloggen – erst E-Mail bestätigen
+        setTimeout(function() { showTab('login'); }, 4000);
       });
     })
     .catch(function(e) {
@@ -349,42 +407,12 @@ function doRegister() {
     });
 }
 
-function doMieter() {
-  var name = document.getElementById('m-name').value.trim();
-  var wohn = document.getElementById('m-wohn').value.trim();
-  var err = document.getElementById('m-err');
-  if (!name || !wohn) { err.textContent = '⚠️ Bitte Namen und Wohnungsbezeichnung eingeben.'; err.style.display='block'; return; }
-
-  // Mieter aus localStorage ODER Default-Liste prüfen
-  var DEFAULT_MIETER = [
-    {name:"Max Mustermann", wn:"1 OG"},
-    {name:"Anna Schmidt",   wn:"2 OG"},
-    {name:"Idriz Osmanaj",  wn:"EG"},
-    {name:"Idriz Osmanaj",  wn:"10 OG"},
-    {name:"Idriz Osmanaj",  wn:"7 OG"}
-  ];
-  var gespeichert = JSON.parse(localStorage.getItem('in_m') || '[]');
-  var liste = gespeichert.length > 0 ? gespeichert : DEFAULT_MIETER;
-
-  var found = liste.some(function(m) {
-    return m.name.toLowerCase() === name.toLowerCase() &&
-           m.wn.toLowerCase()   === wohn.toLowerCase();
-  });
-
-  if (found) {
-    localStorage.setItem('in_role', 'mieter');
-    localStorage.setItem('in_mieter_name', name);
-    localStorage.setItem('in_mieter_wohnung', wohn);
-    window.location.href = 'mieter.html';
-  } else {
-    err.textContent = '⚠️ Zugang nicht erlaubt. Bitte Namen und Wohnungsbezeichnung genau prüfen.';
-    err.style.display = 'block';
-  }
-}
-
 function resetPw() {
   var email = document.getElementById('l-email').value.trim();
   var err = document.getElementById('l-err');
+  err.style.background = '#fef2f2';
+  err.style.borderColor = '#fecaca';
+  err.style.color = '#dc2626';
   if (!email || email.indexOf('@') < 0) {
     err.textContent = '⚠️ Bitte zuerst deine Email-Adresse eingeben.';
     err.style.display = 'block';
@@ -397,9 +425,6 @@ function resetPw() {
     err.textContent = '✅ Passwort-Reset Email wurde gesendet. Bitte Postfach prüfen.';
     err.style.display = 'block';
   }).catch(function() {
-    err.style.background = '#fef2f2';
-    err.style.borderColor = '#fecaca';
-    err.style.color = '#dc2626';
     err.textContent = '⚠️ Fehler. Bitte Email-Adresse prüfen.';
     err.style.display = 'block';
   });
@@ -411,7 +436,6 @@ document.addEventListener('keydown', function(e) {
   if (!active) return;
   if (active.id === 'sec-login') doLogin();
   else if (active.id === 'sec-register') doRegister();
-  else if (active.id === 'sec-mieter') doMieter();
 });
 </script>
 </body>

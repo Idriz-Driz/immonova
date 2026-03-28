@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmoNova – Admin Console</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="shared.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: #f1f5f9; min-height: 100vh; }
+    .top-bar { background: #0f172a; color: white; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+    .top-bar-left { display: flex; align-items: center; gap: 12px; }
+    .top-bar-logo { width: 36px; height: 36px; background: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .top-bar h1 { font-size: 16px; font-weight: 800; }
+    .top-bar h1 span { color: #60a5fa; }
+    .admin-badge { background: #dc2626; color: white; font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 20px; }
+    .top-bar-right { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+    .btn-sm { padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-red { background: #dc2626; color: white; }
+    .btn-red:hover { background: #b91c1c; }
+    .btn-blue { background: #2563eb; color: white; }
+    .btn-blue:hover { background: #1d4ed8; }
+    .btn-ghost { background: rgba(255,255,255,0.1); color: white; }
+    .btn-ghost:hover { background: rgba(255,255,255,0.2); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi { background: white; border-radius: 14px; padding: 18px 20px; }
+    .kpi-label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .kpi-val { font-size: 28px; font-weight: 800; color: #0f172a; }
+    .kpi-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .section { background: white; border-radius: 16px; padding: 20px 24px; margin-bottom: 20px; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .section-head h2 { font-size: 16px; font-weight: 700; color: #0f172a; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-input { padding: 8px 14px; border: 1.5px solid #e2e8f0; border-radius: 9px; font-size: 13px; font-family: inherit; color: #0f172a; outline: none; min-width: 200px; }
+    .search-input:focus { border-color: #2563eb; }
+    .fs-sm { padding: 8px 12px; border: 1.5px solid #e2e8f0; border-radius: 9px; font-size: 12px; font-family: inherit; color: #475569; outline: none; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th { text-align: left; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+    .table td { padding: 12px 12px; font-size: 13px; color: #475569; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .table tr:hover td { background: #f8fafc; }
+    .table tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+    .badge-green { background: #f0fdf4; color: #16a34a; }
+    .badge-blue { background: #eff6ff; color: #2563eb; }
+    .badge-red { background: #fef2f2; color: #dc2626; }
+    .badge-yellow { background: #fffbeb; color: #d97706; }
+    .badge-gray { background: #f1f5f9; color: #64748b; }
+    .plan-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .plan-starter { background: #94a3b8; }
+    .plan-pro { background: #2563eb; }
+    .plan-business { background: #7c3aed; }
+    .plan-enterprise { background: #d97706; }
+    .action-btns { display: flex; gap: 6px; }
+    .btn-icon { width: 30px; height: 30px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+    .btn-icon:hover { transform: scale(1.1); }
+    .btn-edit { background: #eff6ff; color: #2563eb; }
+    .btn-del { background: #fef2f2; color: #dc2626; }
+    .btn-ext { background: #f0fdf4; color: #16a34a; }
+    .loading { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 40px; color: #94a3b8; }
+    .empty-ico { font-size: 40px; margin-bottom: 10px; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: white; border-radius: 20px; padding: 28px; max-width: 480px; width: 100%; margin: 20px; }
+    .modal h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 16px; }
+    .fg { margin-bottom: 14px; }
+    .fl { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 5px; text-transform: uppercase; }
+    .fi, .fs-full { width: 100%; padding: 10px 13px; border: 1.5px solid #e2e8f0; border-radius: 9px; font-size: 13px; font-family: inherit; color: #0f172a; outline: none; }
+    .fi:focus, .fs-full:focus { border-color: #2563eb; }
+    .modal-btns { display: flex; gap: 10px; margin-top: 18px; }
+    .btn-full { flex: 1; padding: 11px; border-radius: 9px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; }
+    .tabs-sm { display: flex; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 3px; margin-bottom: 16px; }
+    .tab-sm { flex: 1; padding: 8px; text-align: center; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600; color: #94a3b8; border: none; background: none; font-family: inherit; }
+    .tab-sm.active { background: white; color: #0f172a; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .log-entry { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-ico { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .log-txt { flex: 1; }
+    .log-time { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-left">
+    <div class="top-bar-logo">🏢</div>
+    <h1>Immo<span>Nova</span></h1>
+    <div class="admin-badge">SUPERADMIN</div>
+  </div>
+  <div class="top-bar-right">
+    <button class="btn-sm btn-ghost" onclick="window.location.href='app.html'">← App</button>
+    <button class="btn-sm btn-red" onclick="doLogout()">Logout</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- KPI Row -->
+  <div class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="kpi-label">Gesamt Nutzer</div><div class="kpi-val" id="kpi-users">–</div><div class="kpi-sub">Registrierte Konten</div></div>
+    <div class="kpi"><div class="kpi-label">Aktive Trials</div><div class="kpi-val" id="kpi-trials">–</div><div class="kpi-sub">Testphase läuft</div></div>
+    <div class="kpi"><div class="kpi-label">Abgelaufen</div><div class="kpi-val" id="kpi-expired">–</div><div class="kpi-sub">Trial abgelaufen</div></div>
+    <div class="kpi"><div class="kpi-label">Pro+</div><div class="kpi-val" id="kpi-paid">–</div><div class="kpi-sub">Zahlende Kunden</div></div>
+    <div class="kpi"><div class="kpi-label">Heute neu</div><div class="kpi-val" id="kpi-today">–</div><div class="kpi-sub">Registrierungen</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-sm" style="max-width:400px;">
+    <button class="tab-sm active" onclick="showSection('users')">👥 Nutzer</button>
+    <button class="tab-sm" onclick="showSection('activity')">📋 Aktivität</button>
+    <button class="tab-sm" onclick="showSection('settings')">⚙️ System</button>
+  </div>
+
+  <!-- USERS SECTION -->
+  <div class="section" id="sec-users">
+    <div class="section-head">
+      <h2>👥 Alle Nutzer</h2>
+      <button class="btn-sm btn-blue" onclick="openCreateModal()">+ Nutzer erstellen</button>
+    </div>
+    <div class="filter-row">
+      <input class="search-input" id="user-search" placeholder="🔍 Suche nach Name, Email..." oninput="filterUsers()">
+      <select class="fs-sm" id="filter-plan" onchange="filterUsers()">
+        <option value="">Alle Pläne</option>
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="business">Business</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+      <select class="fs-sm" id="filter-rolle" onchange="filterUsers()">
+        <option value="">Alle Rollen</option>
+        <option value="verwalter">Verwalter</option>
+        <option value="eigentuemer">Eigentümer</option>
+        <option value="mitarbeiter">Mitarbeiter</option>
+      </select>
+      <select class="fs-sm" id="filter-status" onchange="filterUsers()">
+        <option value="">Alle Status</option>
+        <option value="trial">Trial aktiv</option>
+        <option value="expired">Trial abgelaufen</option>
+      </select>
+    </div>
+    <div id="users-loading" class="loading"><div class="spinner"></div>Nutzer werden geladen...</div>
+    <div id="users-empty" class="empty" style="display:none;"><div class="empty-ico">👥</div><p>Keine Nutzer gefunden</p></div>
+    <table class="table" id="users-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Rolle</th>
+          <th>Plan</th>
+          <th>Trial bis</th>
+          <th>Status</th>
+          <th>Aktionen</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ACTIVITY SECTION -->
+  <div class="section" id="sec-activity" style="display:none;">
+    <div class="section-head">
+      <h2>📋 System-Aktivität</h2>
+    </div>
+    <div id="activity-list">
+      <div class="log-entry">
+        <div class="log-ico" style="background:#eff6ff;">🔐</div>
+        <div class="log-txt"><strong>Superadmin eingeloggt</strong><div class="log-time">Gerade eben</div></div>
+      </div>
+      <div class="log-entry">
+        <div class="log-ico" style="background:#f0fdf4;">✅</div>
+        <div class="log-txt"><strong>System läuft normal</strong><div class="log-time">Firebase Verbindung aktiv</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS SECTION -->
+  <div class="section" id="sec-settings" style="display:none;">
+    <div class="section-head">
+      <h2>⚙️ System-Einstellungen</h2>
+    </div>
+    <div style="display:grid;gap:16px;max-width:480px;">
+      <div class="fg">
+        <label class="fl">Standard Trial-Dauer (Tage)</label>
+        <input class="fi" id="s-trial" value="30" type="number" min="1" max="365">
+      </div>
+      <div class="fg">
+        <label class="fl">Support-Email</label>
+        <input class="fi" id="s-email" value="info@immonova.de">
+      </div>
+      <div class="fg">
+        <label class="fl">App-Version</label>
+        <input class="fi" value="2.0.0 Enterprise" readonly style="background:#f8fafc;color:#94a3b8;">
+      </div>
+      <button class="btn-sm btn-blue" style="width:auto;padding:10px 24px;" onclick="saveSettings()">💾 Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ Nutzer bearbeiten</h3>
+    <input type="hidden" id="edit-uid">
+    <div class="fg"><label class="fl">Vorname</label><input class="fi" id="edit-vn"></div>
+    <div class="fg"><label class="fl">Nachname</label><input class="fi" id="edit-nn"></div>
+    <div class="fg"><label class="fl">Rolle</label>
+      <select class="fs-full" id="edit-rolle">
+        <option value="verwalter">Verwalter</option>
+        <option value="eigentuemer">Eigentümer</option>
+        <option value="mitarbeiter">Mitarbeiter</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Plan</label>
+      <select class="fs-full" id="edit-plan">
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="business">Business</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Trial verlängern bis</label><input class="fi" id="edit-trial" type="date"></div>
+    <div class="modal-btns">
+      <button class="btn-full btn-ghost" onclick="closeModal('edit-modal')">Abbrechen</button>
+      <button class="btn-full btn-blue" onclick="saveUser()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal">
+    <h3>➕ Nutzer erstellen</h3>
+    <div class="fg"><label class="fl">Vorname</label><input class="fi" id="c-vn" placeholder="Max"></div>
+    <div class="fg"><label class="fl">Nachname</label><input class="fi" id="c-nn" placeholder="Mustermann"></div>
+    <div class="fg"><label class="fl">Email</label><input class="fi" id="c-email" type="email" placeholder="max@example.de"></div>
+    <div class="fg"><label class="fl">Rolle</label>
+      <select class="fs-full" id="c-rolle">
+        <option value="mitarbeiter">Mitarbeiter</option>
+        <option value="verwalter">Verwalter</option>
+        <option value="eigentuemer">Eigentümer</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Plan</label>
+      <select class="fs-full" id="c-plan">
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="business">Business</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+    </div>
+    <div id="c-err" style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px 14px;border-radius:9px;font-size:13px;margin-top:8px;display:none;"></div>
+    <div class="modal-btns">
+      <button class="btn-full btn-ghost" onclick="closeModal('create-modal')">Abbrechen</button>
+      <button class="btn-full btn-blue" onclick="createUser()">Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
+  authDomain: "immonova-2e0f2.firebaseapp.com",
+  projectId: "immonova-2e0f2",
+  storageBucket: "immonova-2e0f2.firebasestorage.app",
+  messagingSenderId: "639601807117",
+  appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+var db = firebase.firestore();
+
+// Only superadmin can access
+var role = localStorage.getItem('in_role');
+if (role !== 'superadmin' && role !== 'admin') {
+  window.location.href = 'app.html';
+}
+
+var allUsers = [];
+
+// Load users from Firestore
+db.collection('users').orderBy('createdAt', 'desc').get().then(function(snap) {
+  allUsers = [];
+  snap.forEach(function(doc) {
+    allUsers.push(Object.assign({ uid: doc.id }, doc.data()));
+  });
+  updateKPIs();
+  renderUsers(allUsers);
+}).catch(function() {
+  document.getElementById('users-loading').innerHTML = '<p style="color:#dc2626;">⚠️ Fehler beim Laden der Nutzer.</p>';
+});
+
+function updateKPIs() {
+  var now = new Date();
+  var today = now.toISOString().slice(0,10);
+  var trials = 0, expired = 0, paid = 0, todayNew = 0;
+  allUsers.forEach(function(u) {
+    if (u.trialEndsAt) {
+      var d = Math.ceil((new Date(u.trialEndsAt) - now) / (1000*60*60*24));
+      if (d >= 0) trials++; else expired++;
+    }
+    if (u.plan && u.plan !== 'starter') paid++;
+    if (u.createdAt && u.createdAt.slice(0,10) === today) todayNew++;
+  });
+  document.getElementById('kpi-users').textContent = allUsers.length;
+  document.getElementById('kpi-trials').textContent = trials;
+  document.getElementById('kpi-expired').textContent = expired;
+  document.getElementById('kpi-paid').textContent = paid;
+  document.getElementById('kpi-today').textContent = todayNew;
+}
+
+function renderUsers(list) {
+  document.getElementById('users-loading').style.display = 'none';
+  if (!list.length) {
+    document.getElementById('users-empty').style.display = 'block';
+    document.getElementById('users-table').style.display = 'none';
+    return;
+  }
+  document.getElementById('users-empty').style.display = 'none';
+  document.getElementById('users-table').style.display = 'table';
+  var now = new Date();
+  var html = list.map(function(u) {
+    var daysLeft = u.trialEndsAt ? Math.ceil((new Date(u.trialEndsAt) - now) / (1000*60*60*24)) : null;
+    var statusBadge = daysLeft === null ? '<span class="badge badge-gray">Kein Trial</span>'
+      : daysLeft >= 0 ? '<span class="badge badge-green">Trial: ' + daysLeft + 'T</span>'
+      : '<span class="badge badge-red">Abgelaufen</span>';
+    var planDot = u.plan ? '<span class="plan-dot plan-' + u.plan + '"></span>' : '';
+    var trialDate = u.trialEndsAt ? u.trialEndsAt.slice(0,10) : '–';
+    var rolle = u.rolle || 'verwalter';
+    var rolleBadge = rolle === 'admin' || rolle === 'superadmin'
+      ? '<span class="badge badge-red">' + rolle + '</span>'
+      : '<span class="badge badge-blue">' + rolle + '</span>';
+    return '<tr>'
+      + '<td><strong>' + (u.vn||'') + ' ' + (u.nn||'') + '</strong></td>'
+      + '<td>' + (u.email||'–') + '</td>'
+      + '<td>' + rolleBadge + '</td>'
+      + '<td>' + planDot + (u.plan||'–') + '</td>'
+      + '<td>' + trialDate + '</td>'
+      + '<td>' + statusBadge + '</td>'
+      + '<td><div class="action-btns">'
+      + '<button class="btn-icon btn-edit" onclick="openEditModal(\'' + u.uid + '\')" title="Bearbeiten">✏️</button>'
+      + '<button class="btn-icon btn-ext" onclick="extendTrial(\'' + u.uid + '\')" title="Trial verlängern">⏰</button>'
+      + '<button class="btn-icon btn-del" onclick="deleteUser(\'' + u.uid + '\')" title="Löschen">🗑️</button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+  document.getElementById('users-tbody').innerHTML = html;
+}
+
+function filterUsers() {
+  var q = document.getElementById('user-search').value.toLowerCase();
+  var plan = document.getElementById('filter-plan').value;
+  var rolle = document.getElementById('filter-rolle').value;
+  var status = document.getElementById('filter-status').value;
+  var now = new Date();
+  var filtered = allUsers.filter(function(u) {
+    var name = ((u.vn||'') + ' ' + (u.nn||'') + ' ' + (u.email||'')).toLowerCase();
+    if (q && name.indexOf(q) < 0) return false;
+    if (plan && u.plan !== plan) return false;
+    if (rolle && u.rolle !== rolle) return false;
+    if (status === 'trial') {
+      var d = u.trialEndsAt ? Math.ceil((new Date(u.trialEndsAt) - now)/(1000*60*60*24)) : -1;
+      if (d < 0) return false;
+    }
+    if (status === 'expired') {
+      var d = u.trialEndsAt ? Math.ceil((new Date(u.trialEndsAt) - now)/(1000*60*60*24)) : -1;
+      if (d >= 0) return false;
+    }
+    return true;
+  });
+  renderUsers(filtered);
+}
+
+function openEditModal(uid) {
+  var u = allUsers.find(function(x) { return x.uid === uid; });
+  if (!u) return;
+  document.getElementById('edit-uid').value = uid;
+  document.getElementById('edit-vn').value = u.vn || '';
+  document.getElementById('edit-nn').value = u.nn || '';
+  document.getElementById('edit-rolle').value = u.rolle || 'verwalter';
+  document.getElementById('edit-plan').value = u.plan || 'starter';
+  document.getElementById('edit-trial').value = u.trialEndsAt ? u.trialEndsAt.slice(0,10) : '';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function saveUser() {
+  var uid = document.getElementById('edit-uid').value;
+  var trialVal = document.getElementById('edit-trial').value;
+  var data = {
+    vn: document.getElementById('edit-vn').value.trim(),
+    nn: document.getElementById('edit-nn').value.trim(),
+    rolle: document.getElementById('edit-rolle').value,
+    plan: document.getElementById('edit-plan').value
+  };
+  if (trialVal) data.trialEndsAt = new Date(trialVal).toISOString();
+  db.collection('users').doc(uid).update(data).then(function() {
+    var idx = allUsers.findIndex(function(x) { return x.uid === uid; });
+    if (idx >= 0) allUsers[idx] = Object.assign(allUsers[idx], data);
+    renderUsers(allUsers);
+    closeModal('edit-modal');
+  });
+}
+
+function extendTrial(uid) {
+  var days = parseInt(prompt('Trial verlängern um wie viele Tage?', '30'));
+  if (!days || isNaN(days)) return;
+  var newDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  db.collection('users').doc(uid).update({ trialEndsAt: newDate }).then(function() {
+    var u = allUsers.find(function(x) { return x.uid === uid; });
+    if (u) u.trialEndsAt = newDate;
+    renderUsers(allUsers);
+    updateKPIs();
+  });
+}
+
+function deleteUser(uid) {
+  if (!confirm('Nutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) return;
+  db.collection('users').doc(uid).delete().then(function() {
+    db.collection('data').doc(uid).delete();
+    allUsers = allUsers.filter(function(x) { return x.uid !== uid; });
+    renderUsers(allUsers);
+    updateKPIs();
+  });
+}
+
+function openCreateModal() {
+  document.getElementById('c-vn').value = '';
+  document.getElementById('c-nn').value = '';
+  document.getElementById('c-email').value = '';
+  document.getElementById('c-err').style.display = 'none';
+  document.getElementById('create-modal').classList.add('open');
+}
+
+function createUser() {
+  var vn = document.getElementById('c-vn').value.trim();
+  var nn = document.getElementById('c-nn').value.trim();
+  var email = document.getElementById('c-email').value.trim();
+  var rolle = document.getElementById('c-rolle').value;
+  var plan = document.getElementById('c-plan').value;
+  var err = document.getElementById('c-err');
+  if (!vn || !nn || !email) {
+    err.textContent = '⚠️ Bitte alle Pflichtfelder ausfüllen.';
+    err.style.display = 'block';
+    return;
+  }
+  var trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  db.collection('users').add({
+    vn: vn, nn: nn, email: email, rolle: rolle, plan: plan,
+    aktiv: true, onboardingDone: false, trialEndsAt: trialEndsAt,
+    createdAt: new Date().toISOString()
+  }).then(function(ref) {
+    allUsers.unshift({ uid: ref.id, vn: vn, nn: nn, email: email, rolle: rolle, plan: plan, trialEndsAt: trialEndsAt });
+    renderUsers(allUsers);
+    updateKPIs();
+    closeModal('create-modal');
+  }).catch(function(e) {
+    err.textContent = '⚠️ Fehler: ' + e.message;
+    err.style.display = 'block';
+  });
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function showSection(id) {
+  ['users','activity','settings'].forEach(function(s) {
+    document.getElementById('sec-' + s).style.display = s === id ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-sm').forEach(function(t, i) {
+    t.classList.toggle('active', ['users','activity','settings'][i] === id);
+  });
+}
+
+function saveSettings() {
+  alert('✅ Einstellungen gespeichert (Demo)');
+}
+
+function doLogout() {
+  auth.signOut();
+  localStorage.clear();
+  window.location.href = 'login.html';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ImmoNova – Mieter-Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue-900: #0f2044;
+      --blue-800: #1a3260;
+      --blue-700: #1e3a6e;
+      --blue-600: #2451a3;
+      --blue-500: #2d63c8;
+      --blue-400: #4a7fd4;
+      --blue-100: #dce8fb;
+      --blue-50:  #eef4fd;
+      --white:    #ffffff;
+      --gray-50:  #f8f9fb;
+      --gray-100: #f1f3f7;
+      --gray-200: #e2e6ee;
+      --gray-300: #c8cedb;
+      --gray-400: #9aa3b5;
+      --gray-600: #5c667a;
+      --gray-800: #2d3245;
+      --red-500:  #e53e3e;
+      --red-100:  #fff0f0;
+      --yellow-500: #d69e2e;
+      --yellow-100: #fffbea;
+      --green-500: #38a169;
+      --green-100: #f0fff4;
+      --orange-500: #dd6b20;
+      --orange-100: #fff5eb;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 30px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.07);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      min-height: 100vh;
+    }
+
+    /* ─── LOGIN PAGE ─────────────────────────────────────────── */
+    #login-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 60%, var(--blue-500) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .login-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 44px 40px 36px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .login-logo {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .login-logo .logo-icon {
+      font-size: 2.8rem;
+      line-height: 1;
+    }
+
+    .login-logo .logo-name {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--blue-900);
+      letter-spacing: -0.5px;
+      margin-top: 4px;
+    }
+
+    .login-logo .logo-sub {
+      font-size: 0.85rem;
+      color: var(--gray-400);
+      font-weight: 500;
+      margin-top: 2px;
+      letter-spacing: 0.3px;
+    }
+
+    .info-box {
+      background: var(--blue-50);
+      border: 1px solid var(--blue-100);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      margin: 22px 0;
+      font-size: 0.875rem;
+      color: var(--blue-600);
+      line-height: 1.55;
+    }
+
+    .login-form label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin-bottom: 6px;
+      margin-top: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .login-form input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      color: var(--gray-800);
+      background: var(--white);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    .login-form input:focus {
+      border-color: var(--blue-500);
+      box-shadow: 0 0 0 3px rgba(45, 99, 200, 0.12);
+    }
+
+    .login-form input::placeholder {
+      color: var(--gray-300);
+    }
+
+    .btn-login {
+      width: 100%;
+      margin-top: 24px;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--blue-600), var(--blue-500));
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 4px 14px rgba(45, 99, 200, 0.35);
+    }
+
+    .btn-login:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-login:active { transform: translateY(0); }
+
+    .login-error {
+      margin-top: 14px;
+      background: var(--red-100);
+      border: 1px solid #fca5a5;
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      color: var(--red-500);
+      display: none;
+    }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .login-footer a {
+      font-size: 0.875rem;
+      color: var(--gray-400);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .login-footer a:hover { color: var(--blue-500); }
+
+    /* ─── PORTAL ─────────────────────────────────────────────── */
+    #portal-page { display: none; min-height: 100vh; }
+
+    .portal-header {
+      background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-800) 100%);
+      color: var(--white);
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    }
+
+    .portal-header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 62px;
+      gap: 12px;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-logo .h-icon { font-size: 1.5rem; }
+
+    .header-logo .h-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .header-logo .h-sub {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.55);
+      font-weight: 400;
+      margin-top: 1px;
+    }
+
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .user-info {
+      text-align: right;
+    }
+
+    .user-info .u-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .user-info .u-wohnung {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.55);
+    }
+
+    .btn-logout {
+      padding: 7px 14px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--white);
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-logout:hover { background: rgba(255,255,255,0.2); }
+
+    /* ─── TABS ───────────────────────────────────────────────── */
+    .tab-bar {
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      position: sticky;
+      top: 62px;
+      z-index: 99;
+    }
+
+    .tab-bar-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 0 8px;
+    }
+
+    .tab-bar-inner::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      padding: 14px 20px;
+      background: transparent;
+      border: none;
+      border-bottom: 2.5px solid transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--gray-400);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .tab-btn:hover { color: var(--blue-600); }
+
+    .tab-btn.active {
+      color: var(--blue-600);
+      border-bottom-color: var(--blue-500);
+      background: transparent;
+    }
+
+    /* ─── MAIN CONTENT ───────────────────────────────────────── */
+    .portal-main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ─── SECTION HEADER ─────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+
+    /* ─── BUTTONS ────────────────────────────────────────────── */
+    .btn-primary {
+      padding: 9px 18px;
+      background: var(--blue-500);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      box-shadow: 0 2px 8px rgba(45, 99, 200, 0.28);
+    }
+
+    .btn-primary:hover { background: var(--blue-600); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      padding: 9px 18px;
+      background: var(--white);
+      color: var(--gray-600);
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-secondary:hover { border-color: var(--gray-300); color: var(--gray-800); }
+
+    .btn-send {
+      padding: 10px 18px;
+      background: var(--blue-500);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-send:hover { background: var(--blue-600); }
+
+    /* ─── CARDS ──────────────────────────────────────────────── */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--gray-200);
+      box-shadow: var(--shadow-sm);
+      padding: 18px 20px;
+      margin-bottom: 12px;
+    }
+
+    .card:last-child { margin-bottom: 0; }
+
+    /* ─── FORM CARD ──────────────────────────────────────────── */
+    .form-card {
+      background: var(--blue-50);
+      border: 1.5px solid var(--blue-100);
+      border-radius: var(--radius-md);
+      padding: 22px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .form-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--blue-900);
+      margin-bottom: 16px;
+    }
+
+    .form-row {
+      margin-bottom: 14px;
+    }
+
+    .form-row label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 6px;
+    }
+
+    .form-row input,
+    .form-row textarea,
+    .form-row select {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.92rem;
+      color: var(--gray-800);
+      background: var(--white);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+    }
+
+    .form-row input:focus,
+    .form-row textarea:focus,
+    .form-row select:focus {
+      border-color: var(--blue-500);
+      box-shadow: 0 0 0 3px rgba(45, 99, 200, 0.10);
+    }
+
+    .form-row textarea {
+      resize: vertical;
+      min-height: 90px;
+    }
+
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    /* ─── BADGES ─────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .badge-offen    { background: #fee2e2; color: var(--red-500); }
+    .badge-progress { background: var(--yellow-100); color: var(--yellow-500); }
+    .badge-erledigt { background: var(--green-100); color: var(--green-500); }
+
+    .badge-normal   { background: var(--gray-100); color: var(--gray-600); }
+    .badge-dringend { background: var(--orange-100); color: var(--orange-500); }
+    .badge-notfall  { background: #fee2e2; color: var(--red-500); }
+
+    /* ─── TICKET CARD ────────────────────────────────────────── */
+    .ticket-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+
+    .ticket-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .ticket-title {
+      font-size: 0.975rem;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+
+    .ticket-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .ticket-meta {
+      font-size: 0.8rem;
+      color: var(--gray-400);
+    }
+
+    .ticket-bereich {
+      display: inline-block;
+      font-size: 0.78rem;
+      color: var(--blue-600);
+      background: var(--blue-50);
+      border: 1px solid var(--blue-100);
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+
+    /* ─── MESSAGES ───────────────────────────────────────────── */
+    .messages-container {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .messages-list {
+      padding: 20px;
+      min-height: 280px;
+      max-height: 440px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg-bubble {
+      max-width: 75%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .msg-bubble.mieter {
+      align-self: flex-end;
+      background: var(--blue-500);
+      color: var(--white);
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-bubble.verwalter {
+      align-self: flex-start;
+      background: var(--gray-100);
+      color: var(--gray-800);
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg-sender {
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+      opacity: 0.75;
+    }
+
+    .msg-time {
+      font-size: 0.7rem;
+      margin-top: 4px;
+      opacity: 0.6;
+      text-align: right;
+    }
+
+    .msg-bubble.verwalter .msg-time { text-align: left; }
+
+    .messages-input-area {
+      border-top: 1px solid var(--gray-200);
+      padding: 14px 16px;
+      display: flex;
+      gap: 10px;
+      background: var(--gray-50);
+    }
+
+    .messages-input-area input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.92rem;
+      color: var(--gray-800);
+      background: var(--white);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .messages-input-area input:focus {
+      border-color: var(--blue-500);
+      box-shadow: 0 0 0 3px rgba(45, 99, 200, 0.10);
+    }
+
+    /* ─── MITTEILUNGEN ───────────────────────────────────────── */
+    .mitteilung-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 18px 20px;
+      margin-bottom: 12px;
+    }
+
+    .mitteilung-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--gray-800);
+      margin-bottom: 4px;
+    }
+
+    .mitteilung-date {
+      font-size: 0.78rem;
+      color: var(--gray-400);
+      margin-bottom: 10px;
+    }
+
+    .mitteilung-text {
+      font-size: 0.9rem;
+      color: var(--gray-600);
+      line-height: 1.6;
+    }
+
+    /* ─── TERMINE ────────────────────────────────────────────── */
+    .termin-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .termin-date-box {
+      background: var(--blue-50);
+      border: 1px solid var(--blue-100);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      text-align: center;
+      min-width: 60px;
+      flex-shrink: 0;
+    }
+
+    .termin-day {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--blue-600);
+      line-height: 1;
+    }
+
+    .termin-month {
+      font-size: 0.72rem;
+      color: var(--blue-400);
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .termin-details { flex: 1; }
+
+    .termin-betreff {
+      font-size: 0.975rem;
+      font-weight: 700;
+      color: var(--gray-800);
+      margin-bottom: 4px;
+    }
+
+    .termin-meta {
+      font-size: 0.82rem;
+      color: var(--gray-400);
+    }
+
+    .termin-meta span { margin-right: 14px; }
+
+    /* ─── EMPTY STATE ────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--gray-400);
+    }
+
+    .empty-state .empty-icon { font-size: 2.8rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.95rem; font-weight: 500; }
+
+    /* ─── RESPONSIVE ─────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .login-card { padding: 32px 22px 28px; }
+      .portal-header-inner { height: 56px; padding: 0; }
+      .portal-header { padding: 0 14px; }
+      .portal-main { padding: 20px 14px 40px; }
+      .header-logo .h-sub { display: none; }
+      .user-info .u-name { font-size: 0.8rem; }
+      .tab-btn { padding: 12px 14px; font-size: 0.82rem; }
+      .form-row-2 { grid-template-columns: 1fr; }
+      .msg-bubble { max-width: 88%; }
+      .termin-card { flex-direction: column; gap: 10px; }
+      .termin-date-box { display: flex; align-items: center; gap: 8px; min-width: unset; padding: 7px 12px; }
+      .termin-day { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  LOGIN PAGE                                           -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div id="login-page">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon">🏢</div>
+        <div class="logo-name">ImmoNova</div>
+        <div class="logo-sub">Mieter-Portal</div>
+      </div>
+
+      <div class="info-box">
+        Als Mieter kannst du Schäden melden, Dokumente einsehen und mit deinem Verwalter kommunizieren.
+      </div>
+
+      <div class="login-form">
+        <label for="input-name">Vollständiger Name</label>
+        <input type="text" id="input-name" placeholder="z.B. Max Mustermann" autocomplete="name" />
+
+        <label for="input-wohnung">Wohnungsbezeichnung</label>
+        <input type="text" id="input-wohnung" placeholder="z.B. EG oder 1 OG" autocomplete="off" />
+
+        <button class="btn-login" onclick="handleLogin()">🏠 Als Mieter einloggen</button>
+
+        <div class="login-error" id="login-error"></div>
+      </div>
+
+      <div class="login-footer">
+        <a href="login.html">Zur Hauptseite →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  PORTAL PAGE                                          -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div id="portal-page">
+
+    <!-- Header -->
+    <header class="portal-header">
+      <div class="portal-header-inner">
+        <div class="header-logo">
+          <span class="h-icon">🏢</span>
+          <div>
+            <div class="h-title">ImmoNova</div>
+            <div class="h-sub">Mieter-Portal</div>
+          </div>
+        </div>
+        <div class="header-user">
+          <div class="user-info">
+            <div class="u-name" id="header-name">–</div>
+            <div class="u-wohnung" id="header-wohnung">–</div>
+          </div>
+          <button class="btn-logout" onclick="handleLogout()">Abmelden</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <div class="tab-bar-inner">
+        <button class="tab-btn active" onclick="switchTab('tickets', this)">🎫 Tickets</button>
+        <button class="tab-btn" onclick="switchTab('nachrichten', this)">💬 Nachrichten</button>
+        <button class="tab-btn" onclick="switchTab('mitteilungen', this)">📋 Mitteilungen</button>
+        <button class="tab-btn" onclick="switchTab('termine', this)">📅 Termine</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="portal-main">
+
+      <!-- ── TAB: TICKETS ───────────────────────────────── -->
+      <div class="tab-panel active" id="panel-tickets">
+        <div class="section-header">
+          <div class="section-title">Schäden & Tickets</div>
+          <button class="btn-primary" onclick="toggleSchadenForm()">+ Schaden melden</button>
+        </div>
+
+        <!-- Schaden-Formular -->
+        <div class="form-card" id="schaden-form" style="display:none;">
+          <h3>Neuen Schaden melden</h3>
+
+          <div class="form-row">
+            <label for="s-titel">Titel</label>
+            <input type="text" id="s-titel" placeholder="Kurze Beschreibung des Schadens" />
+          </div>
+
+          <div class="form-row">
+            <label for="s-beschreibung">Beschreibung</label>
+            <textarea id="s-beschreibung" placeholder="Bitte beschreibe den Schaden so genau wie möglich…"></textarea>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-row" style="margin-bottom:0;">
+              <label for="s-dringlichkeit">Dringlichkeit</label>
+              <select id="s-dringlichkeit">
+                <option value="Normal">Normal</option>
+                <option value="Dringend">Dringend</option>
+                <option value="Notfall">Notfall</option>
+              </select>
+            </div>
+            <div class="form-row" style="margin-bottom:0;">
+              <label for="s-bereich">Bereich</label>
+              <select id="s-bereich">
+                <option value="Küche">Küche</option>
+                <option value="Bad">Bad</option>
+                <option value="Wohnzimmer">Wohnzimmer</option>
+                <option value="Flur">Flur</option>
+                <option value="Keller">Keller</option>
+                <option value="Sonstiges">Sonstiges</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-primary" onclick="submitSchaden()">Absenden</button>
+            <button class="btn-secondary" onclick="toggleSchadenForm()">Abbrechen</button>
+          </div>
+        </div>
+
+        <!-- Ticket List -->
+        <div id="tickets-list"></div>
+      </div>
+
+      <!-- ── TAB: NACHRICHTEN ───────────────────────────── -->
+      <div class="tab-panel" id="panel-nachrichten">
+        <div class="section-header">
+          <div class="section-title">Nachrichten</div>
+        </div>
+
+        <div class="messages-container">
+          <div class="messages-list" id="messages-list"></div>
+          <div class="messages-input-area">
+            <input type="text" id="msg-input" placeholder="Nachricht schreiben…" onkeydown="if(event.key==='Enter') sendMessage()" />
+            <button class="btn-send" onclick="sendMessage()">Senden ➤</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: MITTEILUNGEN ──────────────────────────── -->
+      <div class="tab-panel" id="panel-mitteilungen">
+        <div class="section-header">
+          <div class="section-title">Mitteilungen</div>
+        </div>
+        <div id="mitteilungen-list"></div>
+      </div>
+
+      <!-- ── TAB: TERMINE ───────────────────────────────── -->
+      <div class="tab-panel" id="panel-termine">
+        <div class="section-header">
+          <div class="section-title">Termine</div>
+        </div>
+        <div id="termine-list"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  SCRIPTS                                              -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <script>
+    // ── Firebase Init ────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
+      authDomain: "immonova-2e0f2.firebaseapp.com",
+      projectId: "immonova-2e0f2",
+      storageBucket: "immonova-2e0f2.firebasestorage.app",
+      messagingSenderId: "639601807117",
+      appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
+    };
+    firebase.initializeApp(firebaseConfig);
+    // const db = firebase.firestore(); // available for future use
+
+    // ── Default Mieter ───────────────────────────────────────
+    const DEFAULT_MIETER = [
+      { name: "Max Mustermann",  wn: "1 OG" },
+      { name: "Anna Schmidt",    wn: "2 OG" },
+      { name: "Idriz Osmanaj",   wn: "EG"   },
+      { name: "Idriz Osmanaj",   wn: "10 OG" },
+      { name: "Idriz Osmanaj",   wn: "7 OG"  }
+    ];
+
+    // ── State ────────────────────────────────────────────────
+    let currentMieterName    = '';
+    let currentMieterWohnung = '';
+
+    // ── Helpers ──────────────────────────────────────────────
+    function normalize(str) {
+      return (str || '').trim().toLowerCase();
+    }
+
+    function formatDate(isoString) {
+      if (!isoString) return '–';
+      const d = new Date(isoString);
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatDateTime(isoString) {
+      if (!isoString) return '–';
+      const d = new Date(isoString);
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+           + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    }
+
+    function lsGet(key) {
+      try { return JSON.parse(localStorage.getItem(key)) || []; }
+      catch(e) { return []; }
+    }
+
+    function lsSet(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    // ── Login ─────────────────────────────────────────────────
+    function handleLogin() {
+      const nameVal    = document.getElementById('input-name').value.trim();
+      const wohnungVal = document.getElementById('input-wohnung').value.trim();
+      const errorEl    = document.getElementById('login-error');
+
+      errorEl.style.display = 'none';
+      errorEl.textContent   = '';
+
+      if (!nameVal || !wohnungVal) {
+        errorEl.textContent   = 'Bitte fülle alle Felder aus.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      // Check DEFAULT_MIETER
+      const inDefault = DEFAULT_MIETER.some(
+        m => normalize(m.name) === normalize(nameVal) && normalize(m.wn) === normalize(wohnungVal)
+      );
+
+      // Check localStorage 'in_m'
+      const storedMieter = lsGet('in_m');
+      const inStored = Array.isArray(storedMieter) && storedMieter.some(
+        m => normalize(m.name) === normalize(nameVal) && normalize(m.wn) === normalize(wohnungVal)
+      );
+
+      if (!inDefault && !inStored) {
+        errorEl.textContent   = 'Name oder Wohnungsbezeichnung nicht gefunden. Bitte wende dich an deinen Verwalter.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      // Success
+      localStorage.setItem('in_role',          'mieter');
+      localStorage.setItem('in_mieter_name',    nameVal);
+      localStorage.setItem('in_mieter_wohnung', wohnungVal);
+
+      currentMieterName    = nameVal;
+      currentMieterWohnung = wohnungVal;
+
+      showPortal();
+    }
+
+    // ── Logout ────────────────────────────────────────────────
+    function handleLogout() {
+      localStorage.removeItem('in_role');
+      localStorage.removeItem('in_mieter_name');
+      localStorage.removeItem('in_mieter_wohnung');
+      currentMieterName    = '';
+      currentMieterWohnung = '';
+      document.getElementById('portal-page').style.display = 'none';
+      document.getElementById('login-page').style.display  = 'flex';
+      document.getElementById('input-name').value    = '';
+      document.getElementById('input-wohnung').value = '';
+    }
+
+    // ── Show Portal ───────────────────────────────────────────
+    function showPortal() {
+      document.getElementById('login-page').style.display  = 'none';
+      document.getElementById('portal-page').style.display = 'block';
+
+      document.getElementById('header-name').textContent    = currentMieterName;
+      document.getElementById('header-wohnung').textContent = 'Wohnung: ' + currentMieterWohnung;
+
+      renderTickets();
+      renderMessages();
+      renderMitteilungen();
+      renderTermine();
+    }
+
+    // ── Tabs ──────────────────────────────────────────────────
+    function switchTab(tabName, btn) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('panel-' + tabName).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ── TICKETS ───────────────────────────────────────────────
+    function toggleSchadenForm() {
+      const form = document.getElementById('schaden-form');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function submitSchaden() {
+      const titel        = document.getElementById('s-titel').value.trim();
+      const beschreibung = document.getElementById('s-beschreibung').value.trim();
+      const dringlichkeit = document.getElementById('s-dringlichkeit').value;
+      const bereich      = document.getElementById('s-bereich').value;
+
+      if (!titel) {
+        alert('Bitte gib einen Titel ein.');
+        return;
+      }
+
+      const tickets = lsGet('in_tickets');
+      const newTicket = {
+        id:           Date.now().toString(),
+        titel:        titel,
+        beschreibung: beschreibung,
+        dringlichkeit: dringlichkeit,
+        bereich:      bereich,
+        wohnung:      currentMieterWohnung,
+        mieter:       currentMieterName,
+        status:       'Offen',
+        datum:        new Date().toISOString()
+      };
+      tickets.push(newTicket);
+      lsSet('in_tickets', tickets);
+
+      // Reset form
+      document.getElementById('s-titel').value        = '';
+      document.getElementById('s-beschreibung').value = '';
+      document.getElementById('s-dringlichkeit').value = 'Normal';
+      document.getElementById('s-bereich').value      = 'Küche';
+      document.getElementById('schaden-form').style.display = 'none';
+
+      renderTickets();
+    }
+
+    function statusBadgeClass(status) {
+      if (status === 'Erledigt')        return 'badge badge-erledigt';
+      if (status === 'In Bearbeitung')  return 'badge badge-progress';
+      return 'badge badge-offen';
+    }
+
+    function dringlichkeitBadgeClass(d) {
+      if (d === 'Dringend') return 'badge badge-dringend';
+      if (d === 'Notfall')  return 'badge badge-notfall';
+      return 'badge badge-normal';
+    }
+
+    function renderTickets() {
+      const container = document.getElementById('tickets-list');
+      const tickets   = lsGet('in_tickets').filter(
+        t => normalize(t.wohnung) === normalize(currentMieterWohnung)
+      );
+
+      if (tickets.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎫</div><p>Noch keine Tickets vorhanden.</p></div>';
+        return;
+      }
+
+      // Sort newest first
+      tickets.sort((a, b) => new Date(b.datum) - new Date(a.datum));
+
+      container.innerHTML = tickets.map(t => {
+        return '<div class="ticket-card">'
+          + '<div class="ticket-header">'
+          +   '<div class="ticket-title">' + escapeHtml(t.titel) + '</div>'
+          +   '<div class="ticket-badges">'
+          +     '<span class="' + dringlichkeitBadgeClass(t.dringlichkeit) + '">' + escapeHtml(t.dringlichkeit || 'Normal') + '</span>'
+          +     '<span class="' + statusBadgeClass(t.status) + '">' + escapeHtml(t.status || 'Offen') + '</span>'
+          +   '</div>'
+          + '</div>'
+          + '<div class="ticket-meta">' + formatDate(t.datum) + '</div>'
+          + (t.bereich ? '<div><span class="ticket-bereich">' + escapeHtml(t.bereich) + '</span></div>' : '')
+          + (t.beschreibung ? '<div style="font-size:0.87rem;color:var(--gray-600);margin-top:8px;line-height:1.5;">' + escapeHtml(t.beschreibung) + '</div>' : '')
+          + '</div>';
+      }).join('');
+    }
+
+    // ── NACHRICHTEN ───────────────────────────────────────────
+    function sendMessage() {
+      const input = document.getElementById('msg-input');
+      const text  = input.value.trim();
+      if (!text) return;
+
+      const messages = lsGet('in_messages');
+      const newMsg = {
+        id:        Date.now().toString(),
+        sender:    currentMieterName,
+        role:      'mieter',
+        text:      text,
+        wohnung:   currentMieterWohnung,
+        timestamp: new Date().toISOString()
+      };
+      messages.push(newMsg);
+      lsSet('in_messages', messages);
+      input.value = '';
+
+      renderMessages();
+      scrollMessagesToBottom();
+    }
+
+    function renderMessages() {
+      const container = document.getElementById('messages-list');
+      const messages  = lsGet('in_messages').filter(
+        m => normalize(m.wohnung) === normalize(currentMieterWohnung)
+      );
+
+      if (messages.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding:32px 16px;"><div class="empty-icon">💬</div><p>Noch keine Nachrichten. Schreib eine Nachricht an deinen Verwalter.</p></div>';
+        return;
+      }
+
+      messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+      container.innerHTML = messages.map(m => {
+        const isMieter = (m.role === 'mieter') || (normalize(m.sender) === normalize(currentMieterName));
+        const cls      = isMieter ? 'mieter' : 'verwalter';
+        const label    = isMieter ? 'Du' : escapeHtml(m.sender || 'Verwalter');
+        return '<div class="msg-bubble ' + cls + '">'
+          + '<div class="msg-sender">' + label + '</div>'
+          + '<div>' + escapeHtml(m.text) + '</div>'
+          + '<div class="msg-time">' + formatDateTime(m.timestamp) + '</div>'
+          + '</div>';
+      }).join('');
+
+      scrollMessagesToBottom();
+    }
+
+    function scrollMessagesToBottom() {
+      const list = document.getElementById('messages-list');
+      list.scrollTop = list.scrollHeight;
+    }
+
+    // ── MITTEILUNGEN ──────────────────────────────────────────
+    function renderMitteilungen() {
+      const container    = document.getElementById('mitteilungen-list');
+      const mitteilungen = lsGet('in_mitteilungen');
+
+      if (!mitteilungen || mitteilungen.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Mitteilungen vorhanden.</p></div>';
+        return;
+      }
+
+      const sorted = [...mitteilungen].sort((a, b) => new Date(b.datum || b.date || 0) - new Date(a.datum || a.date || 0));
+
+      container.innerHTML = sorted.map(m => {
+        const datum = m.datum || m.date || m.timestamp || '';
+        return '<div class="mitteilung-card">'
+          + '<div class="mitteilung-title">' + escapeHtml(m.titel || m.title || 'Mitteilung') + '</div>'
+          + '<div class="mitteilung-date">' + formatDate(datum) + '</div>'
+          + '<div class="mitteilung-text">' + escapeHtml(m.text || m.inhalt || m.content || '') + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    // ── TERMINE ───────────────────────────────────────────────
+    function renderTermine() {
+      const container = document.getElementById('termine-list');
+      const allTermine = lsGet('in_termine');
+
+      // Filter for this wohnung (or show all if no wohnung filter on entry)
+      const termine = allTermine.filter(t => {
+        if (!t.wohnung) return true;
+        return normalize(t.wohnung) === normalize(currentMieterWohnung);
+      });
+
+      if (termine.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>Keine Termine vorhanden.</p></div>';
+        return;
+      }
+
+      // Sort by date ascending
+      termine.sort((a, b) => {
+        const dateA = new Date((a.datum || a.date || '') + 'T' + (a.uhrzeit || '00:00'));
+        const dateB = new Date((b.datum || b.date || '') + 'T' + (b.uhrzeit || '00:00'));
+        return dateA - dateB;
+      });
+
+      container.innerHTML = termine.map(t => {
+        const rawDate   = t.datum || t.date || '';
+        const uhrzeit   = t.uhrzeit || t.time || '';
+        const betreff   = t.betreff || t.titel || t.title || 'Termin';
+        const ort       = t.ort || t.location || '';
+
+        let dayStr   = '–';
+        let monthStr = '–';
+        if (rawDate) {
+          const d  = new Date(rawDate + (rawDate.includes('T') ? '' : 'T00:00'));
+          dayStr   = d.getDate().toString().padStart(2, '0');
+          monthStr = d.toLocaleDateString('de-DE', { month: 'short' });
+        }
+
+        return '<div class="termin-card">'
+          + '<div class="termin-date-box">'
+          +   '<div class="termin-day">'   + dayStr   + '</div>'
+          +   '<div class="termin-month">' + monthStr + '</div>'
+          + '</div>'
+          + '<div class="termin-details">'
+          +   '<div class="termin-betreff">' + escapeHtml(betreff) + '</div>'
+          +   '<div class="termin-meta">'
+          +     (uhrzeit ? '<span>🕐 ' + escapeHtml(uhrzeit) + ' Uhr</span>' : '')
+          +     (ort     ? '<span>📍 ' + escapeHtml(ort)     + '</span>'     : '')
+          +     (rawDate ? '<span>📅 ' + formatDate(rawDate) + '</span>'     : '')
+          +   '</div>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    // ── Security helper ───────────────────────────────────────
+    function escapeHtml(str) {
+      if (typeof str !== 'string') str = String(str || '');
+      return str
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g,  '&#39;');
+    }
+
+    // ── Auto-login check on page load ─────────────────────────
+    (function init() {
+      const role    = localStorage.getItem('in_role');
+      const name    = localStorage.getItem('in_mieter_name');
+      const wohnung = localStorage.getItem('in_mieter_wohnung');
+
+      if (role === 'mieter' && name && wohnung) {
+        currentMieterName    = name;
+        currentMieterWohnung = wohnung;
+        showPortal();
+      } else {
+        document.getElementById('login-page').style.display  = 'flex';
+        document.getElementById('portal-page').style.display = 'none';
+      }
+    })();
+
+    // ── Allow Enter key on login inputs ───────────────────────
+    document.getElementById('input-name').addEventListener('keydown',    function(e) { if (e.key === 'Enter') document.getElementById('input-wohnung').focus(); });
+    document.getElementById('input-wohnung').addEventListener('keydown', function(e) { if (e.key === 'Enter') handleLogin(); });
+  </script>
+</body>
+</html>

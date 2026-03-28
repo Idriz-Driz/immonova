@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmoNova – Plan upgraden</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); min-height: 100vh; padding: 32px 20px; }
+    .header { text-align: center; margin-bottom: 40px; }
+    .logo-icon { width: 56px; height: 56px; background: #2563eb; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 12px; box-shadow: 0 12px 32px rgba(37,99,235,0.4); }
+    .header h1 { font-size: 26px; font-weight: 800; color: white; margin-bottom: 6px; }
+    .header h1 span { color: #60a5fa; }
+    .header p { font-size: 14px; color: rgba(255,255,255,0.55); }
+    .expired-banner { background: #fef2f2; border: 2px solid #fecaca; border-radius: 16px; padding: 20px 24px; text-align: center; max-width: 560px; margin: 0 auto 32px; }
+    .expired-banner .ico { font-size: 40px; display: block; margin-bottom: 10px; }
+    .expired-banner h2 { font-size: 18px; font-weight: 800; color: #dc2626; margin-bottom: 6px; }
+    .expired-banner p { font-size: 13px; color: #7f1d1d; }
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; max-width: 960px; margin: 0 auto 32px; }
+    .plan { background: white; border-radius: 20px; padding: 28px 24px; text-align: center; position: relative; transition: transform 0.2s; }
+    .plan:hover { transform: translateY(-4px); }
+    .plan.popular { border: 3px solid #2563eb; }
+    .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #2563eb; color: white; font-size: 11px; font-weight: 800; padding: 4px 16px; border-radius: 20px; white-space: nowrap; }
+    .plan-ico { font-size: 36px; margin-bottom: 12px; display: block; }
+    .plan h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 6px; }
+    .plan-price { font-size: 32px; font-weight: 800; color: #2563eb; margin-bottom: 2px; }
+    .plan-price span { font-size: 14px; font-weight: 500; color: #94a3b8; }
+    .plan-sub { font-size: 12px; color: #64748b; margin-bottom: 20px; }
+    .plan-feats { text-align: left; margin-bottom: 20px; }
+    .plan-feat { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; padding: 4px 0; }
+    .plan-feat .ck { color: #16a34a; font-weight: 700; }
+    .plan-feat .no { color: #cbd5e1; font-weight: 700; }
+    .btn-plan { width: 100%; padding: 13px; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-primary { background: #2563eb; color: white; box-shadow: 0 4px 16px rgba(37,99,235,0.3); }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-outline { background: white; color: #2563eb; border: 2px solid #2563eb; }
+    .btn-outline:hover { background: #eff6ff; }
+    .footer-links { text-align: center; font-size: 13px; color: rgba(255,255,255,0.4); }
+    .footer-links a { color: rgba(255,255,255,0.6); text-decoration: none; margin: 0 8px; }
+    .footer-links a:hover { color: white; }
+    .contact-box { max-width: 560px; margin: 0 auto 32px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px 24px; text-align: center; }
+    .contact-box p { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
+    .contact-box a { display: inline-block; background: #2563eb; color: white; font-size: 13px; font-weight: 700; padding: 10px 24px; border-radius: 10px; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="logo-icon">🏢</div>
+  <h1>Immo<span>Nova</span></h1>
+  <p>Wähle deinen Plan und verwalte deine Immobilien professionell</p>
+</div>
+
+<div class="expired-banner">
+  <span class="ico">⏰</span>
+  <h2>Testphase abgelaufen</h2>
+  <p>Deine 30-tägige Testphase ist leider abgelaufen. Wähle einen Plan, um ImmoNova weiter zu nutzen. Deine Daten sind sicher gespeichert.</p>
+</div>
+
+<div class="plans">
+  <div class="plan">
+    <span class="plan-ico">🌱</span>
+    <h3>Starter</h3>
+    <div class="plan-price">29€ <span>/Monat</span></div>
+    <div class="plan-sub">Bis 5 Einheiten · zzgl. MwSt.</div>
+    <div class="plan-feats">
+      <div class="plan-feat"><span class="ck">✓</span> Dashboard & Übersicht</div>
+      <div class="plan-feat"><span class="ck">✓</span> Bis 5 Mieter</div>
+      <div class="plan-feat"><span class="ck">✓</span> Tickets & Schäden</div>
+      <div class="plan-feat"><span class="ck">✓</span> Terminkalender</div>
+      <div class="plan-feat"><span class="no">✗</span> Handwerker-Portal</div>
+      <div class="plan-feat"><span class="no">✗</span> CRM & Interessenten</div>
+      <div class="plan-feat"><span class="no">✗</span> Berichte & Analysen</div>
+    </div>
+    <button class="btn-plan btn-outline" onclick="selectPlan('starter')">Starter wählen</button>
+  </div>
+
+  <div class="plan popular">
+    <div class="popular-badge">🔥 BELIEBTESTER PLAN</div>
+    <span class="plan-ico">🚀</span>
+    <h3>Pro</h3>
+    <div class="plan-price">79€ <span>/Monat</span></div>
+    <div class="plan-sub">Bis 50 Einheiten · zzgl. MwSt.</div>
+    <div class="plan-feats">
+      <div class="plan-feat"><span class="ck">✓</span> Alles aus Starter</div>
+      <div class="plan-feat"><span class="ck">✓</span> Bis 50 Mieter</div>
+      <div class="plan-feat"><span class="ck">✓</span> Handwerker-Portal</div>
+      <div class="plan-feat"><span class="ck">✓</span> CRM & Interessenten</div>
+      <div class="plan-feat"><span class="ck">✓</span> Berichte & Analysen</div>
+      <div class="plan-feat"><span class="ck">✓</span> E-Mail-Benachrichtigungen</div>
+      <div class="plan-feat"><span class="no">✗</span> Mehrere Mitarbeiter</div>
+    </div>
+    <button class="btn-plan btn-primary" onclick="selectPlan('pro')">Pro wählen</button>
+  </div>
+
+  <div class="plan">
+    <span class="plan-ico">🏙️</span>
+    <h3>Business</h3>
+    <div class="plan-price">199€ <span>/Monat</span></div>
+    <div class="plan-sub">Bis 200 Einheiten · zzgl. MwSt.</div>
+    <div class="plan-feats">
+      <div class="plan-feat"><span class="ck">✓</span> Alles aus Pro</div>
+      <div class="plan-feat"><span class="ck">✓</span> Bis 200 Mieter</div>
+      <div class="plan-feat"><span class="ck">✓</span> Mehrere Mitarbeiter</div>
+      <div class="plan-feat"><span class="ck">✓</span> RBAC-Rollensteuerung</div>
+      <div class="plan-feat"><span class="ck">✓</span> API-Zugang</div>
+      <div class="plan-feat"><span class="ck">✓</span> Prioritäts-Support</div>
+      <div class="plan-feat"><span class="no">✗</span> White-Label</div>
+    </div>
+    <button class="btn-plan btn-outline" onclick="selectPlan('business')">Business wählen</button>
+  </div>
+
+  <div class="plan">
+    <span class="plan-ico">🌍</span>
+    <h3>Enterprise</h3>
+    <div class="plan-price">Individuell</div>
+    <div class="plan-sub">Unbegrenzte Einheiten · zzgl. MwSt.</div>
+    <div class="plan-feats">
+      <div class="plan-feat"><span class="ck">✓</span> Alles aus Business</div>
+      <div class="plan-feat"><span class="ck">✓</span> Unbegrenzte Mieter</div>
+      <div class="plan-feat"><span class="ck">✓</span> White-Label</div>
+      <div class="plan-feat"><span class="ck">✓</span> Dedizierter Account-Manager</div>
+      <div class="plan-feat"><span class="ck">✓</span> On-Premise Option</div>
+      <div class="plan-feat"><span class="ck">✓</span> SLA-Garantie</div>
+      <div class="plan-feat"><span class="ck">✓</span> Individuelle Integrationen</div>
+    </div>
+    <button class="btn-plan btn-outline" onclick="contactSales()">Kontakt aufnehmen</button>
+  </div>
+</div>
+
+<div class="contact-box">
+  <p>Fragen zum richtigen Plan? Wir helfen dir gerne bei der Wahl.</p>
+  <a href="mailto:info@immonova.de">📧 info@immonova.de kontaktieren</a>
+</div>
+
+<div class="footer-links">
+  <a href="login.html">← Logout</a> ·
+  <a href="impressum.html">Impressum</a> ·
+  <a href="datenschutz.html">Datenschutz</a>
+</div>
+
+<script>
+function selectPlan(plan) {
+  // In a real app this would open a payment flow (Stripe etc.)
+  // For demo: show confirmation and redirect back
+  var names = { starter: 'Starter (29€/Monat)', pro: 'Pro (79€/Monat)', business: 'Business (199€/Monat)' };
+  var confirmed = confirm('Plan "' + (names[plan] || plan) + '" auswählen?\n\nIn der Demo-Version wird der Plan direkt aktiviert.');
+  if (confirmed) {
+    localStorage.setItem('in_user_plan', plan);
+    // Extend trial by 30 days for demo
+    var newTrial = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem('in_trial_ends', newTrial);
+    window.location.href = 'app.html';
+  }
+}
+
+function contactSales() {
+  window.location.href = 'mailto:info@immonova.de?subject=Enterprise-Plan Anfrage&body=Hallo ImmoNova-Team,%0A%0AIch interessiere mich für den Enterprise-Plan.%0A%0AAnzahl Einheiten:%0AAnforderungen:%0A%0AMit freundlichen Grüßen';
+}
+</script>
+</body>
+</html>

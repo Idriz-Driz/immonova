@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmoNova – E-Mail bestätigen</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .wrap { width: 100%; max-width: 440px; text-align: center; }
+    .logo { margin-bottom: 32px; }
+    .logo-icon { width: 64px; height: 64px; background: #2563eb; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 30px; margin-bottom: 12px; box-shadow: 0 12px 32px rgba(37,99,235,0.4); }
+    .logo h1 { font-size: 26px; font-weight: 800; color: white; }
+    .logo h1 span { color: #60a5fa; }
+    .card { background: white; border-radius: 20px; padding: 40px 32px; box-shadow: 0 24px 64px rgba(0,0,0,0.3); }
+    .icon-big { font-size: 64px; margin-bottom: 20px; display: block; }
+    h2 { font-size: 22px; font-weight: 800; color: #0f172a; margin-bottom: 10px; }
+    .sub { font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 28px; }
+    .email-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; margin-bottom: 24px; font-size: 14px; color: #1d4ed8; font-weight: 600; }
+    .btn { width: 100%; padding: 13px; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; transition: all 0.2s; margin-bottom: 12px; }
+    .btn-blue { background: #2563eb; color: white; box-shadow: 0 4px 16px rgba(37,99,235,0.3); }
+    .btn-blue:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-blue:disabled { background: #93c5fd; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-ghost { background: #f1f5f9; color: #475569; }
+    .btn-ghost:hover { background: #e2e8f0; }
+    .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; padding: 10px 14px; border-radius: 9px; font-size: 13px; margin-bottom: 12px; display: none; }
+    .steps { text-align: left; background: #f8fafc; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+    .step { display: flex; align-items: flex-start; gap: 12px; padding: 6px 0; font-size: 13px; color: #475569; }
+    .step-num { width: 22px; height: 22px; background: #2563eb; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .countdown { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.4); }
+    .footer a { color: rgba(255,255,255,0.6); text-decoration: none; }
+    .footer a:hover { color: white; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-icon">🏢</div>
+    <h1>Immo<span>Nova</span></h1>
+  </div>
+
+  <div class="card">
+    <span class="icon-big">📧</span>
+    <h2>E-Mail bestätigen</h2>
+    <p class="sub">Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte klicke auf den Link in der E-Mail, um dein Konto zu aktivieren.</p>
+
+    <div class="email-box" id="email-display">📬 Prüfe deinen Posteingang</div>
+
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><span>Öffne dein E-Mail-Postfach</span></div>
+      <div class="step"><div class="step-num">2</div><span>Suche nach einer E-Mail von <strong>noreply@immonova-2e0f2.firebaseapp.com</strong></span></div>
+      <div class="step"><div class="step-num">3</div><span>Klicke auf den Bestätigungslink</span></div>
+      <div class="step"><div class="step-num">4</div><span>Kehre zurück und melde dich an</span></div>
+    </div>
+
+    <div class="ok" id="ok-msg"></div>
+
+    <button class="btn btn-blue" id="resend-btn" onclick="resendEmail()">📨 E-Mail erneut senden</button>
+    <div class="countdown" id="countdown-txt"></div>
+
+    <button class="btn btn-ghost" onclick="window.location.href='login.html'" style="margin-top:8px;">← Zurück zum Login</button>
+  </div>
+
+  <div class="footer">
+    <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="mailto:info@immonova.de">Support</a>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
+  authDomain: "immonova-2e0f2.firebaseapp.com",
+  projectId: "immonova-2e0f2",
+  storageBucket: "immonova-2e0f2.firebasestorage.app",
+  messagingSenderId: "639601807117",
+  appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+
+var cooldown = 0;
+var cdInterval = null;
+
+auth.onAuthStateChanged(function(user) {
+  if (user && user.email) {
+    document.getElementById('email-display').textContent = '📬 ' + user.email;
+  }
+});
+
+function resendEmail() {
+  var user = auth.currentUser;
+  if (!user) {
+    window.location.href = 'login.html';
+    return;
+  }
+  var btn = document.getElementById('resend-btn');
+  var ok = document.getElementById('ok-msg');
+
+  user.sendEmailVerification().then(function() {
+    ok.textContent = '✅ Bestätigungs-E-Mail wurde erneut gesendet!';
+    ok.style.display = 'block';
+    startCooldown(60);
+  }).catch(function(e) {
+    if (e.code === 'auth/too-many-requests') {
+      ok.textContent = '⚠️ Zu viele Anfragen. Bitte kurz warten.';
+      ok.style.background = '#fef2f2';
+      ok.style.borderColor = '#fecaca';
+      ok.style.color = '#dc2626';
+      ok.style.display = 'block';
+    }
+  });
+}
+
+function startCooldown(seconds) {
+  var btn = document.getElementById('resend-btn');
+  var txt = document.getElementById('countdown-txt');
+  cooldown = seconds;
+  btn.disabled = true;
+  if (cdInterval) clearInterval(cdInterval);
+  cdInterval = setInterval(function() {
+    cooldown--;
+    txt.textContent = 'Erneut senden möglich in ' + cooldown + 's';
+    if (cooldown <= 0) {
+      clearInterval(cdInterval);
+      btn.disabled = false;
+      txt.textContent = '';
+    }
+  }, 1000);
+}
+</script>
+</body>
+</html>

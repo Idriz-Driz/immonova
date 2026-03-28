@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmoNova – Willkommen</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .wrap { width: 100%; max-width: 560px; }
+    .logo { text-align: center; margin-bottom: 24px; }
+    .logo-icon { width: 56px; height: 56px; background: #2563eb; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 10px; box-shadow: 0 12px 32px rgba(37,99,235,0.4); }
+    .logo h1 { font-size: 24px; font-weight: 800; color: white; }
+    .logo h1 span { color: #60a5fa; }
+    .card { background: white; border-radius: 20px; padding: 36px 32px; box-shadow: 0 24px 64px rgba(0,0,0,0.3); }
+    .progress-bar { display: flex; gap: 6px; margin-bottom: 28px; }
+    .prog-step { flex: 1; height: 4px; border-radius: 4px; background: #e2e8f0; transition: background 0.3s; }
+    .prog-step.done { background: #2563eb; }
+    .prog-step.active { background: #93c5fd; }
+    .step-head { margin-bottom: 24px; }
+    .step-badge { display: inline-block; background: #eff6ff; color: #2563eb; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px; }
+    .step-head h2 { font-size: 22px; font-weight: 800; color: #0f172a; margin-bottom: 6px; }
+    .step-head p { font-size: 14px; color: #64748b; }
+    .step { display: none; }
+    .step.active { display: block; }
+    .fg { margin-bottom: 16px; }
+    .fl { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .fi, .fs { width: 100%; padding: 11px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; font-family: inherit; color: #0f172a; background: white; outline: none; transition: all 0.2s; }
+    .fi:focus, .fs:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .fi::placeholder { color: #cbd5e1; }
+    .fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+    .check-item { border: 2px solid #e2e8f0; border-radius: 12px; padding: 14px 12px; cursor: pointer; text-align: center; transition: all 0.2s; }
+    .check-item:hover { border-color: #93c5fd; background: #f8faff; }
+    .check-item.sel { border-color: #2563eb; background: #eff6ff; }
+    .check-item input { display: none; }
+    .check-ico { font-size: 22px; margin-bottom: 6px; }
+    .check-nm { font-size: 12px; font-weight: 700; color: #0f172a; }
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+    .feat-card { border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 14px 12px; display: flex; align-items: flex-start; gap: 10px; }
+    .feat-card-ico { font-size: 22px; flex-shrink: 0; }
+    .feat-card-txt strong { display: block; font-size: 12px; font-weight: 700; color: #0f172a; }
+    .feat-card-txt span { font-size: 11px; color: #94a3b8; }
+    .nav { display: flex; gap: 12px; margin-top: 24px; }
+    .btn { flex: 1; padding: 13px; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-blue { background: #2563eb; color: white; box-shadow: 0 4px 16px rgba(37,99,235,0.3); }
+    .btn-blue:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-ghost { background: #f1f5f9; color: #64748b; }
+    .btn-ghost:hover { background: #e2e8f0; }
+    .spinner-wrap { display: none; text-align: center; padding: 8px; color: #64748b; font-size: 13px; }
+    .spinner { width: 20px; height: 20px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .welcome-hero { text-align: center; padding: 12px 0 24px; }
+    .welcome-hero .big-ico { font-size: 72px; display: block; margin-bottom: 16px; }
+    .welcome-hero h2 { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+    .welcome-hero p { font-size: 14px; color: #64748b; line-height: 1.6; max-width: 380px; margin: 0 auto 20px; }
+    .trial-badge { display: inline-flex; align-items: center; gap: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: 30px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-icon">🏢</div>
+    <h1>Immo<span>Nova</span></h1>
+  </div>
+
+  <div class="card">
+    <div class="progress-bar" id="prog-bar">
+      <div class="prog-step active" id="ps-0"></div>
+      <div class="prog-step" id="ps-1"></div>
+      <div class="prog-step" id="ps-2"></div>
+      <div class="prog-step" id="ps-3"></div>
+    </div>
+
+    <!-- SCHRITT 0: Willkommen -->
+    <div class="step active" id="step-0">
+      <div class="welcome-hero">
+        <span class="big-ico">🎉</span>
+        <h2>Herzlich willkommen!</h2>
+        <p>Dein ImmoNova-Konto ist bereit. Lass uns in 4 kurzen Schritten alles einrichten, damit du sofort loslegen kannst.</p>
+        <div class="trial-badge">✅ 30 Tage kostenlos – Keine Kreditkarte nötig</div>
+      </div>
+      <div class="nav">
+        <button class="btn btn-blue" onclick="goStep(1)">Los geht's →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 1: Firma & Kontakt -->
+    <div class="step" id="step-1">
+      <div class="step-head">
+        <div class="step-badge">Schritt 1 von 3</div>
+        <h2>🏢 Deine Verwaltung</h2>
+        <p>Wie heißt deine Hausverwaltung oder Firma?</p>
+      </div>
+      <div class="fg"><label class="fl">Firmenname / Verwaltungsname</label><input class="fi" id="o-firma" placeholder="z.B. Mustermann Hausverwaltung"></div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Telefon</label><input class="fi" id="o-tel" placeholder="+49 151 ..."></div>
+        <div class="fg"><label class="fl">Website (optional)</label><input class="fi" id="o-web" placeholder="www.example.de"></div>
+      </div>
+      <div class="fg"><label class="fl">Adresse (optional)</label><input class="fi" id="o-adr" placeholder="Musterstraße 1, 10115 Berlin"></div>
+      <div class="fg">
+        <label class="fl">Anzahl Objekte</label>
+        <select class="fs" id="o-obj">
+          <option value="1-5">1–5 Objekte</option>
+          <option value="6-20">6–20 Objekte</option>
+          <option value="21-50">21–50 Objekte</option>
+          <option value="50+">Mehr als 50</option>
+        </select>
+      </div>
+      <div class="nav">
+        <button class="btn btn-ghost" onclick="goStep(0)">← Zurück</button>
+        <button class="btn btn-blue" onclick="goStep(2)">Weiter →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 2: Module auswählen -->
+    <div class="step" id="step-2">
+      <div class="step-head">
+        <div class="step-badge">Schritt 2 von 3</div>
+        <h2>⚙️ Was verwaltest du?</h2>
+        <p>Wähle aus, welche Bereiche du hauptsächlich nutzen wirst.</p>
+      </div>
+      <div class="check-grid">
+        <label class="check-item sel" onclick="toggleCheck(this)">
+          <input type="checkbox" checked>
+          <div class="check-ico">🏠</div>
+          <div class="check-nm">Mietwohnungen</div>
+        </label>
+        <label class="check-item" onclick="toggleCheck(this)">
+          <input type="checkbox">
+          <div class="check-ico">🏢</div>
+          <div class="check-nm">WEG-Verwaltung</div>
+        </label>
+        <label class="check-item" onclick="toggleCheck(this)">
+          <input type="checkbox">
+          <div class="check-ico">🏪</div>
+          <div class="check-nm">Gewerbeflächen</div>
+        </label>
+        <label class="check-item" onclick="toggleCheck(this)">
+          <input type="checkbox">
+          <div class="check-ico">🔧</div>
+          <div class="check-nm">Handwerker-Mgmt</div>
+        </label>
+        <label class="check-item" onclick="toggleCheck(this)">
+          <input type="checkbox">
+          <div class="check-ico">💼</div>
+          <div class="check-nm">Interessenten / CRM</div>
+        </label>
+        <label class="check-item" onclick="toggleCheck(this)">
+          <input type="checkbox">
+          <div class="check-ico">📊</div>
+          <div class="check-nm">Berichte & Finanzen</div>
+        </label>
+      </div>
+      <div class="nav">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Zurück</button>
+        <button class="btn btn-blue" onclick="goStep(3)">Weiter →</button>
+      </div>
+    </div>
+
+    <!-- SCHRITT 3: Fertig -->
+    <div class="step" id="step-3">
+      <div class="step-head">
+        <div class="step-badge">Schritt 3 von 3</div>
+        <h2>🚀 Alles bereit!</h2>
+        <p>Dein ImmoNova ist eingerichtet. Hier sind deine nächsten Schritte:</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feat-card"><div class="feat-card-ico">🏠</div><div class="feat-card-txt"><strong>Objekte anlegen</strong><span>Deine Gebäude eintragen</span></div></div>
+        <div class="feat-card"><div class="feat-card-ico">👤</div><div class="feat-card-txt"><strong>Mieter hinzufügen</strong><span>Mieterdaten importieren</span></div></div>
+        <div class="feat-card"><div class="feat-card-ico">🎫</div><div class="feat-card-txt"><strong>Tickets verwalten</strong><span>Schadensmeldungen bearbeiten</span></div></div>
+        <div class="feat-card"><div class="feat-card-ico">📅</div><div class="feat-card-txt"><strong>Kalender nutzen</strong><span>Termine & Fristen planen</span></div></div>
+      </div>
+      <div class="spinner-wrap" id="o-spin"><div class="spinner"></div>Wird gespeichert...</div>
+      <div class="nav" style="margin-top:24px;">
+        <button class="btn btn-ghost" onclick="goStep(2)">← Zurück</button>
+        <button class="btn btn-blue" id="finish-btn" onclick="finish()">🚀 Zum Dashboard →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
+  authDomain: "immonova-2e0f2.firebaseapp.com",
+  projectId: "immonova-2e0f2",
+  storageBucket: "immonova-2e0f2.firebasestorage.app",
+  messagingSenderId: "639601807117",
+  appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+var db = firebase.firestore();
+
+var currentStep = 0;
+
+// Auth guard
+auth.onAuthStateChanged(function(user) {
+  if (!user) window.location.href = 'login.html';
+});
+
+function goStep(n) {
+  document.getElementById('step-' + currentStep).classList.remove('active');
+  currentStep = n;
+  document.getElementById('step-' + n).classList.add('active');
+  updateProgress();
+}
+
+function updateProgress() {
+  for (var i = 0; i < 4; i++) {
+    var el = document.getElementById('ps-' + i);
+    el.classList.remove('done', 'active');
+    if (i < currentStep) el.classList.add('done');
+    else if (i === currentStep) el.classList.add('active');
+  }
+}
+
+function toggleCheck(label) {
+  label.classList.toggle('sel');
+  var cb = label.querySelector('input[type=checkbox]');
+  if (cb) cb.checked = !cb.checked;
+}
+
+function finish() {
+  var user = auth.currentUser;
+  if (!user) { window.location.href = 'login.html'; return; }
+
+  var btn = document.getElementById('finish-btn');
+  var spin = document.getElementById('o-spin');
+  btn.style.display = 'none';
+  spin.style.display = 'block';
+
+  var firma = document.getElementById('o-firma').value.trim();
+  var tel = document.getElementById('o-tel').value.trim();
+  var web = document.getElementById('o-web').value.trim();
+  var adr = document.getElementById('o-adr').value.trim();
+  var obj = document.getElementById('o-obj').value;
+
+  db.collection('users').doc(user.uid).update({
+    onboardingDone: true,
+    firma: firma,
+    tel: tel,
+    website: web,
+    adresse: adr,
+    objAnzahl: obj
+  }).then(function() {
+    if (firma) localStorage.setItem('in_user_firma', firma);
+    window.location.href = 'app.html';
+  }).catch(function() {
+    // Even if save fails, go to dashboard
+    window.location.href = 'app.html';
+  });
+}
+</script>
+</body>
+</html>
