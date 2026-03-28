@@ -354,8 +354,23 @@ function doMieter() {
   var wohn = document.getElementById('m-wohn').value.trim();
   var err = document.getElementById('m-err');
   if (!name || !wohn) { err.textContent = '⚠️ Bitte Namen und Wohnungsbezeichnung eingeben.'; err.style.display='block'; return; }
-  var liste = JSON.parse(localStorage.getItem('in_m') || '[]');
-  var found = liste.some(function(m) { return m.name.toLowerCase()===name.toLowerCase() && m.wn.toLowerCase()===wohn.toLowerCase(); });
+
+  // Mieter aus localStorage ODER Default-Liste prüfen
+  var DEFAULT_MIETER = [
+    {name:"Max Mustermann", wn:"1 OG"},
+    {name:"Anna Schmidt",   wn:"2 OG"},
+    {name:"Idriz Osmanaj",  wn:"EG"},
+    {name:"Idriz Osmanaj",  wn:"10 OG"},
+    {name:"Idriz Osmanaj",  wn:"7 OG"}
+  ];
+  var gespeichert = JSON.parse(localStorage.getItem('in_m') || '[]');
+  var liste = gespeichert.length > 0 ? gespeichert : DEFAULT_MIETER;
+
+  var found = liste.some(function(m) {
+    return m.name.toLowerCase() === name.toLowerCase() &&
+           m.wn.toLowerCase()   === wohn.toLowerCase();
+  });
+
   if (found) {
     localStorage.setItem('in_role', 'mieter');
     localStorage.setItem('in_mieter_name', name);
