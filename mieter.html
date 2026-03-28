@@ -317,22 +317,22 @@ function render() {
   var modalContent =
     '<div id="m-err" style="color:#dc2626;font-size:13px;margin-bottom:8px;min-height:18px;"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
-      formGroup('Vorname','<input id="m-vn" type="text" placeholder="Max" style="'+inputStyle()+'">') +
-      formGroup('Nachname','<input id="m-nn" type="text" placeholder="Mustermann" style="'+inputStyle()+'">') +
+      formGroup('Vorname','<input id="m-vn" type="text" placeholder="Max" style="'+inputStyle+'">') +
+      formGroup('Nachname','<input id="m-nn" type="text" placeholder="Mustermann" style="'+inputStyle+'">') +
     '</div>' +
-    formGroup('Wohnung (z.B. 1 OG)','<input id="m-wn" type="text" placeholder="1 OG" style="'+inputStyle()+'">','margin-bottom:12px;') +
+    formGroup('Wohnung (z.B. 1 OG)','<input id="m-wn" type="text" placeholder="1 OG" style="'+inputStyle+'">','margin-bottom:12px;') +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
-      formGroup('Kaltmiete (€)','<input id="m-miete" type="number" min="0" placeholder="750" style="'+inputStyle()+'">') +
-      formGroup('Kaution (€)','<input id="m-kau" type="number" min="0" placeholder="2250" style="'+inputStyle()+'">') +
+      formGroup('Kaltmiete (€)','<input id="m-miete" type="number" min="0" placeholder="750" style="'+inputStyle+'">') +
+      formGroup('Kaution (€)','<input id="m-kau" type="number" min="0" placeholder="2250" style="'+inputStyle+'">') +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
-      formGroup('Telefon','<input id="m-tel" type="tel" placeholder="+49 170 1234567" style="'+inputStyle()+'">') +
-      formGroup('E-Mail','<input id="m-em" type="email" placeholder="max@example.com" style="'+inputStyle()+'">') +
+      formGroup('Telefon','<input id="m-tel" type="tel" placeholder="+49 170 1234567" style="'+inputStyle+'">') +
+      formGroup('E-Mail','<input id="m-em" type="email" placeholder="max@example.com" style="'+inputStyle+'">') +
     '</div>' +
-    formGroup('Einzugsdatum','<input id="m-dat" type="date" style="'+inputStyle()+'">','margin-bottom:12px;') +
+    formGroup('Einzugsdatum','<input id="m-dat" type="date" style="'+inputStyle+'">','margin-bottom:12px;') +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
-      formGroup('Mieter-Score (1–100)','<input id="m-sco" type="number" min="1" max="100" value="80" style="'+inputStyle()+'">') +
-      formGroup('Status','<select id="m-status" style="'+inputStyle()+'"><option value="bezahlt">Bezahlt</option><option value="offen">Offen</option></select>') +
+      formGroup('Mieter-Score (1–100)','<input id="m-sco" type="number" min="1" max="100" value="80" style="'+inputStyle+'">') +
+      formGroup('Status','<select id="m-status" style="'+inputStyle+'"><option value="bezahlt">Bezahlt</option><option value="offen">Offen</option></select>') +
     '</div>' +
     '<button onclick="saveMieter()" style="width:100%;background:#16a34a;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>';
 

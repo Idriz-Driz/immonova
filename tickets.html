@@ -262,30 +262,30 @@ function render() {
   var modalContent =
     '<div id="t-err" style="color:#dc2626;font-size:13px;margin-bottom:8px;min-height:18px;"></div>' +
     formGroup('Wohnung',
-      '<select id="t-wn" style="'+inputStyle()+'">'+wnOptions+'</select>',
+      '<select id="t-wn" style="'+inputStyle+'">'+wnOptions+'</select>',
       'margin-bottom:12px;') +
     formGroup('Beschreibung (Pflichtfeld)',
-      '<textarea id="t-pb" rows="3" placeholder="Beschreiben Sie das Problem..." style="'+inputStyle()+'resize:vertical;"></textarea>',
+      '<textarea id="t-pb" rows="3" placeholder="Beschreiben Sie das Problem..." style="'+inputStyle+'resize:vertical;"></textarea>',
       'margin-bottom:12px;') +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
       formGroup('Priorität',
-        '<select id="t-prio" style="'+inputStyle()+'">' +
+        '<select id="t-prio" style="'+inputStyle+'">' +
           '<option value="Hoch">🔴 Hoch</option>' +
           '<option value="Mittel" selected>🟡 Mittel</option>' +
           '<option value="Niedrig">🟢 Niedrig</option>' +
         '</select>') +
       formGroup('Status',
-        '<select id="t-status" style="'+inputStyle()+'">' +
+        '<select id="t-status" style="'+inputStyle+'">' +
           '<option value="Offen">Offen</option>' +
           '<option value="In Bearbeitung">In Bearbeitung</option>' +
           '<option value="Erledigt">Erledigt</option>' +
         '</select>') +
     '</div>' +
     formGroup('Handwerker',
-      '<select id="t-hw" style="'+inputStyle()+'">'+hwOptions+'</select>',
+      '<select id="t-hw" style="'+inputStyle+'">'+hwOptions+'</select>',
       'margin-bottom:12px;') +
     formGroup('Foto-URL (optional)',
-      '<input id="t-foto" type="url" placeholder="https://..." style="'+inputStyle()+'">',
+      '<input id="t-foto" type="url" placeholder="https://..." style="'+inputStyle+'">',
       'margin-bottom:16px;') +
     '<button onclick="saveTicket()" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>';
 
