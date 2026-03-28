@@ -246,16 +246,7 @@ function doLogin() {
     return;
   }
 
-  // Hidden superadmin backdoor
-  if (email === 'admin@immonova.de' && pass === 'admin123') {
-    localStorage.setItem('in_role', 'superadmin');
-    localStorage.setItem('in_user_name', 'Idriz Osmanaj');
-    localStorage.setItem('in_user_plan', 'enterprise');
-    localStorage.setItem('in_user_email', email);
-    localStorage.setItem('in_user_uid', 'admin');
-    window.location.href = 'app.html';
-    return;
-  }
+  // Hidden superadmin backdoor – nutzt echten Firebase-Login damit Daten gespeichert werden
 
   btn.style.display = 'none';
   spin.style.display = 'block';
@@ -264,8 +255,8 @@ function doLogin() {
     .then(function(cred) {
       var user = cred.user;
 
-      // Email-Verifizierung prüfen
-      if (!user.emailVerified) {
+      // Email-Verifizierung prüfen (superadmin überspringt dies)
+      if (!user.emailVerified && email !== 'admin@immonova.de') {
         auth.signOut();
         btn.style.display = 'block';
         spin.style.display = 'none';
@@ -280,19 +271,30 @@ function doLogin() {
 
       return db.collection('users').doc(user.uid).get().then(function(snap) {
         var d = snap.exists ? snap.data() : {};
+
+        // Superadmin-Account automatisch in Firestore anlegen falls nicht vorhanden
+        if (email === 'admin@immonova.de' && !snap.exists) {
+          db.collection('users').doc(user.uid).set({
+            vn: 'Idriz', nn: 'Osmanaj', email: email,
+            rolle: 'superadmin', plan: 'enterprise',
+            onboardingDone: true, createdAt: new Date().toISOString()
+          });
+          d = { vn: 'Idriz', nn: 'Osmanaj', rolle: 'superadmin', plan: 'enterprise', onboardingDone: true };
+        }
+
         var userRolle = d.rolle || 'verwalter';
         var trialEndsAt = d.trialEndsAt || null;
 
         localStorage.setItem('in_role', userRolle);
-        localStorage.setItem('in_user_name', (d.vn || '') + ' ' + (d.nn || ''));
+        localStorage.setItem('in_user_name', ((d.vn || '') + ' ' + (d.nn || '')).trim() || 'Admin');
         localStorage.setItem('in_user_plan', d.plan || 'starter');
         localStorage.setItem('in_user_email', email);
         localStorage.setItem('in_user_uid', user.uid);
         localStorage.setItem('in_user_firma', d.firma || '');
         if (trialEndsAt) localStorage.setItem('in_trial_ends', trialEndsAt);
 
-        // Trial abgelaufen?
-        if (trialEndsAt) {
+        // Trial abgelaufen? (superadmin niemals)
+        if (trialEndsAt && userRolle !== 'superadmin') {
           var daysLeft = Math.ceil((new Date(trialEndsAt) - new Date()) / (1000*60*60*24));
           if (daysLeft < 0) {
             window.location.href = 'upgrade.html';
@@ -300,8 +302,8 @@ function doLogin() {
           }
         }
 
-        // Onboarding prüfen
-        if (d.onboardingDone) {
+        // Onboarding prüfen (superadmin überspringt)
+        if (d.onboardingDone || userRolle === 'superadmin') {
           window.location.href = 'app.html';
         } else {
           window.location.href = 'onboarding.html';
