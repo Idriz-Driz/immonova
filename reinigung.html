@@ -14,198 +14,191 @@
 <script>
 checkAuth(); checkTrial();
 var user = getUser(); var uid = user.uid;
-var appData = {}; var editId = null; var activeTab = 'plan';
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
-var TAGE = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
-var BEREICHE = ['Treppenhaus','Keller','Tiefgarage','Außenanlage','Dachboden','Hauseingang','Sonstiges'];
+var editId = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
+
+var BEREICHE = ['Treppenhaus','Keller','Hof/Garten','Tiefgarage','Dachboden','Gemeinschaftsraum','Müllbereich','Briefkastenanlage'];
+
 function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
-function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
+function lbl(t) { return '<label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;">'+t+'</label>'; }
+
+function calcStatus(von, bis) {
+  if (!von || !bis) return 'Geplant';
+  var now = today();
+  if (now < von) return 'Geplant';
+  if (now > bis) return 'Abgeschlossen';
+  return 'Aktiv';
+}
+
+function statusBadge(st) {
+  var map = { Aktiv: '#16a34a', Geplant: '#2563eb', Abgeschlossen: '#64748b' };
+  var col = map[st] || '#64748b';
+  return '<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;">'+st+'</span>';
+}
 
 function render() {
-  var reinigungen = appData.reinigungen || [];
-  var heute = reinigungen.filter(function(r){ var d=new Date().getDay(); var wt=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][d]; return r.wochentag===wt||r.wochentag==='Täglich'; });
-  var erledigt = reinigungen.filter(function(r){ return r.status==='Erledigt'; }).length;
-  var pct = reinigungen.length ? Math.round(erledigt/reinigungen.length*100) : 0;
-  var naechste = reinigungen.filter(function(r){ return r.status!=='Erledigt'; }).sort(function(a,b){ return TAGE.indexOf(a.wochentag)-TAGE.indexOf(b.wochentag); });
+  var list = getData(KEYS.reinigungen, []);
+  var mieter = getData(KEYS.mieter, []);
+  var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
+  var qSt = (document.getElementById('f-st')||{}).value||'';
 
-  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">'
-    +kpi('🧹','Aufgaben heute',heute.length,'')
-    +kpi('✅','Erledigungsrate',pct+'%','von '+reinigungen.length+' Aufgaben')
-    +kpi('📅','Nächste Aufgabe',naechste.length?(naechste[0].bereich+' ('+naechste[0].wochentag+')'):'–','')
+  var enriched = list.map(function(r) {
+    var st = calcStatus(r.von, r.bis);
+    return Object.assign({}, r, { _status: st });
+  });
+
+  var filtered = enriched.filter(function(r) {
+    if (qSt && r._status !== qSt) return false;
+    if (qQ && !(r.mieter+r.bereich+'').toLowerCase().includes(qQ)) return false;
+    return true;
+  });
+
+  var aktiv = enriched.filter(function(r){ return r._status==='Aktiv'; }).length;
+  var geplant = enriched.filter(function(r){ return r._status==='Geplant'; }).length;
+  var abgeschl = enriched.filter(function(r){ return r._status==='Abgeschlossen'; }).length;
+
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">'
+    +kpi('🧹','Gesamt',list.length,'')
+    +kpi('✅','Aktiv',aktiv,'')
+    +kpi('📅','Geplant',geplant,'')
+    +kpi('✓','Abgeschlossen',abgeschl,'')
     +'</div>';
 
-  var tabsHtml = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
-    +['plan','hausordnung','protokoll'].map(function(t,i){
-      var labels = ['🧹 Reinigungsplan','📋 Hausordnung','📝 Protokoll'];
-      return '<button onclick="switchTab(\''+t+'\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab===t?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">'+labels[i]+'</button>';
-    }).join('')
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Mieter, Bereich..." style="'+inputStyle+'max-width:220px;">'
+    +'<select id="f-st" onchange="render()" style="'+inputStyle+'max-width:160px;"><option value="">Alle Status</option><option value="Aktiv">Aktiv</option><option value="Geplant">Geplant</option><option value="Abgeschlossen">Abgeschlossen</option></select>'
     +'</div>';
 
-  var content = '';
-  if (activeTab === 'plan') {
-    content = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">';
-    TAGE.forEach(function(tag) {
-      var dayTasks = reinigungen.filter(function(r){ return r.wochentag===tag||r.wochentag==='Täglich'; });
-      var isToday = new Date().getDay()===TAGE.indexOf(tag)+1;
-      content += '<div style="background:'+(isToday?'#eff6ff':'white')+';border-radius:12px;padding:12px;border:'+(isToday?'2px solid #2563eb':'1.5px solid #e2e8f0')+'">'
-        +'<div style="font-size:11px;font-weight:700;color:'+(isToday?'#2563eb':'#475569')+';margin-bottom:10px;text-transform:uppercase;">'+tag.slice(0,2)+'</div>';
-      if (!dayTasks.length) { content += '<div style="font-size:11px;color:#cbd5e1;text-align:center;padding:8px 0;">–</div>'; }
-      dayTasks.forEach(function(r) {
-        var col = r.status==='Erledigt'?'#16a34a':r.status==='Nicht erledigt'?'#dc2626':'#64748b';
-        var ico = r.status==='Erledigt'?'✅':r.status==='Nicht erledigt'?'❌':'⏳';
-        content += '<div onclick="toggleStatus(\''+r.id+'\')" style="background:'+col+'15;border-radius:8px;padding:6px 8px;margin-bottom:6px;cursor:pointer;border-left:3px solid '+col+';">'
-          +'<div style="font-size:10px;font-weight:700;color:'+col+';">'+ico+' '+esc(r.bereich)+'</div>'
-          +'<div style="font-size:10px;color:#94a3b8;">'+esc(r.zustaendig||'')+'</div>'
-          +'</div>';
-      });
-      content += '</div>';
+  var tableHtml = '';
+  if (!filtered.length) {
+    tableHtml = emptyState('🧹','Keine Reinigungseinträge','Füge den ersten Eintrag für den Reinigungsplan hinzu','+ Eintrag hinzufügen','openAdd()');
+  } else {
+    tableHtml = '<div style="background:white;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">'
+      +'<table style="width:100%;border-collapse:collapse;">'
+      +'<thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">'
+      +'<th style="text-align:left;padding:12px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Mieter / Wohnung</th>'
+      +'<th style="text-align:left;padding:12px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Bereich</th>'
+      +'<th style="text-align:left;padding:12px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Von</th>'
+      +'<th style="text-align:left;padding:12px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Bis</th>'
+      +'<th style="text-align:left;padding:12px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Status</th>'
+      +'<th style="text-align:left;padding:12px 16px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">Notiz</th>'
+      +'<th style="padding:12px 16px;"></th>'
+      +'</tr></thead>'
+      +'<tbody>';
+    filtered.forEach(function(r, idx) {
+      var bg = idx%2===0?'white':'#fafbfc';
+      var isAktiv = r._status === 'Aktiv';
+      tableHtml += '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
+        +'<td style="padding:12px 16px;font-size:13px;font-weight:600;color:#0f172a;">'+esc(r.mieter||'–')+(r.wohnung?'<br><span style="font-size:11px;color:#94a3b8;font-weight:400;">'+esc(r.wohnung)+'</span>':'')+'</td>'
+        +'<td style="padding:12px 16px;font-size:13px;color:#475569;">'+esc(r.bereich||'–')+'</td>'
+        +'<td style="padding:12px 16px;font-size:13px;color:#475569;">'+fmtDate(r.von)+'</td>'
+        +'<td style="padding:12px 16px;font-size:13px;color:#475569;">'+fmtDate(r.bis)+'</td>'
+        +'<td style="padding:12px 16px;">'+statusBadge(r._status)+'</td>'
+        +'<td style="padding:12px 16px;font-size:12px;color:#64748b;max-width:200px;">'+esc(r.notiz||'–')+'</td>'
+        +'<td style="padding:12px 16px;">'
+        +'<div style="display:flex;gap:4px;">'
+        +'<button onclick="openEdit(\''+r.id+'\')" style="width:30px;height:30px;border-radius:7px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
+        +'<button onclick="deleteRei(\''+r.id+'\')" style="width:30px;height:30px;border-radius:7px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
+        +'</div>'
+        +'</td>'
+        +'</tr>';
     });
-    content += '</div>';
-    content += '<div style="margin-top:16px;">'
-      +'<h3 style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:12px;">📋 Alle Aufgaben</h3>'
-      +'<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
-    if (!reinigungen.length) {
-      content += '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:14px;">Keine Aufgaben vorhanden</div>';
-    } else {
-      reinigungen.forEach(function(r) {
-        var col = r.status==='Erledigt'?'#16a34a':r.status==='Nicht erledigt'?'#dc2626':'#64748b';
-        content += '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
-          +'<span style="font-size:16px;">'+(r.status==='Erledigt'?'✅':r.status==='Nicht erledigt'?'❌':'⏳')+'</span>'
-          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#0f172a;">'+esc(r.bereich)+'</div>'
-          +'<div style="font-size:12px;color:#64748b;">'+esc(r.wochentag)+' · '+esc(r.zustaendig||'–')+' · '+esc(r.frequenz||'')+'</div></div>'
-          +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(r.status||'Ausstehend')+'</span>'
-          +'<button onclick="editR(\''+r.id+'\')" style="width:30px;height:30px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:13px;">✏️</button>'
-          +'<button onclick="deleteR(\''+r.id+'\')" style="width:30px;height:30px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:13px;">🗑️</button>'
-          +'</div>';
-      });
-    }
-    content += '</div></div>';
-
-  } else if (activeTab === 'hausordnung') {
-    content = '<div style="background:white;border-radius:16px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
-      +'<h3 style="font-size:16px;font-weight:700;color:#0f172a;">📋 Hausordnung</h3>'
-      +'<div style="display:flex;gap:8px;">'
-      +'<button onclick="alert(\'PDF-Export kommt bald\')" style="padding:8px 16px;border-radius:9px;border:none;background:#f1f5f9;color:#475569;font-size:12px;font-weight:700;cursor:pointer;">📄 PDF</button>'
-      +'<button onclick="alert(\'Senden-Funktion kommt bald\')" style="padding:8px 16px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;">📤 An Mieter senden</button>'
-      +'</div></div>'
-      +'<textarea id="ho-text" style="'+inputStyle+'height:400px;resize:vertical;font-size:13px;line-height:1.8;">'+esc(getHausordnung())+'</textarea>'
-      +'<button onclick="saveHO()" style="margin-top:12px;padding:10px 24px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
-      +'</div>';
-
-  } else if (activeTab === 'protokoll') {
-    var protokoll = appData.reinigungsprotokoll || [];
-    content = '<div style="background:white;border-radius:16px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
-      +'<h3 style="font-size:16px;font-weight:700;color:#0f172a;">📝 Reinigungsprotokoll</h3>'
-      +'<button onclick="openProtokoll()" style="padding:8px 16px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;">+ Eintrag</button>'
-      +'</div>';
-    if (!protokoll.length) {
-      content += '<div style="text-align:center;padding:40px;color:#94a3b8;"><div style="font-size:40px;margin-bottom:10px;">📝</div><p>Noch keine Protokolleinträge</p></div>';
-    } else {
-      protokoll.forEach(function(p) {
-        var col = p.status==='Erledigt'?'#16a34a':p.status==='Mangel'?'#dc2626':'#64748b';
-        content += '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #f1f5f9;">'
-          +'<div style="width:40px;height:40px;border-radius:10px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🧹</div>'
-          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#0f172a;">'+esc(p.bereich)+'</div>'
-          +'<div style="font-size:12px;color:#64748b;">'+esc(p.datum)+' · '+esc(p.person||'–')+'</div>'
-          +'<div style="font-size:12px;color:#94a3b8;margin-top:2px;">'+esc(p.notizen||'')+'</div></div>'
-          +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;height:fit-content;">'+esc(p.status||'–')+'</span>'
-          +'</div>';
-      });
-    }
-    content += '</div>';
+    tableHtml += '</tbody></table></div>';
   }
 
-  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Aufgabe hinzufügen</button>';
-  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+tabsHtml+content+'</div>';
-  document.body.innerHTML = renderLayout('reinigung','Reinigung & Hausordnung',actionBtn,main,buildModal()+buildProtokollModal());
+  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Eintrag hinzufügen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+tableHtml+'</div>';
+  renderLayout('reinigung','Reinigung & Hausordnung', actionBtn, main, buildModal(mieter));
 }
 
-function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
-
-function switchTab(t) { activeTab = t; render(); }
-
-function getHausordnung() {
-  return appData.hausordnung || 'HAUSORDNUNG\n\n§1 Ruhezeiten\nDie Nachtruhe gilt von 22:00 bis 06:00 Uhr. An Sonn- und Feiertagen ganztägig. Mittagsruhe von 13:00 bis 15:00 Uhr.\n\n§2 Treppenhaus und Gemeinschaftsflächen\nTreppenhäuser und Flure sind ständig freizuhalten. Das Abstellen von Fahrrädern, Kinderwagen und Gegenständen ist nur in den dafür vorgesehenen Bereichen erlaubt.\n\n§3 Müllentsorgung\nMüll ist in die dafür vorgesehenen Behälter zu geben. Hausabfälle dürfen nur zu den angegebenen Zeiten bereitgestellt werden.\n\n§4 Haustiere\nDas Halten von Haustieren ist nur nach vorheriger schriftlicher Genehmigung des Vermieters gestattet.\n\n§5 Sauberkeit\nAlle Bewohner sind zur Reinigung der Gemeinschaftsflächen verpflichtet. Der Reinigungsplan ist einzuhalten.\n\n§6 Rauchen\nDas Rauchen in Gemeinschaftsbereichen, Treppenhäusern und Kellern ist verboten.';
+function kpi(ico,l,v,s) {
+  return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
+    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'
+    +(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')
+    +'</div>';
 }
 
-function buildModal() {
+function buildModal(mieter) {
+  var mOpts = '<option value="">– Manuell eingeben –</option>'
+    +(mieter||[]).map(function(m){ return '<option value="'+esc(m.name||'')+'|'+esc(m.wn||'')+'">'+esc(m.name||'')+(m.wn?' – '+esc(m.wn):'')+'</option>'; }).join('');
+
   return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
     +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Reinigungsaufgabe</h3>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Bereich</label><select id="r-bereich" style="'+inputStyle+'">'+BEREICHE.map(function(b){ return '<option>'+b+'</option>'; }).join('')+'</select></div>'
-    +fg('Beschreibung','r-beschr','text','z.B. Boden wischen')
+    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Eintrag hinzufügen</h3>'
+    +'<div style="margin-bottom:12px;">'+lbl('Mieter (aus Liste)')+'<select id="r-mopt" onchange="fillMieter()" style="'+inputStyle+'">'+mOpts+'</select></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Wochentag</label><select id="r-tag" style="'+inputStyle+'">'+['Täglich'].concat(TAGE).map(function(t){ return '<option>'+t+'</option>'; }).join('')+'</select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Frequenz</label><select id="r-freq" style="'+inputStyle+'"><option>Täglich</option><option>Wöchentlich</option><option>Monatlich</option></select></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Mieter Name')+'<input id="r-mieter" style="'+inputStyle+'" placeholder="Max Mustermann"></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Wohnung')+'<input id="r-wohnung" style="'+inputStyle+'" placeholder="EG Links"></div>'
     +'</div>'
-    +fg('Zuständig','r-zust','text','Name der Person')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="r-status" style="'+inputStyle+'"><option>Ausstehend</option><option>Erledigt</option><option>Nicht erledigt</option></select></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Bereich')+'<select id="r-bereich" style="'+inputStyle+'">'
+    +BEREICHE.map(function(b){ return '<option>'+b+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +'<div style="margin-bottom:12px;">'+lbl('Von')+'<input id="r-von" type="date" style="'+inputStyle+'"></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Bis')+'<input id="r-bis" type="date" style="'+inputStyle+'"></div>'
+    +'</div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Notiz (optional)')+'<textarea id="r-notiz" style="'+inputStyle+'height:70px;resize:vertical;" placeholder="z.B. Jeden Montag + Donnerstag"></textarea></div>'
     +'<div style="display:flex;gap:10px;margin-top:18px;">'
     +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveR()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'<button onclick="saveRei()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
     +'</div></div></div>';
 }
 
-function buildProtokollModal() {
-  return '<div id="prot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:420px;width:100%;margin:20px;">'
-    +'<h3 style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">📝 Protokolleintrag</h3>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Bereich</label><select id="p-bereich" style="'+inputStyle+'">'+BEREICHE.map(function(b){ return '<option>'+b+'</option>'; }).join('')+'</select></div>'
-    +fg('Datum','p-datum','date','')
-    +fg('Durchgeführt von','p-person','text','Name')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="p-status" style="'+inputStyle+'"><option>Erledigt</option><option>Mangel</option><option>Ausstehend</option></select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Notizen</label><textarea id="p-notizen" style="'+inputStyle+'height:80px;resize:vertical;"></textarea></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeProt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveProt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+function fillMieter() {
+  var val = (document.getElementById('r-mopt')||{}).value||'';
+  if (!val) return;
+  var parts = val.split('|');
+  document.getElementById('r-mieter').value = parts[0]||'';
+  document.getElementById('r-wohnung').value = parts[1]||'';
 }
 
-function openAdd() { editId=null; document.getElementById('m-title').textContent='Aufgabe hinzufügen'; document.getElementById('r-beschr').value=''; document.getElementById('r-zust').value=''; document.getElementById('add-modal').style.display='flex'; }
+function openAdd() {
+  editId = null;
+  document.getElementById('m-title').textContent = 'Eintrag hinzufügen';
+  ['r-mieter','r-wohnung','r-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
+  document.getElementById('r-von').value = today();
+  document.getElementById('r-bis').value = '';
+  document.getElementById('r-bereich').value = BEREICHE[0];
+  document.getElementById('add-modal').style.display = 'flex';
+}
+
+function openEdit(id) {
+  var r = getData(KEYS.reinigungen, []).find(function(x){ return x.id===id; }); if (!r) return;
+  editId = id;
+  document.getElementById('m-title').textContent = 'Eintrag bearbeiten';
+  document.getElementById('r-mieter').value = r.mieter||'';
+  document.getElementById('r-wohnung').value = r.wohnung||'';
+  document.getElementById('r-bereich').value = r.bereich||BEREICHE[0];
+  document.getElementById('r-von').value = r.von||'';
+  document.getElementById('r-bis').value = r.bis||'';
+  document.getElementById('r-notiz').value = r.notiz||'';
+  document.getElementById('add-modal').style.display = 'flex';
+}
+
 function closeAdd() { document.getElementById('add-modal').style.display='none'; }
-function editR(id) {
-  var r = (appData.reinigungen||[]).find(function(x){return x.id===id;});
-  if (!r) return; editId=id;
-  document.getElementById('m-title').textContent='Aufgabe bearbeiten';
-  document.getElementById('r-bereich').value = r.bereich||'Treppenhaus';
-  document.getElementById('r-beschr').value = r.beschreibung||'';
-  document.getElementById('r-tag').value = r.wochentag||'Täglich';
-  document.getElementById('r-freq').value = r.frequenz||'Wöchentlich';
-  document.getElementById('r-zust').value = r.zustaendig||'';
-  document.getElementById('r-status').value = r.status||'Ausstehend';
-  document.getElementById('add-modal').style.display='flex';
+
+function saveRei() {
+  var mieter = document.getElementById('r-mieter').value.trim();
+  if (!mieter) { alert('Bitte Mieter eingeben.'); return; }
+  var list = getData(KEYS.reinigungen, []);
+  var obj = { id: editId||gid(), mieter: mieter, wohnung: document.getElementById('r-wohnung').value.trim(),
+    bereich: document.getElementById('r-bereich').value, von: document.getElementById('r-von').value,
+    bis: document.getElementById('r-bis').value, notiz: document.getElementById('r-notiz').value.trim() };
+  if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0) list[idx]=obj; }
+  else list.push(obj);
+  setData(KEYS.reinigungen, list); syncToFirebase(uid); closeAdd(); render();
 }
-function saveR() {
-  var reinigungen = appData.reinigungen||[];
-  var obj = { id:editId||gid(), bereich:document.getElementById('r-bereich').value, beschreibung:document.getElementById('r-beschr').value.trim(), wochentag:document.getElementById('r-tag').value, frequenz:document.getElementById('r-freq').value, zustaendig:document.getElementById('r-zust').value.trim(), status:document.getElementById('r-status').value };
-  if (editId) { var idx=reinigungen.findIndex(function(x){return x.id===editId;}); if(idx>=0) reinigungen[idx]=obj; }
-  else reinigungen.unshift(obj);
-  appData.reinigungen = reinigungen; syncToFirebase(uid); closeAdd(); render();
-}
-function toggleStatus(id) {
-  var r = (appData.reinigungen||[]).find(function(x){return x.id===id;});
-  if (!r) return;
-  var cycle = ['Ausstehend','Erledigt','Nicht erledigt'];
-  var idx = cycle.indexOf(r.status||'Ausstehend');
-  r.status = cycle[(idx+1)%cycle.length];
+
+function deleteRei(id) {
+  if (!confirm('Eintrag löschen?')) return;
+  setData(KEYS.reinigungen, getData(KEYS.reinigungen,[]).filter(function(x){return x.id!==id;}));
   syncToFirebase(uid); render();
 }
-function deleteR(id) { if (!confirm('Aufgabe löschen?')) return; appData.reinigungen=(appData.reinigungen||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
-function openProtokoll() { document.getElementById('p-datum').value=new Date().toISOString().slice(0,10); document.getElementById('prot-modal').style.display='flex'; }
-function closeProt() { document.getElementById('prot-modal').style.display='none'; }
-function saveProt() {
-  if (!appData.reinigungsprotokoll) appData.reinigungsprotokoll=[];
-  appData.reinigungsprotokoll.unshift({ id:gid(), bereich:document.getElementById('p-bereich').value, datum:document.getElementById('p-datum').value, person:document.getElementById('p-person').value.trim(), status:document.getElementById('p-status').value, notizen:document.getElementById('p-notizen').value.trim() });
-  syncToFirebase(uid); closeProt(); render();
-}
-function saveHO() { appData.hausordnung = document.getElementById('ho-text').value; syncToFirebase(uid); alert('✅ Hausordnung gespeichert.'); }
 
 initFirebase();
-loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.reinigungen) appData.reinigungen=[]; render(); });
+loadFromFirebase(uid, function(){ render(); });
 </script>
 </body>
 </html>

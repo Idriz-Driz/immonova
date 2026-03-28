@@ -14,196 +14,322 @@
 <script>
 checkAuth(); checkTrial();
 var user = getUser(); var uid = user.uid;
-var appData = {}; var editId = null; var activeTab = 'pipeline';
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
-var STAGES = ['Lead','Kontaktiert','Qualifiziert','Angebot','Abschluss'];
-var STAGE_COLS = {Lead:'#64748b',Kontaktiert:'#2563eb',Qualifiziert:'#d97706',Angebot:'#7c3aed',Abschluss:'#16a34a'};
-var PRIOR_COLS = {Hoch:'#dc2626',Normal:'#d97706',Niedrig:'#64748b'};
+var activeTab = 'followup';
+var editId = null; var editType = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
+var PRIO_COLS = {Hoch:'#dc2626', Mittel:'#d97706', Niedrig:'#16a34a'};
+var INT_STATUS = ['Neu','Warm','Kalt','Interessiert','Abschluss','Verloren'];
+var INT_COLS = {Neu:'#64748b',Warm:'#ea580c',Kalt:'#2563eb',Interessiert:'#7c3aed',Abschluss:'#16a34a',Verloren:'#dc2626'};
+
 function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
-function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
-function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
-function isOverdue(d) { return d && new Date(d) < new Date(); }
+function lbl(t) { return '<label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;">'+t+'</label>'; }
+function fg(label,id,type,ph,extra) { return '<div style="margin-bottom:12px;">'+lbl(label)+'<input id="'+id+'" type="'+(type||'text')+'" placeholder="'+(ph||'')+'" '+(extra||'')+' style="'+inputStyle+'"></div>'; }
+function fg2(label,id,type,ph) { return '<div style="margin-bottom:12px;">'+lbl(label)+'<input id="'+id+'" type="'+(type||'text')+'" placeholder="'+(ph||'')+'" style="'+inputStyle+'"></div>'; }
 
-function render() {
-  var fu = appData.followups || [];
-  var today = new Date().toISOString().slice(0,10);
-  var overdue = fu.filter(function(f){ return f.faellig && f.faellig < today && f.status !== 'Erledigt'; });
-  var todayItems = fu.filter(function(f){ return f.faellig === today && f.status !== 'Erledigt'; });
-
-  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">'
-    +kpi('📋','Gesamt Follow-Ups',fu.length,'')
-    +kpi('⚠️','Überfällig',overdue.length,'Sofort bearbeiten')
-    +kpi('📅','Heute fällig',todayItems.length,'')
-    +kpi('✅','Erledigt',fu.filter(function(f){return f.status==='Erledigt';}).length,'')
-    +'</div>';
-
-  var tabsHtml = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
-    +'<button onclick="switchTab(\'pipeline\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab==='pipeline'?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">🏢 Pipeline (Kanban)</button>'
-    +'<button onclick="switchTab(\'followups\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab==='followups'?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">📋 Follow-Up Liste</button>'
-    +'</div>';
-
-  var content = '';
-  if (activeTab === 'pipeline') {
-    // Kanban board using interessenten with stages
-    var ints = appData.interessenten || [];
-    content = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;overflow-x:auto;">';
-    STAGES.forEach(function(stage) {
-      var col = STAGE_COLS[stage];
-      var items = ints.filter(function(i){ return (i.stage||'Lead') === stage; });
-      content += '<div ondragover="event.preventDefault()" ondrop="dropCard(event,\''+stage+'\')" style="background:#f8fafc;border-radius:14px;padding:14px;min-height:300px;">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
-        +'<div style="display:flex;align-items:center;gap:8px;">'
-        +'<div style="width:10px;height:10px;border-radius:50%;background:'+col+';"></div>'
-        +'<span style="font-size:12px;font-weight:700;color:#475569;">'+stage+'</span></div>'
-        +'<span style="background:'+col+'20;color:'+col+';font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;">'+items.length+'</span></div>';
-      items.forEach(function(item) {
-        var name = (item.vn||'')+' '+(item.nn||'');
-        content += '<div draggable="true" ondragstart="dragCard(event,\''+item.id+'\')" '
-          +'style="background:white;border-radius:10px;padding:12px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,0.08);">'
-          +'<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">'+esc(name)+'</div>'
-          +(item.objekt?'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">📍 '+esc(item.objekt)+'</div>':'')
-          +(item.budget?'<div style="font-size:11px;color:#2563eb;font-weight:600;">💰 '+item.budget+' €</div>':'')
-          +'<div style="display:flex;gap:4px;margin-top:8px;">'
-          +(item.tel?'<a href="https://wa.me/'+item.tel.replace(/\D/g,'')+'" target="_blank" style="font-size:12px;text-decoration:none;">💬</a>':'')
-          +'<button onclick="openEditInt(\''+item.id+'\')" style="font-size:11px;border:none;background:none;cursor:pointer;color:#2563eb;padding:0;">✏️</button>'
-          +'</div></div>';
-      });
-      content += '</div>';
-    });
-    content += '</div>';
-
-  } else {
-    // Follow-Up list
-    if (overdue.length) {
-      content += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
-        +'<span style="font-size:22px;">⚠️</span>'
-        +'<strong style="color:#dc2626;">'+overdue.length+' überfällige Follow-Up'+(overdue.length>1?'s'!'')+' – sofort bearbeiten!</strong></div>';
-    }
-    var sorted = fu.slice().sort(function(a,b){ return (a.faellig||'').localeCompare(b.faellig||''); });
-    if (!sorted.length) {
-      content += emptyState('📋','Keine Follow-Ups','Plane deinen nächsten Kontakt','+ Follow-Up erstellen','openAdd()');
-    } else {
-      content += '<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
-      sorted.forEach(function(f) {
-        var overd = isOverdue(f.faellig) && f.status !== 'Erledigt';
-        var pcol = PRIOR_COLS[f.prioritaet]||'#64748b';
-        var scol = f.status==='Erledigt'?'#16a34a':overd?'#dc2626':'#d97706';
-        content += '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #f1f5f9;background:'+(overd?'#fff5f5':'white')+';">'
-          +'<div style="width:10px;height:10px;border-radius:50%;background:'+pcol+';flex-shrink:0;"></div>'
-          +'<div style="flex:1;min-width:0;">'
-          +'<div style="font-size:14px;font-weight:600;color:#0f172a;">'+esc(f.titel||'–')+'</div>'
-          +'<div style="font-size:12px;color:#64748b;">'+esc(f.kontakt||'–')+' · '+esc(f.typ||'')+'</div></div>'
-          +'<div style="text-align:right;flex-shrink:0;">'
-          +'<div style="font-size:12px;font-weight:600;color:'+(overd?'#dc2626':'#475569')+';">'+fmtDate(f.faellig)+'</div>'
-          +'<span style="background:'+scol+'20;color:'+scol+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">'+esc(f.status||'Offen')+'</span>'
-          +'</div>'
-          +'<div style="display:flex;gap:6px;flex-shrink:0;">'
-          +'<button onclick="toggleFU(\''+f.id+'\')" style="padding:6px 10px;border-radius:8px;border:none;background:'+(f.status==='Erledigt'?'#f1f5f9':'#f0fdf4')+';color:'+(f.status==='Erledigt'?'#94a3b8':'#16a34a')+';font-size:11px;font-weight:700;cursor:pointer;">'+(f.status==='Erledigt'?'↩ Öffnen':'✓ Erledigt')+'</button>'
-          +'<button onclick="editFU(\''+f.id+'\')" style="width:30px;height:30px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
-          +'<button onclick="deleteFU(\''+f.id+'\')" style="width:30px;height:30px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
-          +'</div></div>';
-      });
-      content += '</div>';
-    }
-  }
-
-  var actionBtn = activeTab==='pipeline'
-    ? '<button onclick="openEditInt(\'\')" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Interessent</button>'
-    : '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Follow-Up</button>';
-
-  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+tabsHtml+content+'</div>';
-  document.body.innerHTML = renderLayout('crm','CRM & Follow-Up',actionBtn,main,buildFUModal()+buildIntModal());
-}
-
-function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
 function switchTab(t) { activeTab=t; render(); }
 
-var draggedId = '';
-function dragCard(e,id) { draggedId=id; e.dataTransfer.effectAllowed='move'; }
-function dropCard(e,stage) {
-  e.preventDefault();
-  var item=(appData.interessenten||[]).find(function(x){return x.id===draggedId;});
-  if(item){ item.stage=stage; syncToFirebase(uid); render(); }
+function render() {
+  var fus = getData(KEYS.followups, []);
+  var ints = getData(KEYS.interessenten, []);
+  var heute = today();
+
+  var tabBar = '<div style="display:flex;gap:4px;margin-bottom:24px;background:#f1f5f9;border-radius:12px;padding:4px;">'
+    +tabBtn('followup','📞 Follow-Ups')
+    +tabBtn('interessenten','🔍 Interessenten')
+    +'</div>';
+
+  var content = activeTab === 'followup' ? renderFollowUps(fus, heute) : renderInteressenten(ints);
+  var actionBtn = activeTab === 'followup'
+    ? '<button onclick="openAdd(\'fu\')" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Follow-Up</button>'
+    : '<button onclick="openAdd(\'int\')" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Interessent</button>';
+
+  var main = '<div style="padding:24px;">'+getTrialBanner()+tabBar+content+'</div>';
+  renderLayout('crm','CRM', actionBtn, main, buildFuModal()+buildIntModal());
 }
 
-function buildFUModal() {
+function tabBtn(id, label) {
+  var active = activeTab===id;
+  return '<button onclick="switchTab(\''+id+'\')" style="flex:1;padding:9px 14px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;background:'+(active?'white':'transparent')+';color:'+(active?'#0f172a':'#64748b')+';box-shadow:'+(active?'0 1px 4px rgba(0,0,0,0.1)':'none')+';">'+label+'</button>';
+}
+
+function renderFollowUps(fus, heute) {
+  var offen = fus.filter(function(f){ return !f.done; });
+  var erledigt = fus.filter(function(f){ return f.done; });
+  var heuteF = fus.filter(function(f){ return !f.done && f.dat===heute; });
+  var ueberfaellig = fus.filter(function(f){ return !f.done && f.dat && f.dat<heute; });
+
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">'
+    +kpi('📞','Offen',offen.length,'')
+    +kpi('📅','Heute fällig',heuteF.length,'')
+    +kpi('🔴','Überfällig',ueberfaellig.length,'')
+    +kpi('✅','Erledigt',erledigt.length,'')
+    +'</div>';
+
+  var sorted = fus.slice().sort(function(a,b){
+    if (!a.dat && !b.dat) return 0;
+    if (!a.dat) return 1;
+    if (!b.dat) return -1;
+    return a.dat.localeCompare(b.dat);
+  });
+
+  var listHtml = '';
+  if (!sorted.length) {
+    listHtml = emptyState('📞','Keine Follow-Ups','Füge deinen ersten Follow-Up hinzu','+ Follow-Up','openAdd(\'fu\')');
+  } else {
+    sorted.forEach(function(f) {
+      var overdue = !f.done && f.dat && f.dat < heute;
+      var isHeute = !f.done && f.dat === heute;
+      var pCol = PRIO_COLS[f.prio] || '#64748b';
+      var borderCol = f.done ? '#16a34a' : overdue ? '#dc2626' : isHeute ? '#d97706' : '#e2e8f0';
+      var waLink = f.tel ? 'https://wa.me/'+f.tel.replace(/\D/g,'') : '';
+      listHtml += '<div style="background:white;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.05);margin-bottom:10px;border-left:4px solid '+borderCol+';display:flex;align-items:center;gap:14px;opacity:'+(f.done?'0.6':'1')+'">'
+        +'<div style="flex:1;">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
+        +(f.done?'<span style="color:#16a34a;font-size:16px;">✅</span>':'')
+        +'<span style="font-size:14px;font-weight:700;color:#0f172a;'+(f.done?'text-decoration:line-through;':'')+'">'+esc(f.name||'–')+'</span>'
+        +(f.firma?'<span style="font-size:12px;color:#64748b;">· '+esc(f.firma)+'</span>':'')
+        +'<span style="background:'+pCol+'20;color:'+pCol+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:auto;">'+esc(f.prio||'Mittel')+'</span>'
+        +'</div>'
+        +'<div style="font-size:12px;color:#475569;margin-bottom:2px;">📌 '+esc(f.thema||'–')+'</div>'
+        +'<div style="font-size:11px;color:'+(overdue?'#dc2626':isHeute?'#d97706':'#94a3b8')+';">📅 '+fmtDate(f.dat)+(f.uhr?' · '+esc(f.uhr)+' Uhr':'')+(overdue?' – ÜBERFÄLLIG':'')+(isHeute?' – HEUTE':'')+'</div>'
+        +(f.notiz?'<div style="font-size:12px;color:#64748b;margin-top:6px;background:#f8fafc;border-radius:6px;padding:6px 8px;">'+esc(f.notiz)+'</div>':'')
+        +'</div>'
+        +'<div style="display:flex;gap:6px;flex-shrink:0;">'
+        +(waLink?'<a href="'+waLink+'" target="_blank" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f0fdf4;color:#16a34a;text-decoration:none;font-size:14px;">💬</a>':'')
+        +'<button onclick="toggleDone(\''+f.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:'+(f.done?'#f1f5f9':'#eff6ff')+';color:'+(f.done?'#64748b':'#2563eb')+';cursor:pointer;font-size:13px;">'+(f.done?'↩️':'✓')+'</button>'
+        +'<button onclick="openEdit(\''+f.id+'\',\'fu\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
+        +'<button onclick="deleteFu(\''+f.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
+        +'</div>'
+        +'</div>';
+    });
+  }
+  return kpiHtml + listHtml;
+}
+
+function renderInteressenten(ints) {
+  var qFilter = ((document.getElementById('int-filter')||{}).value||'');
+  var filtered = qFilter ? ints.filter(function(i){ return i.status===qFilter; }) : ints;
+
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px;">'
+    +INT_STATUS.map(function(s){
+      var cnt = ints.filter(function(i){ return i.status===s; }).length;
+      return '<div style="background:white;border-radius:10px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border-top:3px solid '+(INT_COLS[s]||'#64748b')+';">'
+        +'<div style="font-size:11px;color:#94a3b8;font-weight:700;text-transform:uppercase;">'+s+'</div>'
+        +'<div style="font-size:22px;font-weight:800;color:#0f172a;">'+cnt+'</div>'
+        +'</div>';
+    }).join('')
+    +'</div>';
+
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<select id="int-filter" onchange="render()" style="'+inputStyle+'max-width:180px;"><option value="">Alle Status</option>'
+    +INT_STATUS.map(function(s){ return '<option value="'+s+'"'+(qFilter===s?' selected':'')+'>'+s+'</option>'; }).join('')
+    +'</select></div>';
+
+  var listHtml = '';
+  if (!filtered.length) {
+    listHtml = emptyState('🔍','Keine Interessenten','Füge deinen ersten Interessenten hinzu','+ Interessent','openAdd(\'int\')');
+  } else {
+    listHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">';
+    filtered.forEach(function(i) {
+      var col = INT_COLS[i.status] || '#64748b';
+      var waLink = i.tel ? 'https://wa.me/'+i.tel.replace(/\D/g,'') : '';
+      var name = ((i.vn||'')+' '+(i.nn||'')).trim() || i.name || '–';
+      listHtml += '<div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-top:3px solid '+col+';">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+        +'<div>'
+        +'<div style="font-size:15px;font-weight:700;color:#0f172a;">'+esc(name)+'</div>'
+        +'<div style="font-size:12px;color:#64748b;">'+esc(i.email||'–')+'</div>'
+        +'</div>'
+        +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(i.status||'Neu')+'</span>'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Objekt/Wunsch</div><div style="font-size:12px;font-weight:600;color:#0f172a;">'+esc(i.objekt||'–')+'</div></div>'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Budget</div><div style="font-size:12px;font-weight:600;color:#0f172a;">'+(i.budget?fmt(i.budget)+' €/Mo':'–')+'</div></div>'
+        +'</div>'
+        +(i.notiz?'<div style="font-size:12px;color:#64748b;background:#f8fafc;border-radius:8px;padding:8px;margin-bottom:10px;">'+esc(i.notiz)+'</div>':'')
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'
+        +'<select onchange="changeIntStatus(\''+i.id+'\',this.value)" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;font-family:inherit;color:#475569;">'
+        +INT_STATUS.map(function(s){ return '<option value="'+s+'"'+(i.status===s?' selected':'')+'>'+s+'</option>'; }).join('')
+        +'</select>'
+        +(waLink?'<a href="'+waLink+'" target="_blank" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f0fdf4;color:#16a34a;text-decoration:none;font-size:14px;">💬</a>':'')
+        +'<button onclick="createFuFromInt(\''+i.id+'\')" style="padding:5px 10px;border-radius:8px;border:none;background:#fdf4ff;color:#7c3aed;font-size:11px;font-weight:700;cursor:pointer;">🎯 Follow-Up</button>'
+        +'<button onclick="openEdit(\''+i.id+'\',\'int\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
+        +'<button onclick="deleteInt(\''+i.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
+        +'</div></div>';
+    });
+    listHtml += '</div>';
+  }
+  return kpiHtml + filterHtml + listHtml;
+}
+
+function kpi(ico,l,v,s) {
+  return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
+    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div>'
+    +'<div style="font-size:26px;font-weight:800;color:#0f172a;">'+v+'</div>'
+    +(s?'<div style="font-size:12px;color:#64748b;">'+s+'</div>':'')
+    +'</div>';
+}
+
+function buildFuModal() {
   return '<div id="fu-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
     +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="fu-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Follow-Up erstellen</h3>'
-    +fg('Titel','fu-titel','text','z.B. Rückruf vereinbaren')
-    +fg('Kontakt / Person','fu-kontakt','text','Name des Kontakts')
+    +'<h3 id="fu-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Follow-Up hinzufügen</h3>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Typ</label><select id="fu-typ" style="'+inputStyle+'"><option>Anruf</option><option>Email</option><option>Besichtigung</option><option>Meeting</option><option>Sonstiges</option></select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Priorität</label><select id="fu-prior" style="'+inputStyle+'"><option>Normal</option><option>Hoch</option><option>Niedrig</option></select></div>'
+    +fg('Name *','fu-name','text','Max Mustermann')
+    +fg('Telefon','fu-tel','tel','+49 151...')
     +'</div>'
-    +fg('Fällig am','fu-faellig','date','')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="fu-status" style="'+inputStyle+'"><option>Offen</option><option>Erledigt</option><option>Verschoben</option></select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Notizen</label><textarea id="fu-notizen" style="'+inputStyle+'height:80px;resize:vertical;"></textarea></div>'
+    +fg('Firma / Objekt','fu-firma','text','z.B. Musterstr. 5')
+    +fg('Thema / Betreff','fu-thema','text','z.B. Besichtigung Rückruf')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Rückruf-Datum','fu-dat','date','')
+    +fg('Uhrzeit','fu-uhr','time','')
+    +'</div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Priorität')+'<select id="fu-prio" style="'+inputStyle+'"><option>Mittel</option><option>Hoch</option><option>Niedrig</option></select></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Notizen')+'<textarea id="fu-notiz" style="'+inputStyle+'height:70px;resize:vertical;"></textarea></div>'
     +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeFU()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveFU()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'<button onclick="closeFuModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveFu()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
     +'</div></div></div>';
 }
 
 function buildIntModal() {
   return '<div id="int-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="int-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Interessent</h3>'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:520px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="int-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Interessent hinzufügen</h3>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Vorname','int-vn','text','Max')+fg('Nachname','int-nn','text','Mustermann')
+    +fg('Vorname','int-vn','text','Max')
+    +fg('Nachname','int-nn','text','Mustermann')
     +'</div>'
-    +fg('Email','int-em','email','') +fg('Telefon','int-tel','tel','')
-    +fg('Gewünschtes Objekt','int-obj','text','')
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Budget (€/Mo)','int-budget','number','')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Pipeline-Stage</label><select id="int-stage" style="'+inputStyle+'">'+STAGES.map(function(s){ return '<option>'+s+'</option>'; }).join('')+'</select></div>'
+    +fg('Email','int-em','email','max@example.de')
+    +fg('Telefon','int-tel','tel','+49 151...')
     +'</div>'
+    +fg('Gewünschtes Objekt','int-obj','text','z.B. 3-Zimmer, Musterstr.')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
+    +fg('Budget (€/Mo)','int-budget','number','900')
+    +fg('Zimmer','int-zi','number','3')
+    +fg('m²','int-qm','number','70')
+    +'</div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Status')+'<select id="int-status" style="'+inputStyle+'">'
+    +INT_STATUS.map(function(s){ return '<option>'+s+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Notizen')+'<textarea id="int-notiz" style="'+inputStyle+'height:70px;resize:vertical;"></textarea></div>'
     +'<div style="display:flex;gap:10px;margin-top:18px;">'
     +'<button onclick="closeIntModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveIntModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'<button onclick="saveInt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
     +'</div></div></div>';
 }
 
-function openAdd() { editId=null; document.getElementById('fu-title').textContent='Follow-Up erstellen'; ['fu-titel','fu-kontakt','fu-notizen'].forEach(function(x){document.getElementById(x).value='';}); document.getElementById('fu-faellig').value=new Date().toISOString().slice(0,10); document.getElementById('fu-modal').style.display='flex'; }
-function editFU(id) {
-  var f=(appData.followups||[]).find(function(x){return x.id===id;}); if(!f) return; editId=id;
-  document.getElementById('fu-title').textContent='Follow-Up bearbeiten';
-  document.getElementById('fu-titel').value=f.titel||''; document.getElementById('fu-kontakt').value=f.kontakt||''; document.getElementById('fu-typ').value=f.typ||'Anruf'; document.getElementById('fu-prior').value=f.prioritaet||'Normal'; document.getElementById('fu-faellig').value=f.faellig||''; document.getElementById('fu-status').value=f.status||'Offen'; document.getElementById('fu-notizen').value=f.notizen||'';
-  document.getElementById('fu-modal').style.display='flex';
+function openAdd(type) {
+  editId = null; editType = type;
+  if (type === 'fu') {
+    document.getElementById('fu-title').textContent = 'Follow-Up hinzufügen';
+    ['fu-name','fu-tel','fu-firma','fu-thema','fu-uhr','fu-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
+    document.getElementById('fu-dat').value = today();
+    document.getElementById('fu-prio').value = 'Mittel';
+    document.getElementById('fu-modal').style.display = 'flex';
+  } else {
+    document.getElementById('int-title').textContent = 'Interessent hinzufügen';
+    ['int-vn','int-nn','int-em','int-tel','int-obj','int-budget','int-zi','int-qm','int-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
+    document.getElementById('int-status').value = 'Neu';
+    document.getElementById('int-modal').style.display = 'flex';
+  }
 }
-function closeFU() { document.getElementById('fu-modal').style.display='none'; }
-function saveFU() {
-  var titel=document.getElementById('fu-titel').value.trim(); if(!titel){alert('Titel eingeben.');return;}
-  var fu=appData.followups||[];
-  var obj={id:editId||gid(),titel:titel,kontakt:document.getElementById('fu-kontakt').value.trim(),typ:document.getElementById('fu-typ').value,prioritaet:document.getElementById('fu-prior').value,faellig:document.getElementById('fu-faellig').value,status:document.getElementById('fu-status').value,notizen:document.getElementById('fu-notizen').value.trim()};
-  if(editId){var idx=fu.findIndex(function(x){return x.id===editId;}); if(idx>=0) fu[idx]=obj;}else fu.unshift(obj);
-  appData.followups=fu; syncToFirebase(uid); closeFU(); render();
-}
-function toggleFU(id) { var f=(appData.followups||[]).find(function(x){return x.id===id;}); if(!f) return; f.status=f.status==='Erledigt'?'Offen':'Erledigt'; syncToFirebase(uid); render(); }
-function deleteFU(id) { if(!confirm('Follow-Up löschen?')) return; appData.followups=(appData.followups||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
 
-function openEditInt(id) {
-  editId=id||null;
-  var item=id?(appData.interessenten||[]).find(function(x){return x.id===id;}):null;
-  document.getElementById('int-title').textContent=item?'Interessent bearbeiten':'Interessent hinzufügen';
-  ['int-vn','int-nn','int-em','int-tel','int-obj','int-budget'].forEach(function(x){document.getElementById(x).value=item?item[x.replace('int-','')]||'':'';});
-  if(item) document.getElementById('int-stage').value=item.stage||'Lead';
-  document.getElementById('int-modal').style.display='flex';
+function openEdit(id, type) {
+  editId = id; editType = type;
+  if (type === 'fu') {
+    var f = getData(KEYS.followups, []).find(function(x){ return x.id===id; }); if (!f) return;
+    document.getElementById('fu-title').textContent = 'Follow-Up bearbeiten';
+    document.getElementById('fu-name').value = f.name||'';
+    document.getElementById('fu-tel').value = f.tel||'';
+    document.getElementById('fu-firma').value = f.firma||'';
+    document.getElementById('fu-thema').value = f.thema||'';
+    document.getElementById('fu-dat').value = f.dat||'';
+    document.getElementById('fu-uhr').value = f.uhr||'';
+    document.getElementById('fu-prio').value = f.prio||'Mittel';
+    document.getElementById('fu-notiz').value = f.notiz||'';
+    document.getElementById('fu-modal').style.display = 'flex';
+  } else {
+    var i = getData(KEYS.interessenten, []).find(function(x){ return x.id===id; }); if (!i) return;
+    document.getElementById('int-title').textContent = 'Interessent bearbeiten';
+    document.getElementById('int-vn').value = i.vn||'';
+    document.getElementById('int-nn').value = i.nn||'';
+    document.getElementById('int-em').value = i.email||'';
+    document.getElementById('int-tel').value = i.tel||'';
+    document.getElementById('int-obj').value = i.objekt||'';
+    document.getElementById('int-budget').value = i.budget||'';
+    document.getElementById('int-zi').value = i.zimmer||'';
+    document.getElementById('int-qm').value = i.qm||'';
+    document.getElementById('int-status').value = i.status||'Neu';
+    document.getElementById('int-notiz').value = i.notiz||'';
+    document.getElementById('int-modal').style.display = 'flex';
+  }
 }
+
+function closeFuModal() { document.getElementById('fu-modal').style.display='none'; }
 function closeIntModal() { document.getElementById('int-modal').style.display='none'; }
-function saveIntModal() {
-  var vn=document.getElementById('int-vn').value.trim(),nn=document.getElementById('int-nn').value.trim();
-  if(!vn&&!nn){alert('Namen eingeben.');return;}
-  var ints=appData.interessenten||[];
-  var obj={id:editId||gid(),vn:vn,nn:nn,email:document.getElementById('int-em').value.trim(),tel:document.getElementById('int-tel').value.trim(),objekt:document.getElementById('int-obj').value.trim(),budget:document.getElementById('int-budget').value,stage:document.getElementById('int-stage').value,status:'Neu'};
-  if(editId){var idx=ints.findIndex(function(x){return x.id===editId;}); if(idx>=0) ints[idx]=obj;}else ints.unshift(obj);
-  appData.interessenten=ints; syncToFirebase(uid); closeIntModal(); render();
+
+function saveFu() {
+  var name = document.getElementById('fu-name').value.trim();
+  if (!name) { alert('Bitte Namen eingeben.'); return; }
+  var list = getData(KEYS.followups, []);
+  var obj = { id: editId||gid(), name: name, tel: document.getElementById('fu-tel').value.trim(),
+    firma: document.getElementById('fu-firma').value.trim(), thema: document.getElementById('fu-thema').value.trim(),
+    dat: document.getElementById('fu-dat').value, uhr: document.getElementById('fu-uhr').value,
+    prio: document.getElementById('fu-prio').value, notiz: document.getElementById('fu-notiz').value.trim(), done: false };
+  if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0){obj.done=list[idx].done;list[idx]=obj;} } else list.unshift(obj);
+  setData(KEYS.followups, list); syncToFirebase(uid); closeFuModal(); render();
 }
+
+function saveInt() {
+  var vn = document.getElementById('int-vn').value.trim();
+  var nn = document.getElementById('int-nn').value.trim();
+  if (!vn && !nn) { alert('Bitte Namen eingeben.'); return; }
+  var list = getData(KEYS.interessenten, []);
+  var obj = { id: editId||gid(), vn: vn, nn: nn, email: document.getElementById('int-em').value.trim(),
+    tel: document.getElementById('int-tel').value.trim(), objekt: document.getElementById('int-obj').value.trim(),
+    budget: document.getElementById('int-budget').value, zimmer: document.getElementById('int-zi').value,
+    qm: document.getElementById('int-qm').value, status: document.getElementById('int-status').value,
+    notiz: document.getElementById('int-notiz').value.trim() };
+  if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0) list[idx]=obj; } else list.unshift(obj);
+  setData(KEYS.interessenten, list); syncToFirebase(uid); closeIntModal(); render();
+}
+
+function toggleDone(id) {
+  var list = getData(KEYS.followups, []);
+  var item = list.find(function(x){ return x.id===id; }); if (!item) return;
+  item.done = !item.done;
+  setData(KEYS.followups, list); syncToFirebase(uid); render();
+}
+
+function changeIntStatus(id, status) {
+  var list = getData(KEYS.interessenten, []);
+  var item = list.find(function(x){ return x.id===id; }); if (!item) return;
+  item.status = status;
+  setData(KEYS.interessenten, list); syncToFirebase(uid); render();
+}
+
+function createFuFromInt(id) {
+  var i = getData(KEYS.interessenten, []).find(function(x){ return x.id===id; }); if (!i) return;
+  activeTab = 'followup';
+  render();
+  setTimeout(function(){
+    openAdd('fu');
+    var name = ((i.vn||'')+' '+(i.nn||'')).trim();
+    document.getElementById('fu-name').value = name;
+    document.getElementById('fu-tel').value = i.tel||'';
+    document.getElementById('fu-thema').value = 'Interessent: '+( i.objekt||'Objekt unbekannt');
+    document.getElementById('fu-prio').value = 'Hoch';
+  }, 100);
+}
+
+function deleteFu(id) { if(!confirm('Follow-Up löschen?')) return; setData(KEYS.followups, getData(KEYS.followups,[]).filter(function(x){return x.id!==id;})); syncToFirebase(uid); render(); }
+function deleteInt(id) { if(!confirm('Interessent löschen?')) return; setData(KEYS.interessenten, getData(KEYS.interessenten,[]).filter(function(x){return x.id!==id;})); syncToFirebase(uid); render(); }
 
 initFirebase();
-loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.followups) appData.followups=[]; if(!appData.interessenten) appData.interessenten=[]; render(); });
+loadFromFirebase(uid, function(){ render(); });
 </script>
 </body>
 </html>

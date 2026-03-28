@@ -14,162 +14,442 @@
 <script>
 checkAuth(); checkTrial();
 var user = getUser(); var uid = user.uid;
-var appData = {}; var editId = null; var activeTab = 'dokumente'; var activeFolder = '';
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
-var KATEGORIEN = ['Mietverträge','Übergabeprotokolle','Abrechnungen','Korrespondenz','Grundrisse','Sonstiges'];
-var TYPEN = {PDF:'📄',Excel:'📊',Word:'📝',Bild:'🖼️',Sonstiges:'📁'};
-var VORLAGEN = [
-  {name:'Mietvertrag (Standard)',desc:'Vollständiger Mietvertrag für Wohnraum'},
-  {name:'Übergabeprotokoll',desc:'Wohnungsübergabe bei Ein- und Auszug'},
-  {name:'Nebenkostenabrechnung',desc:'Jährliche Betriebskostenabrechnung'},
-  {name:'Mieterhöhungsschreiben',desc:'Ankündigung einer Mieterhöhung'},
-  {name:'Kündigung durch Vermieter',desc:'Ordentliche Kündigung des Mietvertrags'},
-  {name:'Kündigung durch Mieter',desc:'Vorlage für Mieter-Kündigung'},
-  {name:'Mahnung (1. Stufe)',desc:'Erste freundliche Zahlungserinnerung'},
-  {name:'Mahnung (2. Stufe)',desc:'Letzte Mahnung vor weiteren Schritten'},
-  {name:'Hausordnung',desc:'Standard-Hausordnung für Mietobjekte'},
-  {name:'Vollmacht',desc:'Allgemeine Vollmacht für Verwaltungsaufgaben'}
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
+
+var TEMPLATES = [
+  {
+    id: 'mietvertrag',
+    ico: '📄',
+    titel: 'Mietvertrag',
+    kat: 'Verträge',
+    desc: 'Standardmietvertrag für Wohnraum mit allen gesetzlichen Klauseln',
+    felder: ['name','wn','kaltmiete','nebenkosten','beginn','kaution'],
+    html: function(d) {
+      var m = d.mieter || {};
+      return '<h2 style="text-align:center;margin-bottom:4px;">MIETVERTRAG</h2>'
+        +'<p style="text-align:center;color:#64748b;margin-bottom:24px;">für Wohnraum gemäß §§ 535 ff. BGB</p>'
+        +'<h3>§ 1 Vertragsparteien</h3>'
+        +'<p><strong>Vermieter:</strong> '+esc(user.firma||user.name)+', '+esc(user.email)+'</p>'
+        +'<p><strong>Mieter:</strong> '+esc(m.name||d.name||'[Name des Mieters]')+'</p>'
+        +'<h3>§ 2 Mietobjekt</h3>'
+        +'<p>Vermietet wird die Wohnung: <strong>'+esc(m.wn||d.wn||'[Wohnung]')+'</strong></p>'
+        +'<p>Adresse: '+esc(m.adr||'[Adresse]')+'</p>'
+        +'<h3>§ 3 Mietdauer</h3>'
+        +'<p>Das Mietverhältnis beginnt am <strong>'+fmtDate(m.einzug||d.beginn||today())+'</strong> und wird auf unbestimmte Zeit geschlossen.</p>'
+        +'<p>Die Kündigungsfrist beträgt 3 Monate zum Monatsende gemäß § 573c BGB.</p>'
+        +'<h3>§ 4 Miete</h3>'
+        +'<p>Kaltmiete: <strong>'+(m.miete||d.kaltmiete||'[Betrag]')+' €</strong><br>'
+        +'Nebenkosten: <strong>'+(m.nk||d.nebenkosten||'[Betrag]')+' €</strong><br>'
+        +'<strong>Gesamtmiete: '+((parseFloat(m.miete||d.kaltmiete||0)+parseFloat(m.nk||d.nebenkosten||0))||'[Gesamt]')+' €</strong></p>'
+        +'<p>Die Miete ist monatlich im Voraus, spätestens am 3. Werktag des Monats zu entrichten.</p>'
+        +'<h3>§ 5 Kaution</h3>'
+        +'<p>Die Mietsicherheit beträgt <strong>'+(m.kaution||d.kaution||'[Betrag]')+' €</strong> (max. 3 Monatsnettomieten).<br>'
+        +'Die Kaution ist bei Übergabe in bar oder per Überweisung zu leisten.</p>'
+        +'<h3>§ 6 Hausordnung</h3>'
+        +'<p>Der Mieter verpflichtet sich zur Einhaltung der Hausordnung. Ruhezeiten: 22:00 – 06:00 Uhr und 13:00 – 15:00 Uhr.</p>'
+        +'<h3>§ 7 Untervermietung</h3>'
+        +'<p>Eine Untervermietung bedarf der vorherigen schriftlichen Zustimmung des Vermieters.</p>'
+        +'<h3>§ 8 Schönheitsreparaturen</h3>'
+        +'<p>Der Mieter führt Schönheitsreparaturen in angemessenen Abständen durch (Küche/Bad: 3 Jahre; Wohn-/Schlafräume: 5 Jahre; sonstige Räume: 7 Jahre).</p>'
+        +'<h3>§ 9 Sonstiges</h3>'
+        +'<p>Änderungen und Ergänzungen dieses Vertrages bedürfen der Schriftform. Mündliche Nebenabreden bestehen nicht.</p>'
+        +'<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px;">'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Vermieter, Datum</p></div>'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Mieter, Datum</p></div>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'mietbestaetigung',
+    ico: '✉️',
+    titel: 'Mietbestätigung',
+    kat: 'Briefe',
+    desc: 'Offizielle Mietbestätigung für Behörden und Ämter',
+    felder: ['name','wn','beginn'],
+    html: function(d) {
+      var m = d.mieter || {};
+      return '<p style="text-align:right;">'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'<br>'+fmtDate(today())+'</p>'
+        +'<br><p><strong>MIETBESTÄTIGUNG</strong></p>'
+        +'<p>Hiermit bestätigen wir, dass</p>'
+        +'<p><strong>'+esc(m.name||d.name||'[Name]')+'</strong></p>'
+        +'<p>seit dem <strong>'+fmtDate(m.einzug||d.beginn||'[Datum]')+'</strong> die Wohnung</p>'
+        +'<p><strong>'+esc(m.wn||d.wn||'[Wohnung]')+'</strong></p>'
+        +'<p>als Hauptwohnsitz bewohnt und Mieter/in ist.</p>'
+        +'<p>Die monatliche Gesamtmiete beträgt <strong>'+(m.miete?m.miete+' €':'[Betrag]')+'</strong> (Kaltmiete zzgl. Nebenkosten).</p>'
+        +'<br><p>Diese Bestätigung wird auf Anfrage des Mieters ausgestellt und dient als Nachweis gegenüber Behörden.</p>'
+        +'<div style="margin-top:40px;">'
+        +'<p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;display:inline-block;min-width:200px;">Vermieter, Datum</p>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'abmahnung',
+    ico: '⚠️',
+    titel: 'Abmahnung',
+    kat: 'Mahnwesen',
+    desc: 'Formelle Abmahnung bei Vertragsverletzungen',
+    felder: ['name','wn','grund'],
+    html: function(d) {
+      var m = d.mieter || {};
+      return '<p style="text-align:right;">'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'<br>'+fmtDate(today())+'</p>'
+        +'<p><strong>'+esc(m.name||d.name||'[Name]')+'</strong><br>'+esc(m.wn||d.wn||'[Wohnung]')+'</p>'
+        +'<br><p><strong>ABMAHNUNG</strong></p>'
+        +'<p>Sehr geehrte/r '+esc(m.name||d.name||'[Name]')+',</p>'
+        +'<p>hiermit mahnen wir Sie wegen folgenden Verstoßes gegen Ihre vertraglichen Pflichten ab:</p>'
+        +'<p style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px;border-radius:0 8px 8px 0;"><strong>'+(d.grund||'[Beschreibung des Verstoßes]')+'</strong></p>'
+        +'<p>Wir fordern Sie auf, diesen Verstoß unverzüglich zu unterlassen und zukünftig Ihre Mieterpflichten gemäß Mietvertrag vom '+fmtDate(m.einzug||'[Datum]')+' zu erfüllen.</p>'
+        +'<p>Bei wiederholten Verstößen behalten wir uns vor, das Mietverhältnis außerordentlich zu kündigen (§ 543 BGB).</p>'
+        +'<p>Wir bitten um schriftliche Stellungnahme bis zum <strong>'+fmtDate(new Date(Date.now()+14*86400000).toISOString().slice(0,10))+'</strong>.</p>'
+        +'<br><p>Mit freundlichen Grüßen,</p>'
+        +'<p>'+esc(user.firma||user.name)+'</p>'
+        +'<div style="margin-top:40px;">'
+        +'<p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;display:inline-block;min-width:200px;">Vermieter, Datum</p>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'kuendigung',
+    ico: '📮',
+    titel: 'Kündigung (Mieter)',
+    kat: 'Mahnwesen',
+    desc: 'Kündigungsschreiben des Mieters entgegennehmen / bestätigen',
+    felder: ['name','wn','kuendigung'],
+    html: function(d) {
+      var m = d.mieter || {};
+      var kDat = d.kuendigung || m.kuendigung || today();
+      var endDat = new Date(new Date(kDat).getTime() + 90*86400000).toISOString().slice(0,10);
+      return '<p style="text-align:right;">'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'<br>'+fmtDate(today())+'</p>'
+        +'<p><strong>'+esc(m.name||d.name||'[Name]')+'</strong><br>'+esc(m.wn||d.wn||'[Wohnung]')+'</p>'
+        +'<br><p><strong>BESTÄTIGUNG DER KÜNDIGUNG</strong></p>'
+        +'<p>Sehr geehrte/r '+esc(m.name||d.name||'[Name]')+',</p>'
+        +'<p>wir bestätigen den Eingang Ihrer Kündigung vom <strong>'+fmtDate(kDat)+'</strong>.</p>'
+        +'<p>Das Mietverhältnis über die Wohnung <strong>'+esc(m.wn||d.wn||'[Wohnung]')+'</strong> endet unter Einhaltung der dreimonatigen Kündigungsfrist am <strong>'+fmtDate(endDat)+'</strong>.</p>'
+        +'<p>Bitte beachten Sie:</p>'
+        +'<ul><li>Die Wohnung ist bis zum letzten Tag besenrein zu übergeben.</li>'
+        +'<li>Alle Schlüssel (Wohnungsschlüssel, Briefkastenschlüssel, etc.) sind bei Übergabe zurückzugeben.</li>'
+        +'<li>Schönheitsreparaturen gemäß Mietvertrag sind vor Auszug durchzuführen.</li>'
+        +'<li>Die Kaution wird nach ordnungsgemäßer Wohnungsübergabe zurückgezahlt.</li></ul>'
+        +'<p>Bitte vereinbaren Sie rechtzeitig einen Übergabetermin.</p>'
+        +'<br><p>Mit freundlichen Grüßen,</p>'
+        +'<p>'+esc(user.firma||user.name)+'</p>'
+        +'<div style="margin-top:40px;">'
+        +'<p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;display:inline-block;min-width:200px;">Vermieter, Datum</p>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'nebenkostenabrechnung',
+    ico: '🧾',
+    titel: 'Nebenkostenabrechnung',
+    kat: 'Finanzen',
+    desc: 'Jährliche Betriebskostenabrechnung für Mieter',
+    felder: ['name','wn','jahr'],
+    html: function(d) {
+      var m = d.mieter || {};
+      var jahr = d.jahr || new Date().getFullYear()-1;
+      var gezahlt = parseFloat(m.nk||d.nk||'0') * 12;
+      return '<h2 style="text-align:center;">NEBENKOSTENABRECHNUNG '+jahr+'</h2>'
+        +'<p style="text-align:center;color:#64748b;margin-bottom:20px;">Wohnung: '+esc(m.wn||d.wn||'[Wohnung]')+'  ·  Mieter: '+esc(m.name||d.name||'[Name]')+'</p>'
+        +'<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">'
+        +'<thead><tr style="background:#f1f5f9;"><th style="text-align:left;padding:10px;">Kostenart</th><th style="text-align:right;padding:10px;">Gesamt</th><th style="text-align:right;padding:10px;">Ihr Anteil</th></tr></thead>'
+        +'<tbody>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px;">Grundsteuer</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px;">Wasser/Abwasser</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px;">Heizung</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px;">Müllentsorgung</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px;">Hausmeister/Reinigung</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px;">Versicherungen</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr style="border-bottom:2px solid #0f172a;font-weight:700;background:#f8fafc;"><td style="padding:10px;">Tatsächliche Nebenkosten '+jahr+'</td><td style="text-align:right;padding:10px;">[Gesamt €]</td><td style="text-align:right;padding:10px;">[Anteil €]</td></tr>'
+        +'<tr><td style="padding:10px;">Bereits geleistete Vorauszahlungen</td><td></td><td style="text-align:right;padding:10px;">- '+fmt(Math.round(gezahlt))+' €</td></tr>'
+        +'<tr style="font-weight:700;background:'+(gezahlt>0?'#f0fdf4':'#fef2f2')+';"><td style="padding:10px;">Ergebnis</td><td></td><td style="text-align:right;padding:10px;">[Nachzahlung/Guthaben]</td></tr>'
+        +'</tbody></table>'
+        +'<p style="font-size:12px;color:#64748b;">Abrechungszeitraum: 01.01.'+jahr+' – 31.12.'+jahr+' · Umlageschlüssel: Wohnfläche/Personenanzahl</p>'
+        +'<p style="font-size:12px;color:#64748b;">Einspruchsfrist: 12 Monate ab Erhalt dieser Abrechnung (§ 556 BGB)</p>'
+        +'<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px;">'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Vermieter, Datum</p></div>'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Empfang bestätigt, Datum</p></div>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'mieterhöhung',
+    ico: '📈',
+    titel: 'Mieterhöhung',
+    kat: 'Finanzen',
+    desc: 'Ankündigung einer Mieterhöhung nach § 558 BGB',
+    felder: ['name','wn','neuemiete'],
+    html: function(d) {
+      var m = d.mieter || {};
+      var altMiete = parseFloat(m.miete||0);
+      var neuMiete = parseFloat(d.neuemiete||m.miete||0);
+      var diff = (neuMiete-altMiete).toFixed(2);
+      var pct = altMiete ? ((neuMiete-altMiete)/altMiete*100).toFixed(1) : '–';
+      var in2Mon = new Date(Date.now()+62*86400000).toISOString().slice(0,10);
+      return '<p style="text-align:right;">'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'<br>'+fmtDate(today())+'</p>'
+        +'<p><strong>'+esc(m.name||d.name||'[Name]')+'</strong><br>'+esc(m.wn||d.wn||'[Wohnung]')+'</p>'
+        +'<br><p><strong>ANKÜNDIGUNG EINER MIETERHÖHUNG</strong></p>'
+        +'<p>Sehr geehrte/r '+esc(m.name||d.name||'[Name]')+',</p>'
+        +'<p>gemäß § 558 BGB beabsichtigen wir, die Miete für Ihre Wohnung wie folgt anzupassen:</p>'
+        +'<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
+        +'<tr style="background:#f8fafc;"><td style="padding:10px;font-weight:600;">Bisherige Kaltmiete:</td><td style="padding:10px;text-align:right;">'+fmt(altMiete)+' €</td></tr>'
+        +'<tr style="background:white;"><td style="padding:10px;font-weight:600;">Neue Kaltmiete:</td><td style="padding:10px;text-align:right;font-weight:700;color:#2563eb;">'+fmt(neuMiete)+' €</td></tr>'
+        +'<tr style="background:#eff6ff;"><td style="padding:10px;font-weight:600;">Erhöhungsbetrag:</td><td style="padding:10px;text-align:right;color:#dc2626;">+ '+diff+' € ('+pct+' %)</td></tr>'
+        +'</table>'
+        +'<p>Die neue Miete gilt ab dem <strong>'+fmtDate(in2Mon)+'</strong>.</p>'
+        +'<p>Die Mieterhöhung entspricht der ortsüblichen Vergleichsmiete gemäß dem aktuellen Mietspiegel. Die Kappungsgrenze von 20 % innerhalb von 3 Jahren wird eingehalten.</p>'
+        +'<p>Sie haben das Recht, der Mieterhöhung bis zum Ende des übernächsten Monats zuzustimmen. Stimmen Sie nicht zu, können wir innerhalb von 3 Monaten Klage erheben (§ 558b BGB).</p>'
+        +'<br><p>Mit freundlichen Grüßen,</p>'
+        +'<p>'+esc(user.firma||user.name)+'</p>'
+        +'<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px;">'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Vermieter, Datum</p></div>'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Zustimmung Mieter, Datum</p></div>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'zahlungserinnerung',
+    ico: '💳',
+    titel: 'Zahlungserinnerung',
+    kat: 'Mahnwesen',
+    desc: 'Höfliche Zahlungserinnerung bei Mietrückstand',
+    felder: ['name','wn','betrag'],
+    html: function(d) {
+      var m = d.mieter || {};
+      return '<p style="text-align:right;">'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'<br>'+fmtDate(today())+'</p>'
+        +'<p><strong>'+esc(m.name||d.name||'[Name]')+'</strong><br>'+esc(m.wn||d.wn||'[Wohnung]')+'</p>'
+        +'<br><p><strong>ZAHLUNGSERINNERUNG</strong></p>'
+        +'<p>Sehr geehrte/r '+esc(m.name||d.name||'[Name]')+',</p>'
+        +'<p>leider mussten wir feststellen, dass die fällige Miete für den laufenden Monat noch nicht auf unserem Konto eingegangen ist.</p>'
+        +'<p>Ausstehender Betrag: <strong>'+(d.betrag||m.miete||'[Betrag]')+' €</strong></p>'
+        +'<p>Wir bitten Sie, den Betrag bis spätestens <strong>'+fmtDate(new Date(Date.now()+7*86400000).toISOString().slice(0,10))+'</strong> zu überweisen.</p>'
+        +'<p>Bankverbindung:<br>Kontoinhaber: '+esc(user.firma||user.name)+'<br>IBAN: [Ihre IBAN]<br>BIC: [Ihre BIC]<br>Verwendungszweck: Miete '+esc(m.wn||'[Wohnung]')+' '+new Date().toLocaleDateString('de-DE',{month:'long',year:'numeric'})+'</p>'
+        +'<p>Sollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.</p>'
+        +'<br><p>Mit freundlichen Grüßen,</p>'
+        +'<p>'+esc(user.firma||user.name)+'</p>';
+    }
+  },
+  {
+    id: 'wohnungsuebergabe',
+    ico: '🔑',
+    titel: 'Wohnungsübergabe',
+    kat: 'Übergabe',
+    desc: 'Übergabeprotokoll für Ein- und Auszug',
+    felder: ['name','wn'],
+    html: function(d) {
+      var m = d.mieter || {};
+      var rooms = ['Flur','Wohnzimmer','Schlafzimmer','Küche','Bad','Keller'];
+      return '<h2 style="text-align:center;">WOHNUNGSÜBERGABEPROTOKOLL</h2>'
+        +'<p style="text-align:center;color:#64748b;margin-bottom:20px;">Datum: '+fmtDate(today())+'</p>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:12px;"><strong>Vermieter:</strong><br>'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'</div>'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:12px;"><strong>Mieter:</strong><br>'+esc(m.name||d.name||'[Name]')+'<br>Wohnung: '+esc(m.wn||d.wn||'[Wohnung]')+'</div>'
+        +'</div>'
+        +'<h3>Schlüssel</h3>'
+        +'<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">'
+        +'<tr style="background:#f8fafc;"><th style="text-align:left;padding:8px;">Schlüsselart</th><th style="text-align:center;padding:8px;">Anzahl übergeben</th><th style="text-align:center;padding:8px;">Anzahl zurück</th></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px;">Wohnungsschlüssel</td><td style="text-align:center;padding:8px;">___</td><td style="text-align:center;padding:8px;">___</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px;">Briefkastenschlüssel</td><td style="text-align:center;padding:8px;">___</td><td style="text-align:center;padding:8px;">___</td></tr>'
+        +'<tr><td style="padding:8px;">Keller-/Garagenschlüssel</td><td style="text-align:center;padding:8px;">___</td><td style="text-align:center;padding:8px;">___</td></tr>'
+        +'</table>'
+        +'<h3>Raumzustand</h3>'
+        +'<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">'
+        +'<tr style="background:#f8fafc;"><th style="text-align:left;padding:8px;">Raum</th><th style="text-align:center;padding:8px;">Zustand</th><th style="text-align:left;padding:8px;">Mängel / Bemerkungen</th></tr>'
+        +rooms.map(function(r){ return '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px;">'+r+'</td><td style="text-align:center;padding:8px;">☐ gut  ☐ mittel  ☐ schlecht</td><td style="padding:8px;min-width:200px;">__________________</td></tr>'; }).join('')
+        +'</table>'
+        +'<h3>Zählerstände bei Übergabe</h3>'
+        +'<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">'
+        +'<tr style="background:#f8fafc;"><th style="text-align:left;padding:8px;">Zähler</th><th style="text-align:left;padding:8px;">Stand</th><th style="text-align:left;padding:8px;">Zählernummer</th></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px;">Strom (kWh)</td><td style="padding:8px;">__________</td><td style="padding:8px;">__________</td></tr>'
+        +'<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px;">Wasser kalt (m³)</td><td style="padding:8px;">__________</td><td style="padding:8px;">__________</td></tr>'
+        +'<tr><td style="padding:8px;">Gas (m³)</td><td style="padding:8px;">__________</td><td style="padding:8px;">__________</td></tr>'
+        +'</table>'
+        +'<h3>Besondere Feststellungen</h3>'
+        +'<div style="border:1px solid #e2e8f0;border-radius:8px;min-height:80px;padding:12px;margin-bottom:20px;">&nbsp;</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;">'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Vermieter, Datum</p></div>'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Mieter, Datum</p></div>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'handwerkerauftrag',
+    ico: '🔧',
+    titel: 'Handwerkerauftrag',
+    kat: 'Aufträge',
+    desc: 'Beauftragung eines Handwerkers für Reparaturarbeiten',
+    felder: ['hw','leistung','wn'],
+    html: function(d) {
+      var hw = getData(KEYS.handwerker, [])[0] || {};
+      var hwName = d.hw || (hw.vn?hw.vn+' '+hw.nn:'[Handwerkername]');
+      return '<p style="text-align:right;">'+esc(user.firma||user.name)+'<br>'+esc(user.email)+'<br>'+fmtDate(today())+'</p>'
+        +'<br><p><strong>HANDWERKERAUFTRAG</strong></p>'
+        +'<p>Sehr geehrte Damen und Herren,</p>'
+        +'<p>wir beauftragen Sie hiermit mit folgenden Leistungen:</p>'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:16px;margin:16px 0;">'
+        +'<p><strong>Auftragnehmer:</strong> '+esc(hwName)+'</p>'
+        +'<p><strong>Ausführungsort:</strong> '+esc(d.wn||'[Wohnung/Adresse]')+'</p>'
+        +'<p><strong>Beschreibung der Arbeiten:</strong><br>'+(d.leistung||'[Beschreibung der Arbeiten]')+'</p>'
+        +'<p><strong>Gewünschter Ausführungstermin:</strong> [Datum]</p>'
+        +'</div>'
+        +'<p>Bitte beachten Sie folgende Hinweise:</p>'
+        +'<ul><li>Die Arbeiten sind fachgerecht und nach den anerkannten Regeln der Technik auszuführen.</li>'
+        +'<li>Über die Arbeiten ist ein Protokoll zu führen.</li>'
+        +'<li>Die Rechnung ist nach Abschluss der Arbeiten einzureichen.</li>'
+        +'<li>Bei Mehrkosten ist vorher Rücksprache zu nehmen.</li></ul>'
+        +'<p>Mit freundlichen Grüßen,<br>'+esc(user.firma||user.name)+'</p>'
+        +'<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px;">'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Auftraggeber, Datum</p></div>'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Auftragnehmer, Datum</p></div>'
+        +'</div>';
+    }
+  },
+  {
+    id: 'hausordnung',
+    ico: '📋',
+    titel: 'Hausordnung',
+    kat: 'Verträge',
+    desc: 'Allgemeine Hausordnung für Mieter und Bewohner',
+    felder: [],
+    html: function(d) {
+      return '<h2 style="text-align:center;">HAUSORDNUNG</h2>'
+        +'<p style="text-align:center;color:#64748b;margin-bottom:24px;">'+esc(user.firma||user.name)+'</p>'
+        +'<h3>§ 1 Ruhezeiten</h3>'
+        +'<p>Die allgemeinen Ruhezeiten sind täglich von 22:00 bis 06:00 Uhr sowie 13:00 bis 15:00 Uhr einzuhalten. Besondere Ruhezeiten gelten an Sonn- und Feiertagen (ganztägig).</p>'
+        +'<h3>§ 2 Treppenhausreinigung</h3>'
+        +'<p>Die Reinigung des Treppenhauses, der Eingangsbereiche und der Gemeinschaftsflächen erfolgt nach dem ausgehängten Reinigungsplan. Alle Mieter sind zur Beteiligung verpflichtet.</p>'
+        +'<h3>§ 3 Müllentsorgung</h3>'
+        +'<p>Müll ist in die dafür vorgesehenen Tonnen zu entsorgen. Die Tonnen sind werktags bis 06:00 Uhr und spätestens abends nach der Leerung zurückzustellen. Sperrmüll ist nur zu den offiziellen Abholzeiten bereitzustellen.</p>'
+        +'<h3>§ 4 Gemeinschaftsanlagen</h3>'
+        +'<p>Keller, Waschküche, Fahrradkeller und sonstige Gemeinschaftsräume sind nach Benutzung ordentlich zu hinterlassen. Waschzeiten sind zu reservieren und einzuhalten.</p>'
+        +'<h3>§ 5 Sicherheit</h3>'
+        +'<p>Hausein- und ausgangstüren sind stets zu verschließen. Fenster und Türen sind bei Sturm und Unwetter zu schließen. Das Abstellen von Fahrrädern und Kinderwagen im Treppenhaus ist aus Sicherheitsgründen nicht gestattet.</p>'
+        +'<h3>§ 6 Haustiere</h3>'
+        +'<p>Das Halten von Haustieren bedarf der schriftlichen Genehmigung des Vermieters. Haustiere sind in Gemeinschaftsbereichen stets anzuleinen.</p>'
+        +'<h3>§ 7 Veranstaltungen</h3>'
+        +'<p>Feiern und Veranstaltungen sind dem Vermieter rechtzeitig anzukündigen. Nach 22:00 Uhr ist die Lautstärke so zu reduzieren, dass Mitbewohner nicht gestört werden.</p>'
+        +'<h3>§ 8 Verstöße</h3>'
+        +'<p>Verstöße gegen die Hausordnung berechtigen den Vermieter zu einer Abmahnung. Bei wiederholten Verstößen kann dies zur Kündigung des Mietverhältnisses führen.</p>'
+        +'<br><p style="font-size:12px;color:#64748b;">Stand: '+fmtDate(today())+' · Diese Hausordnung ist Bestandteil des Mietvertrages.</p>'
+        +'<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px;">'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Vermieter, Datum</p></div>'
+        +'<div><p style="border-top:1px solid #0f172a;padding-top:8px;margin-top:50px;">Mieter (Empfang bestätigt), Datum</p></div>'
+        +'</div>';
+    }
+  }
 ];
-function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
-function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
-function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+var cats = ['Alle','Verträge','Briefe','Mahnwesen','Finanzen','Übergabe','Aufträge'];
 
 function render() {
-  var docs = appData.dokumente || [];
+  var qCat = ((document.getElementById('f-cat')||{}).value)||'Alle';
   var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
-  var qKat = (document.getElementById('f-kat')||{}).value||'';
+  var mieter = getData(KEYS.mieter, []);
+  var firstMieter = mieter[0] || {};
 
-  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">'
-    +kpi('📁','Gesamt Dokumente',docs.length,'')
-    +kpi('📄','Vorlagen',VORLAGEN.length,'Bereit zur Verwendung')
-    +kpi('🕐','Zuletzt hinzugefügt',docs.length?fmtDate(docs[0].datum):'–','')
+  var filtered = TEMPLATES.filter(function(t) {
+    if (qCat !== 'Alle' && t.kat !== qCat) return false;
+    if (qQ && !(t.titel+t.kat+t.desc+'').toLowerCase().includes(qQ)) return false;
+    return true;
+  });
+
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">'
+    +kpi('📄','Vorlagen',TEMPLATES.length,'')
+    +kpi('👥','Mieter',mieter.length,'für Auto-Ausfüllung')
+    +kpi('📁','Kategorien',cats.length-1,'')
     +'</div>';
 
-  var tabsHtml = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
-    +'<button onclick="switchTab(\'dokumente\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab==='dokumente'?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">📁 Meine Dokumente</button>'
-    +'<button onclick="switchTab(\'vorlagen\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab==='vorlagen'?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">📝 Vorlagen</button>'
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Vorlage suchen..." style="'+inputStyle+'max-width:220px;">'
+    +'<select id="f-cat" onchange="render()" style="'+inputStyle+'max-width:180px;">'
+    +cats.map(function(c){ return '<option value="'+c+'"'+(qCat===c?' selected':'')+'>'+c+'</option>'; }).join('')
+    +'</select>'
     +'</div>';
 
-  var content = '';
-  if (activeTab === 'dokumente') {
-    var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
-      +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Dokument suchen..." style="'+inputStyle+'max-width:220px;">'
-      +'<select id="f-kat" onchange="render()" style="'+inputStyle+'max-width:180px;"><option value="">Alle Kategorien</option>'+KATEGORIEN.map(function(k){ return '<option value="'+k+'"'+(qKat===k?' selected':'')+'>'+k+'</option>'; }).join('')+'</select>'
-      +'</div>';
-
-    // Folder view
-    var folderHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">';
-    KATEGORIEN.forEach(function(kat) {
-      var cnt = docs.filter(function(d){ return d.kategorie===kat; }).length;
-      var isActive = activeFolder === kat;
-      folderHtml += '<div onclick="setFolder(\''+kat+'\')" style="background:'+(isActive?'#eff6ff':' white')+';border:2px solid '+(isActive?'#2563eb':'#e2e8f0')+';border-radius:14px;padding:16px 12px;cursor:pointer;text-align:center;transition:all 0.15s;">'
-        +'<div style="font-size:32px;margin-bottom:8px;">📁</div>'
-        +'<div style="font-size:12px;font-weight:700;color:'+(isActive?'#2563eb':'#0f172a')+';">'+esc(kat)+'</div>'
-        +'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">'+cnt+' Dokument'+(cnt!==1?'e':'')+'</div>'
-        +'</div>';
-    });
-    folderHtml += '</div>';
-
-    var filtered = docs.filter(function(d){
-      if (activeFolder && d.kategorie!==activeFolder) return false;
-      if (qKat && d.kategorie!==qKat) return false;
-      if (qQ && !(d.name+d.kategorie+d.objekt+'').toLowerCase().includes(qQ)) return false;
-      return true;
-    });
-
-    var listHtml = '';
-    if (!filtered.length && !activeFolder) {
-      listHtml = emptyState('📁','Keine Dokumente','Füge dein erstes Dokument hinzu','+ Dokument hinzufügen','openAdd()');
-    } else if (!filtered.length) {
-      listHtml = '<div style="text-align:center;padding:32px;color:#94a3b8;font-size:14px;">Keine Dokumente in dieser Kategorie</div>';
-    } else {
-      listHtml = '<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
-        +'<div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:grid;grid-template-columns:1fr auto auto auto auto;gap:12px;align-items:center;">'
-        +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Dateiname</div>'
-        +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Kategorie</div>'
-        +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Datum</div>'
-        +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Typ</div>'
-        +'<div></div></div>';
-      filtered.forEach(function(d) {
-        var ico = TYPEN[d.dateityp]||'📁';
-        listHtml += '<div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:grid;grid-template-columns:1fr auto auto auto auto;gap:12px;align-items:center;">'
-          +'<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:20px;">'+ico+'</span><div>'
-          +'<div style="font-size:14px;font-weight:600;color:#0f172a;">'+esc(d.name)+'</div>'
-          +'<div style="font-size:12px;color:#94a3b8;">'+esc(d.objekt||'')+'</div></div></div>'
-          +'<span style="background:#f1f5f9;color:#475569;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap;">'+esc(d.kategorie)+'</span>'
-          +'<div style="font-size:12px;color:#64748b;white-space:nowrap;">'+fmtDate(d.datum)+'</div>'
-          +'<span style="background:#eff6ff;color:#2563eb;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;">'+esc(d.dateityp||'PDF')+'</span>'
-          +'<div style="display:flex;gap:4px;">'
-          +'<button onclick="alert(\'Vorschau kommt bald\')" style="width:28px;height:28px;border-radius:7px;border:none;background:#f8fafc;color:#475569;cursor:pointer;font-size:12px;">👁️</button>'
-          +'<button onclick="openEditDoc(\''+d.id+'\')" style="width:28px;height:28px;border-radius:7px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
-          +'<button onclick="deleteDoc(\''+d.id+'\')" style="width:28px;height:28px;border-radius:7px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
-          +'</div></div>';
-      });
-      listHtml += '</div>';
-    }
-    content = filterHtml+folderHtml+listHtml;
-
+  var cardsHtml = '';
+  if (!filtered.length) {
+    cardsHtml = emptyState('📄','Keine Vorlagen','Keine Vorlagen gefunden','','');
   } else {
-    content = '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#d97706;">📎 Datei-Upload wird bald verfügbar sein. Vorlagen können als Metadaten verwaltet werden.</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">';
-    VORLAGEN.forEach(function(v,i) {
-      content += '<div style="background:white;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
-        +'<div style="font-size:28px;margin-bottom:10px;">📄</div>'
-        +'<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">'+esc(v.name)+'</div>'
-        +'<div style="font-size:12px;color:#64748b;margin-bottom:14px;">'+esc(v.desc)+'</div>'
-        +'<button onclick="alert(\'Vorlage wird vorbereitet...\')" style="width:100%;padding:9px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Vorlage verwenden</button>'
-        +'</div>';
+    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">';
+    filtered.forEach(function(t) {
+      cardsHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;flex-direction:column;">'
+        +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
+        +'<span style="font-size:28px;">'+t.ico+'</span>'
+        +'<div>'
+        +'<div style="font-size:15px;font-weight:700;color:#0f172a;">'+esc(t.titel)+'</div>'
+        +'<div style="font-size:11px;background:#eff6ff;color:#2563eb;padding:2px 8px;border-radius:20px;display:inline-block;font-weight:600;">'+esc(t.kat)+'</div>'
+        +'</div>'
+        +'</div>'
+        +'<p style="font-size:12px;color:#64748b;flex:1;line-height:1.5;margin-bottom:14px;">'+esc(t.desc)+'</p>'
+        +'<div style="display:flex;gap:6px;">'
+        +'<button onclick="previewDoc(\''+t.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#f1f5f9;color:#475569;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">👁️ Vorschau</button>'
+        +'<button onclick="printDoc(\''+t.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Drucken</button>'
+        +'</div></div>';
     });
-    content += '</div>';
+    cardsHtml += '</div>';
   }
 
-  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Dokument hinzufügen</button>';
-  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+tabsHtml+content+'</div>';
-  document.body.innerHTML = renderLayout('dokumente','Dokumente',actionBtn,main,buildModal());
+  var actionBtn = '';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+cardsHtml+'</div>';
+  renderLayout('dokumente','Dokumente & Vorlagen', actionBtn, main, buildPreviewModal());
 }
 
-function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
-function switchTab(t) { activeTab=t; render(); }
-function setFolder(f) { activeFolder = activeFolder===f?'':f; render(); }
-
-function buildModal() {
-  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:460px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Dokument hinzufügen</h3>'
-    +'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#d97706;">📎 Datei-Upload kommt bald – füge zunächst Metadaten hinzu.</div>'
-    +fg('Dateiname','d-name','text','z.B. Mietvertrag_Mustermann.pdf')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Kategorie</label><select id="d-kat" style="'+inputStyle+'">'+KATEGORIEN.map(function(k){ return '<option>'+k+'</option>'; }).join('')+'</select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Dateityp</label><select id="d-typ" style="'+inputStyle+'">'+Object.keys(TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('')+'</select></div>'
-    +fg('Objekt','d-obj','text','Musterstr. 1')
-    +fg('Datum','d-datum','date','')
-    +fg('Notizen','d-notizen','text','')
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveDoc()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+function kpi(ico,l,v,s) {
+  return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
+    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'
+    +(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')
+    +'</div>';
 }
 
-function openAdd() { editId=null; document.getElementById('m-title').textContent='Dokument hinzufügen'; ['d-name','d-obj','d-datum','d-notizen'].forEach(function(i){document.getElementById(i).value='';}); document.getElementById('d-datum').value=new Date().toISOString().slice(0,10); document.getElementById('add-modal').style.display='flex'; }
-function openEditDoc(id) {
-  var d=(appData.dokumente||[]).find(function(x){return x.id===id;}); if(!d) return; editId=id;
-  document.getElementById('m-title').textContent='Dokument bearbeiten';
-  document.getElementById('d-name').value=d.name||''; document.getElementById('d-kat').value=d.kategorie||'Sonstiges'; document.getElementById('d-typ').value=d.dateityp||'PDF'; document.getElementById('d-obj').value=d.objekt||''; document.getElementById('d-datum').value=d.datum||''; document.getElementById('d-notizen').value=d.notizen||'';
-  document.getElementById('add-modal').style.display='flex';
+function buildPreviewModal() {
+  return '<div id="preview-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;">'
+    +'<div style="background:white;border-radius:20px;max-width:750px;width:100%;margin:auto;">'
+    +'<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">'
+    +'<div id="preview-titlebar" style="font-size:16px;font-weight:700;color:#0f172a;"></div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button id="preview-print-btn" onclick="" style="padding:8px 16px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;">🖨️ Drucken</button>'
+    +'<button onclick="closePreview()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;color:#64748b;cursor:pointer;font-size:16px;">✕</button>'
+    +'</div>'
+    +'</div>'
+    +'<div id="preview-content" style="padding:32px 40px;font-family:Georgia,serif;font-size:14px;line-height:1.7;color:#1e293b;"></div>'
+    +'</div></div>';
 }
-function closeAdd() { document.getElementById('add-modal').style.display='none'; }
-function saveDoc() {
-  var name=document.getElementById('d-name').value.trim(); if(!name){alert('Bitte Dateiname eingeben.');return;}
-  var docs=appData.dokumente||[];
-  var obj={id:editId||gid(),name:name,kategorie:document.getElementById('d-kat').value,dateityp:document.getElementById('d-typ').value,objekt:document.getElementById('d-obj').value.trim(),datum:document.getElementById('d-datum').value,notizen:document.getElementById('d-notizen').value.trim()};
-  if(editId){var idx=docs.findIndex(function(x){return x.id===editId;}); if(idx>=0) docs[idx]=obj;}else docs.unshift(obj);
-  appData.dokumente=docs; syncToFirebase(uid); closeAdd(); render();
+
+function getDocData(id) {
+  var mieter = getData(KEYS.mieter, []);
+  var firstM = mieter[0] || {};
+  return { mieter: firstM, name: firstM.name||'', wn: firstM.wn||'', jahr: new Date().getFullYear()-1 };
 }
-function deleteDoc(id) { if(!confirm('Dokument löschen?')) return; appData.dokumente=(appData.dokumente||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+
+function previewDoc(id) {
+  var tmpl = TEMPLATES.find(function(t){ return t.id===id; });
+  if (!tmpl) return;
+  var d = getDocData(id);
+  document.getElementById('preview-titlebar').textContent = tmpl.ico+' '+tmpl.titel;
+  document.getElementById('preview-content').innerHTML = tmpl.html(d);
+  document.getElementById('preview-print-btn').onclick = function(){ printDoc(id); };
+  document.getElementById('preview-modal').style.display = 'flex';
+}
+
+function closePreview() { document.getElementById('preview-modal').style.display='none'; }
+
+function printDoc(id) {
+  var tmpl = TEMPLATES.find(function(t){ return t.id===id; });
+  if (!tmpl) return;
+  var d = getDocData(id);
+  var win = window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<style>body{font-family:Georgia,serif;font-size:13px;line-height:1.7;color:#1e293b;max-width:700px;margin:40px auto;padding:0 20px;}h2,h3{color:#0f172a;}table{width:100%;border-collapse:collapse;margin:12px 0;}th,td{border:1px solid #e2e8f0;padding:8px;}th{background:#f8fafc;}@media print{body{margin:20px;}.no-print{display:none;}}</style>'
+    +'</head><body>');
+  win.document.write(tmpl.html(d));
+  win.document.write('</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 500);
+}
 
 initFirebase();
-loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.dokumente) appData.dokumente=[]; render(); });
+loadFromFirebase(uid, function(){ render(); });
 </script>
 </body>
 </html>

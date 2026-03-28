@@ -14,17 +14,23 @@
 <script>
 checkAuth(); checkTrial();
 var user = getUser(); var uid = user.uid;
-var appData = {}; var editId = null;
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
-var TYPEN = {Info:'ℹ️',Wichtig:'⚠️',Dringend:'🔴',Veranstaltung:'🎉',Wartung:'🔧'};
-var TYP_COLS = {Info:'#2563eb',Wichtig:'#d97706',Dringend:'#dc2626',Veranstaltung:'#7c3aed',Wartung:'#64748b'};
+var editId = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
+
+var TYPEN = {
+  Info:         { ico: 'ℹ️', col: '#2563eb' },
+  Wichtig:      { ico: '⚠️', col: '#d97706' },
+  Dringend:     { ico: '🚨', col: '#dc2626' },
+  Veranstaltung:{ ico: '🎉', col: '#7c3aed' },
+  Wartung:      { ico: '🔧', col: '#64748b' }
+};
+
 function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
-function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+function lbl(t) { return '<label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;">'+t+'</label>'; }
 
 function render() {
-  var mitt = appData.mitteilungen || [];
+  var mitt = getData(KEYS.mitteilungen, []);
   var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
   var qTyp = (document.getElementById('f-typ')||{}).value||'';
   var filtered = mitt.filter(function(m){
@@ -33,15 +39,21 @@ function render() {
     return true;
   });
 
-  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">'
+  var heute = today();
+  var weekAgo = new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">'
     +kpi('📢','Gesamt',mitt.length,'')
-    +kpi('🔴','Dringend',mitt.filter(function(m){return m.typ==='Dringend';}).length,'')
-    +kpi('📅','Diese Woche',mitt.filter(function(m){ var d=new Date(m.datum); var now=new Date(); return d>=new Date(now-7*86400000); }).length,'')
+    +kpi('🚨','Dringend',mitt.filter(function(m){return m.typ==='Dringend';}).length,'')
+    +kpi('📅','Diese Woche',mitt.filter(function(m){return m.datum>=weekAgo;}).length,'')
+    +kpi('✓','Gesendet',mitt.filter(function(m){return m.gesendet;}).length,'')
     +'</div>';
 
   var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
     +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Suchen..." style="'+inputStyle+'max-width:220px;">'
-    +'<select id="f-typ" onchange="render()" style="'+inputStyle+'max-width:160px;"><option value="">Alle Typen</option>'+Object.keys(TYPEN).map(function(t){ return '<option value="'+t+'"'+(qTyp===t?' selected':'')+'>'+TYPEN[t]+' '+t+'</option>'; }).join('')+'</select>'
+    +'<select id="f-typ" onchange="render()" style="'+inputStyle+'max-width:180px;"><option value="">Alle Typen</option>'
+    +Object.keys(TYPEN).map(function(t){ return '<option value="'+t+'"'+(qTyp===t?' selected':'')+'>'+TYPEN[t].ico+' '+t+'</option>'; }).join('')
+    +'</select>'
     +'</div>';
 
   var listHtml = '';
@@ -49,23 +61,29 @@ function render() {
     listHtml = emptyState('📢','Keine Mitteilungen','Erstelle deine erste Mitteilung an die Mieter','+ Mitteilung erstellen','openAdd()');
   } else {
     filtered.forEach(function(m) {
-      var col = TYP_COLS[m.typ]||'#64748b';
-      var ico = TYPEN[m.typ]||'📢';
-      listHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:12px;border-left:4px solid '+col+';">'
-        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">'
-        +'<div style="display:flex;align-items:center;gap:10px;">'
-        +'<span style="font-size:22px;">'+ico+'</span>'
+      var typ = TYPEN[m.typ] || TYPEN.Info;
+      var mieterListe = getData(KEYS.mieter, []);
+      var empfCount = m.empfaenger === 'Alle Mieter' ? mieterListe.length : null;
+      listHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:12px;border-left:5px solid '+typ.col+';">'
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:12px;">'
+        +'<div style="display:flex;align-items:center;gap:12px;flex:1;">'
+        +'<span style="font-size:24px;flex-shrink:0;">'+typ.ico+'</span>'
         +'<div>'
-        +'<div style="font-size:16px;font-weight:700;color:#0f172a;">'+esc(m.titel)+'</div>'
-        +'<div style="font-size:12px;color:#94a3b8;">'+fmtDate(m.datum)+' · An: '+esc(m.empfaenger||'Alle Mieter')+'</div>'
-        +'</div></div>'
-        +'<div style="display:flex;align-items:center;gap:8px;">'
-        +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(m.typ||'Info')+'</span>'
+        +'<div style="font-size:16px;font-weight:700;color:#0f172a;">'+esc(m.titel||'–')+'</div>'
+        +'<div style="font-size:12px;color:#94a3b8;margin-top:2px;">'+fmtDate(m.datum)+' · An: '+esc(m.empfaenger||'Alle Mieter')
+        +(empfCount?' ('+empfCount+' Mieter)':'')+'</div>'
+        +'</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'
+        +'<span style="background:'+typ.col+'20;color:'+typ.col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+typ.ico+' '+esc(m.typ||'Info')+'</span>'
         +(m.gesendet?'<span style="background:#f0fdf4;color:#16a34a;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">✓ Gesendet</span>':'')
-        +'</div></div>'
-        +'<p style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:14px;">'+esc(m.text)+'</p>'
+        +(m.bis && m.bis < heute?'<span style="background:#fef2f2;color:#dc2626;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">Abgelaufen</span>':'')
+        +'</div>'
+        +'</div>'
+        +(m.text?'<p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 14px;">'+esc(m.text)+'</p>':'')
+        +(m.bis?'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">🗓 Gültig bis: '+fmtDate(m.bis)+'</div>':'')
         +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
-        +'<button onclick="markSent(\''+m.id+'\')" style="padding:7px 14px;border-radius:8px;border:none;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:700;cursor:pointer;">'+(m.gesendet?'✓ Gesendet':'📤 Als gesendet markieren')+'</button>'
+        +'<button onclick="markSent(\''+m.id+'\')" style="padding:7px 14px;border-radius:8px;border:none;background:'+(m.gesendet?'#f0fdf4':'#eff6ff')+';color:'+(m.gesendet?'#16a34a':'#2563eb')+';font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">'+(m.gesendet?'✓ Gesendet':'📤 Als gesendet markieren')+'</button>'
         +'<button onclick="openEdit(\''+m.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:13px;">✏️</button>'
         +'<button onclick="deleteMitt(\''+m.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:13px;">🗑️</button>'
         +'</div></div>';
@@ -74,49 +92,95 @@ function render() {
 
   var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Mitteilung erstellen</button>';
   var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+listHtml+'</div>';
-  document.body.innerHTML = renderLayout('mitteilungen','Mitteilungen',actionBtn,main,buildModal());
+  renderLayout('mitteilungen','Mitteilungen', actionBtn, main, buildModal());
 }
 
-function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
+function kpi(ico,l,v,s) {
+  return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
+    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'
+    +(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')
+    +'</div>';
+}
 
 function buildModal() {
   return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
     +'<div style="background:white;border-radius:20px;padding:28px;max-width:500px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
     +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Mitteilung erstellen</h3>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Typ</label><select id="m-typ" style="'+inputStyle+'">'+Object.keys(TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('')+'</select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Titel</label><input id="m-titel" style="'+inputStyle+'" placeholder="z.B. Wasserabsperrung am 15. März"></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Typ')+'<select id="m-typ" onchange="updateTypPreview()" style="'+inputStyle+'">'
+    +Object.keys(TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Titel')+'<input id="m-titel" style="'+inputStyle+'" placeholder="z.B. Wasserabsperrung am 15. März"></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Datum</label><input id="m-datum" type="date" style="'+inputStyle+'"></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Empfänger</label><input id="m-empf" style="'+inputStyle+'" placeholder="Alle Mieter / Objekt..."></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Datum')+'<input id="m-datum" type="date" style="'+inputStyle+'"></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Empfänger')+'<input id="m-empf" style="'+inputStyle+'" placeholder="Alle Mieter"></div>'
     +'</div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Inhalt</label><textarea id="m-text" style="'+inputStyle+'height:120px;resize:vertical;" placeholder="Text der Mitteilung..."></textarea></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Gültig bis (optional)</label><input id="m-bis" type="date" style="'+inputStyle+'"></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Inhalt')+'<textarea id="m-text" style="'+inputStyle+'height:120px;resize:vertical;" placeholder="Text der Mitteilung..."></textarea></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Gültig bis (optional)')+'<input id="m-bis" type="date" style="'+inputStyle+'"></div>'
     +'<div style="display:flex;gap:10px;margin-top:18px;">'
     +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
     +'<button onclick="saveMitt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
     +'</div></div></div>';
 }
 
-function openAdd() { editId=null; document.getElementById('m-title').textContent='Mitteilung erstellen'; document.getElementById('m-titel').value=''; document.getElementById('m-text').value=''; document.getElementById('m-empf').value='Alle Mieter'; document.getElementById('m-datum').value=new Date().toISOString().slice(0,10); document.getElementById('m-bis').value=''; document.getElementById('add-modal').style.display='flex'; }
+function openAdd() {
+  editId = null;
+  document.getElementById('m-title').textContent = 'Mitteilung erstellen';
+  document.getElementById('m-titel').value = '';
+  document.getElementById('m-text').value = '';
+  document.getElementById('m-empf').value = 'Alle Mieter';
+  document.getElementById('m-datum').value = today();
+  document.getElementById('m-bis').value = '';
+  document.getElementById('m-typ').value = 'Info';
+  document.getElementById('add-modal').style.display = 'flex';
+}
+
 function openEdit(id) {
-  var m=(appData.mitteilungen||[]).find(function(x){return x.id===id;}); if(!m) return; editId=id;
-  document.getElementById('m-title').textContent='Mitteilung bearbeiten';
-  document.getElementById('m-typ').value=m.typ||'Info'; document.getElementById('m-titel').value=m.titel||''; document.getElementById('m-datum').value=m.datum||''; document.getElementById('m-empf').value=m.empfaenger||''; document.getElementById('m-text').value=m.text||''; document.getElementById('m-bis').value=m.bis||'';
-  document.getElementById('add-modal').style.display='flex';
+  var m = getData(KEYS.mitteilungen, []).find(function(x){ return x.id===id; }); if (!m) return;
+  editId = id;
+  document.getElementById('m-title').textContent = 'Mitteilung bearbeiten';
+  document.getElementById('m-typ').value = m.typ||'Info';
+  document.getElementById('m-titel').value = m.titel||'';
+  document.getElementById('m-datum').value = m.datum||'';
+  document.getElementById('m-empf').value = m.empfaenger||'Alle Mieter';
+  document.getElementById('m-text').value = m.text||'';
+  document.getElementById('m-bis').value = m.bis||'';
+  document.getElementById('add-modal').style.display = 'flex';
 }
+
 function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+
 function saveMitt() {
-  var titel=document.getElementById('m-titel').value.trim(); if(!titel){alert('Bitte Titel eingeben.');return;}
-  var mitt=appData.mitteilungen||[];
-  var obj={id:editId||gid(),typ:document.getElementById('m-typ').value,titel:titel,datum:document.getElementById('m-datum').value,empfaenger:document.getElementById('m-empf').value.trim()||'Alle Mieter',text:document.getElementById('m-text').value.trim(),bis:document.getElementById('m-bis').value,gesendet:false};
-  if(editId){var idx=mitt.findIndex(function(x){return x.id===editId;}); if(idx>=0){obj.gesendet=mitt[idx].gesendet; mitt[idx]=obj;}}else mitt.unshift(obj);
-  appData.mitteilungen=mitt; syncToFirebase(uid); closeAdd(); render();
+  var titel = document.getElementById('m-titel').value.trim();
+  if (!titel) { alert('Bitte Titel eingeben.'); return; }
+  var list = getData(KEYS.mitteilungen, []);
+  var obj = { id: editId||gid(), typ: document.getElementById('m-typ').value,
+    titel: titel, datum: document.getElementById('m-datum').value,
+    empfaenger: document.getElementById('m-empf').value.trim()||'Alle Mieter',
+    text: document.getElementById('m-text').value.trim(),
+    bis: document.getElementById('m-bis').value, gesendet: false };
+  if (editId) {
+    var idx = list.findIndex(function(x){ return x.id===editId; });
+    if (idx >= 0) { obj.gesendet = list[idx].gesendet; list[idx] = obj; }
+  } else { list.unshift(obj); }
+  setData(KEYS.mitteilungen, list); syncToFirebase(uid); closeAdd(); render();
 }
-function markSent(id) { var m=(appData.mitteilungen||[]).find(function(x){return x.id===id;}); if(!m) return; m.gesendet=!m.gesendet; syncToFirebase(uid); render(); }
-function deleteMitt(id) { if(!confirm('Mitteilung löschen?')) return; appData.mitteilungen=(appData.mitteilungen||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+
+function markSent(id) {
+  var list = getData(KEYS.mitteilungen, []);
+  var m = list.find(function(x){ return x.id===id; }); if (!m) return;
+  m.gesendet = !m.gesendet;
+  setData(KEYS.mitteilungen, list); syncToFirebase(uid); render();
+}
+
+function deleteMitt(id) {
+  if (!confirm('Mitteilung löschen?')) return;
+  setData(KEYS.mitteilungen, getData(KEYS.mitteilungen,[]).filter(function(x){return x.id!==id;}));
+  syncToFirebase(uid); render();
+}
 
 initFirebase();
-loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.mitteilungen) appData.mitteilungen=[]; render(); });
+loadFromFirebase(uid, function(){ render(); });
 </script>
 </body>
 </html>

@@ -12,190 +12,293 @@
 </head>
 <body>
 <script>
-checkAuth(); checkTrial();
-var user = getUser(); var uid = user.uid;
-var appData = {}; var editId = null; var activeTab = 'liste';
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
-var STATUS_COLS = {Planung:'#64748b',Aktiv:'#2563eb',Pausiert:'#d97706',Abgeschlossen:'#16a34a',Abgebrochen:'#dc2626'};
-var PRIO_COLS = {Hoch:'#dc2626',Normal:'#d97706',Niedrig:'#64748b'};
-function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+checkAuth();
+var user = getUser();
+var uid = user.uid;
+var activeTab = 'liste';
+var editId = null;
+
+function gid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
-function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
-function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
-function fmtEur(n) { return (Number(n)||0).toLocaleString('de-DE')+' €'; }
-function daysDiff(a,b) { return Math.round((new Date(b)-new Date(a))/86400000); }
-function progressBar(pct,col) { return '<div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;"><div style="height:100%;width:'+Math.min(100,Math.max(0,pct))+'%;background:'+col+';border-radius:99px;transition:width 0.3s;"></div></div>'; }
+
+function calcProgress(start, end) {
+  if (!start || !end) return 0;
+  var s = new Date(start), e = new Date(end), now = new Date();
+  if (now <= s) return 0;
+  if (now >= e) return 100;
+  return Math.round((now - s) / (e - s) * 100);
+}
+
+function statusColor(st) {
+  if (st === 'In Bearbeitung') return '#2563eb';
+  if (st === 'Abgeschlossen') return '#16a34a';
+  if (st === 'Geplant') return '#d97706';
+  return '#64748b';
+}
 
 function render() {
-  var proj = appData.projekte || [];
-  var aktiv = proj.filter(function(p){ return p.status==='Aktiv'; }).length;
-  var sumBudget = proj.reduce(function(s,p){ return s+(Number(p.budget)||0); },0);
-  var abgeschl = proj.filter(function(p){ return p.status==='Abgeschlossen'; }).length;
+  var projekte = getData(KEYS.projekte, []);
 
-  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">'
-    +kpi('📁','Gesamt Projekte',proj.length,'')
-    +kpi('🔵','Aktiv',aktiv,'Laufende Projekte')
-    +kpi('✅','Abgeschlossen',abgeschl,'')
-    +kpi('💰','Gesamtbudget',fmtEur(sumBudget),'')
-    +'</div>';
-
-  var tabsHtml = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
-    +['liste','gantt','aufgaben'].map(function(t,i){
-      var ls=['📋 Projektliste','📊 Zeitplan (Gantt)','✅ Aufgaben'];
-      return '<button onclick="switchTab(\''+t+'\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab===t?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">'+ls[i]+'</button>';
-    }).join('')+'</div>';
+  var tabBar = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
+    + ['liste','plantafel','gewerke'].map(function(t,i){
+        var labels = ['📋 Projektliste','📊 Plantafel','🔧 Gewerke'];
+        return '<button onclick="switchTab(\''+t+'\')" style="flex:1;padding:9px 6px;border-radius:9px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;'
+          +(activeTab===t?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">'
+          +labels[i]+'</button>';
+      }).join('')
+    + '</div>';
 
   var content = '';
 
   if (activeTab === 'liste') {
-    if (!proj.length) {
-      content = emptyState('📁','Keine Projekte','Erstelle dein erstes Projekt','+ Projekt erstellen','openAdd()');
-    } else {
-      content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">';
-      proj.forEach(function(p) {
-        var col = STATUS_COLS[p.status]||'#64748b';
-        var pcol = PRIO_COLS[p.prioritaet]||'#64748b';
-        var pct = p.fortschritt || 0;
-        var barCol = pct>=80?'#16a34a':pct>=50?'#d97706':'#2563eb';
-        var dauer = (p.start&&p.ende) ? daysDiff(p.start,p.ende)+' Tage' : '–';
-        content += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-top:4px solid '+col+';">'
-          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
-          +'<div><div style="font-size:16px;font-weight:800;color:#0f172a;">'+esc(p.name||'–')+'</div>'
-          +'<div style="font-size:12px;color:#64748b;margin-top:2px;">📍 '+esc(p.objekt||'–')+'</div></div>'
-          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'
-          +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(p.status||'Planung')+'</span>'
-          +'<span style="background:'+pcol+'20;color:'+pcol+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">'+esc(p.prioritaet||'Normal')+'</span>'
-          +'</div></div>'
-          +'<div style="margin-bottom:12px;">'
-          +'<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:12px;color:#64748b;">Fortschritt</span><span style="font-size:12px;font-weight:700;color:'+barCol+';">'+pct+'%</span></div>'
-          +progressBar(pct, barCol)
-          +'</div>'
-          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'
-          +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Budget</div><div style="font-size:13px;font-weight:700;color:#0f172a;">'+fmtEur(p.budget)+'</div></div>'
-          +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Dauer</div><div style="font-size:13px;font-weight:700;color:#0f172a;">'+dauer+'</div></div>'
-          +'</div>'
-          +'<div style="font-size:12px;color:#64748b;margin-bottom:14px;">📅 '+fmtDate(p.start)+' – '+fmtDate(p.ende)+'<br>👤 '+esc(p.verantwortlich||'–')+'</div>'
-          +(p.beschreibung?'<div style="font-size:12px;color:#94a3b8;margin-bottom:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.beschreibung)+'</div>':'')
-          +'<div style="display:flex;gap:8px;">'
-          +'<button onclick="openEdit(\''+p.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Bearbeiten</button>'
-          +'<button onclick="deleteP(\''+p.id+'\')" style="width:36px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;">🗑️</button>'
-          +'</div></div>';
-      });
-      content += '</div>';
-    }
-
-  } else if (activeTab === 'gantt') {
-    if (!proj.length) {
-      content = emptyState('📊','Kein Zeitplan','Erstelle Projekte um den Gantt-Chart zu sehen','+ Projekt erstellen','openAdd()');
-    } else {
-      // Simple Gantt chart
-      var allDates = proj.filter(function(p){ return p.start&&p.ende; });
-      if (!allDates.length) { content = '<div style="text-align:center;padding:40px;color:#94a3b8;">Keine Projekte mit Start- und Enddatum vorhanden.</div>'; }
-      else {
-        var minDate = allDates.reduce(function(m,p){ return p.start<m?p.start:m; }, allDates[0].start);
-        var maxDate = allDates.reduce(function(m,p){ return p.ende>m?p.ende:m; }, allDates[0].ende);
-        var totalDays = daysDiff(minDate, maxDate) || 1;
-        content = '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);overflow-x:auto;">'
-          +'<div style="min-width:600px;">';
-        allDates.forEach(function(p) {
-          var col = STATUS_COLS[p.status]||'#64748b';
-          var startOff = daysDiff(minDate,p.start);
-          var dur = daysDiff(p.start,p.ende)||1;
-          var leftPct = (startOff/totalDays)*100;
-          var widthPct = (dur/totalDays)*100;
-          content += '<div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;">'
-            +'<div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name)+'</div>'
-            +'<div style="position:relative;height:28px;background:#f1f5f9;border-radius:6px;">'
-            +'<div style="position:absolute;left:'+leftPct+'%;width:'+widthPct+'%;background:'+col+';border-radius:6px;height:100%;display:flex;align-items:center;padding:0 8px;">'
-            +'<span style="font-size:10px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;">'+fmtDate(p.start)+' – '+fmtDate(p.ende)+'</span>'
-            +'</div></div></div>';
-        });
-        content += '</div></div>';
-      }
-    }
-
+    content = renderListe(projekte);
+  } else if (activeTab === 'plantafel') {
+    content = renderPlantafel(projekte);
   } else {
-    // Aufgaben tab – project tasks
-    var allTasks = [];
-    proj.forEach(function(p){ (p.aufgaben||[]).forEach(function(a){ allTasks.push(Object.assign({projektName:p.name,projektId:p.id},a)); }); });
-    if (!allTasks.length) {
-      content = '<div style="text-align:center;padding:60px;color:#94a3b8;"><div style="font-size:48px;margin-bottom:12px;">✅</div><p style="font-size:15px;font-weight:600;">Keine Projektaufgaben</p><p style="font-size:13px;margin-top:4px;">Bearbeite ein Projekt um Aufgaben hinzuzufügen</p></div>';
-    } else {
-      content = '<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
-      allTasks.forEach(function(t) {
-        var col = t.erledigt?'#16a34a':'#64748b';
-        content += '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
-          +'<div onclick="toggleTask(\''+t.projektId+'\',\''+t.id+'\')" style="width:20px;height:20px;border-radius:5px;border:2px solid '+(t.erledigt?'#16a34a':'#e2e8f0')+';background:'+(t.erledigt?'#16a34a':'white')+';cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">'+(t.erledigt?'✓':'')+'</div>'
-          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#0f172a;'+(t.erledigt?'text-decoration:line-through;opacity:0.5;':'')+'">'+esc(t.titel||'–')+'</div>'
-          +'<div style="font-size:11px;color:#94a3b8;">📁 '+esc(t.projektName)+' · '+(t.faellig?fmtDate(t.faellig):'kein Datum')+'</div></div>'
-          +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">'+(t.erledigt?'Erledigt':'Offen')+'</span>'
-          +'</div>';
-      });
-      content += '</div>';
-    }
+    content = renderGewerke(projekte);
   }
 
-  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>';
-  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+tabsHtml+content+'</div>';
-  document.body.innerHTML = renderLayout('projekte','Projekte',actionBtn,main,buildModal());
+  var actionBtn = '<button onclick="showModal(\'proj-modal\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>';
+
+  renderLayout('projekte', 'Projekte', actionBtn, tabBar + content, buildModal());
 }
 
-function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
-function switchTab(t) { activeTab=t; render(); }
+function renderListe(projekte) {
+  if (!projekte.length) {
+    return emptyState('🏗️','Keine Projekte vorhanden','Erstelle dein erstes Bauprojekt oder Renovierungsvorhaben','+ Projekt erstellen','showModal(\'proj-modal\')');
+  }
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">';
+  projekte.forEach(function(p) {
+    var pct = calcProgress(p.start, p.end);
+    var col = statusColor(p.status);
+    var gewerke = (p.gewerke||'').split(',').map(function(g){ return g.trim(); }).filter(Boolean);
+    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow 0.2s;" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.1)\'" onmouseout="this.style.boxShadow=\'0 1px 3px rgba(0,0,0,0.06)\'">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">'
+      + '<div style="flex:1;">'
+      + '<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:2px;">'+esc(p.name||'–')+'</div>'
+      + '<div style="font-size:12px;color:#64748b;">📍 '+esc(p.adr||'–')+' · 👤 '+esc(p.auftraggeber||'–')+'</div>'
+      + '</div>'
+      + '<span style="background:'+col+'20;color:'+col+';font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;margin-left:8px;">'+esc(p.status||'Geplant')+'</span>'
+      + '</div>'
+      + '<div style="margin-bottom:12px;">'
+      + '<div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:4px;">'
+      + '<span>Fortschritt</span><span style="font-weight:700;color:'+col+'">'+pct+'%</span>'
+      + '</div>'
+      + '<div style="background:#e2e8f0;border-radius:99px;height:7px;overflow:hidden;">'
+      + '<div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:99px;transition:width 0.3s;"></div>'
+      + '</div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
+      + '<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">'
+      + '<div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Budget</div>'
+      + '<div style="font-size:14px;font-weight:700;color:#0f172a;">'+fmt(p.budget)+' €</div>'
+      + '</div>'
+      + '<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">'
+      + '<div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Zeitraum</div>'
+      + '<div style="font-size:11px;font-weight:600;color:#475569;">'+fmtDate(p.start)+' – '+fmtDate(p.end)+'</div>'
+      + '</div>'
+      + '</div>'
+      + (gewerke.length ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">'
+          + gewerke.map(function(g){ return '<span style="background:#eff6ff;color:#2563eb;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;">'+esc(g)+'</span>'; }).join('')
+          + '</div>' : '')
+      + '<div style="display:flex;gap:8px;">'
+      + '<select onchange="changeStatus(\''+p.id+'\',this.value)" style="flex:1;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;color:#475569;background:white;">'
+      + ['Geplant','In Bearbeitung','Abgeschlossen'].map(function(s){ return '<option value="'+s+'"'+(p.status===s?' selected':'')+'>'+s+'</option>'; }).join('')
+      + '</select>'
+      + '<button onclick="openEdit(\''+p.id+'\')" style="width:36px;height:36px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:14px;">✏️</button>'
+      + '<button onclick="deleteProj(\''+p.id+'\')" style="width:36px;height:36px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:14px;">🗑️</button>'
+      + '</div></div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderPlantafel(projekte) {
+  var withDates = projekte.filter(function(p){ return p.start && p.end; });
+  if (!withDates.length) {
+    return emptyState('📊','Keine Projekte mit Terminen','Lege Start- und Enddaten bei deinen Projekten fest','+ Projekt erstellen','showModal(\'proj-modal\')');
+  }
+
+  var minTs = Math.min.apply(null, withDates.map(function(p){ return new Date(p.start).getTime(); }));
+  var maxTs = Math.max.apply(null, withDates.map(function(p){ return new Date(p.end).getTime(); }));
+  // Auf Montag der ersten Woche runden
+  var startDate = new Date(minTs);
+  var dow = startDate.getDay(); var offset = dow === 0 ? 6 : dow - 1;
+  startDate.setDate(startDate.getDate() - offset);
+  var endDate = new Date(maxTs);
+  // Auf Sonntag der letzten Woche
+  var edow = endDate.getDay(); var eoffset = edow === 0 ? 0 : 7 - edow;
+  endDate.setDate(endDate.getDate() + eoffset);
+
+  var totalDays = Math.round((endDate - startDate) / 86400000) || 1;
+  var weeks = Math.ceil(totalDays / 7);
+
+  var PROJ_COLORS = ['#2563eb','#7c3aed','#16a34a','#ea580c','#0891b2','#dc2626','#d97706'];
+
+  // Build week headers
+  var weekHeaders = '';
+  var w = new Date(startDate);
+  for (var i = 0; i < weeks; i++) {
+    weekHeaders += '<div style="min-width:100px;flex:1;text-align:center;font-size:11px;font-weight:600;color:#64748b;padding:6px 0;border-right:1px solid #f1f5f9;">'
+      + w.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit'}) + '</div>';
+    w.setDate(w.getDate() + 7);
+  }
+
+  // Today line position
+  var now = new Date();
+  var todayOffset = (now - startDate) / (endDate - startDate) * 100;
+  var todayLine = (todayOffset >= 0 && todayOffset <= 100)
+    ? '<div style="position:absolute;left:'+todayOffset+'%;top:0;bottom:0;width:2px;background:#dc2626;z-index:10;pointer-events:none;">'
+      + '<div style="position:absolute;top:-6px;left:-20px;background:#dc2626;color:white;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;white-space:nowrap;">Heute</div>'
+      + '</div>' : '';
+
+  var rows = withDates.map(function(p, idx) {
+    var pStart = new Date(p.start);
+    var pEnd = new Date(p.end);
+    var leftPct = Math.max(0, (pStart - startDate) / (endDate - startDate) * 100);
+    var widthPct = Math.max(1, (pEnd - pStart) / (endDate - startDate) * 100);
+    var col = PROJ_COLORS[idx % PROJ_COLORS.length];
+    return '<div style="display:flex;align-items:center;border-bottom:1px solid #f1f5f9;">'
+      + '<div style="min-width:180px;max-width:180px;padding:10px 12px;font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid #e2e8f0;">'+esc(p.name||'–')+'</div>'
+      + '<div style="flex:1;position:relative;height:40px;">'
+      + '<div title="'+esc(p.name)+': '+fmtDate(p.start)+' – '+fmtDate(p.end)+'" style="position:absolute;left:'+leftPct+'%;width:'+widthPct+'%;top:6px;height:28px;background:'+col+';border-radius:6px;display:flex;align-items:center;padding:0 8px;cursor:pointer;transition:opacity 0.15s;" onmouseover="this.style.opacity=\'0.85\'" onmouseout="this.style.opacity=\'1\'">'
+      + '<span style="font-size:10px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.name)+'</span>'
+      + '</div>'
+      + '</div></div>';
+  }).join('');
+
+  return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    + '<div style="display:flex;border-bottom:2px solid #e2e8f0;">'
+    + '<div style="min-width:180px;max-width:180px;padding:10px 12px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-right:1px solid #e2e8f0;">Projekt</div>'
+    + '<div style="flex:1;display:flex;overflow:hidden;">'+weekHeaders+'</div>'
+    + '</div>'
+    + '<div style="overflow-x:auto;">'
+    + '<div style="position:relative;">'
+    + todayLine
+    + rows
+    + '</div></div></div>';
+}
+
+function renderGewerke(projekte) {
+  var gewerkeMap = {};
+  projekte.forEach(function(p) {
+    var gs = (p.gewerke||'').split(',').map(function(g){ return g.trim(); }).filter(Boolean);
+    gs.forEach(function(g) {
+      if (!gewerkeMap[g]) gewerkeMap[g] = [];
+      gewerkeMap[g].push(p);
+    });
+  });
+  var keys = Object.keys(gewerkeMap);
+  if (!keys.length) {
+    return emptyState('🔧','Keine Gewerke vorhanden','Trage Gewerke (kommagetrennt) bei deinen Projekten ein','+ Projekt erstellen','showModal(\'proj-modal\')');
+  }
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">'
+    + keys.map(function(g) {
+        var ps = gewerkeMap[g];
+        return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+          + '<div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:10px;">🔧 '+esc(g)+'</div>'
+          + '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">'+ps.length+' Projekt'+(ps.length!==1?'e':'')+'</div>'
+          + ps.map(function(p){
+              var col = statusColor(p.status);
+              return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #f1f5f9;">'
+                + '<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">'+esc(p.status||'Geplant')+'</span>'
+                + '<span style="font-size:12px;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'–')+'</span>'
+                + '</div>';
+            }).join('')
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
 
 function buildModal() {
-  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:560px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Projekt erstellen</h3>'
-    +fg('Projektname','p-name','text','z.B. Dachrenovierung Musterstr. 1')
-    +fg('Objekt / Gebäude','p-obj','text','Musterstr. 1')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Beschreibung</label><textarea id="p-beschr" style="'+inputStyle+'height:80px;resize:vertical;" placeholder="Kurze Beschreibung des Projekts..."></textarea></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="p-status" style="'+inputStyle+'">'+Object.keys(STATUS_COLS).map(function(s){ return '<option>'+s+'</option>'; }).join('')+'</select></div>'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Priorität</label><select id="p-prior" style="'+inputStyle+'"><option>Normal</option><option>Hoch</option><option>Niedrig</option></select></div>'
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Startdatum','p-start','date','')
-    +fg('Enddatum','p-ende','date','')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Budget (€)','p-budget','number','10000')
-    +fg('Fortschritt (%)','p-fort','number','0')
-    +'</div>'
-    +fg('Verantwortlich','p-verantw','text','Name der Person')
-    +fg('Auftragnehmer / Handwerker','p-hw','text','')
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveP()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+  var content = formGroup('Projektname *', '<input id="p-name" style="'+inputStyle+'" placeholder="z.B. Dachsanierung Musterstr. 1">')
+    + formGroup('Adresse', '<input id="p-adr" style="'+inputStyle+'" placeholder="Straße, PLZ Stadt">')
+    + formGroup('Auftraggeber', '<input id="p-auftraggeber" style="'+inputStyle+'" placeholder="z.B. Eigentümergemeinschaft">')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Startdatum', '<input id="p-start" type="date" style="'+inputStyle+'">')
+    + formGroup('Enddatum', '<input id="p-end" type="date" style="'+inputStyle+'">')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Budget (€)', '<input id="p-budget" type="number" style="'+inputStyle+'" placeholder="50000">')
+    + formGroup('Status', '<select id="p-status" style="'+inputStyle+'"><option>Geplant</option><option>In Bearbeitung</option><option>Abgeschlossen</option></select>')
+    + '</div>'
+    + formGroup('Gewerke (kommagetrennt)', '<input id="p-gewerke" style="'+inputStyle+'" placeholder="Dach, Fassade, Elektriker">')
+    + formGroup('Beschreibung', '<textarea id="p-beschr" style="'+inputStyle+'height:80px;resize:vertical;" placeholder="Kurze Beschreibung..."></textarea>')
+    + '<div style="display:flex;gap:10px;margin-top:4px;">'
+    + '<button onclick="hideModal(\'proj-modal\')" style="flex:1;padding:11px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '<button onclick="saveProj()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
+    + '</div>';
+  return modalHTML('proj-modal', '🏗️ Projekt', content);
 }
 
-function openAdd() { editId=null; document.getElementById('m-title').textContent='Projekt erstellen'; ['p-name','p-obj','p-beschr','p-start','p-ende','p-budget','p-verantw','p-hw'].forEach(function(x){document.getElementById(x).value='';}); document.getElementById('p-fort').value='0'; document.getElementById('add-modal').style.display='flex'; }
 function openEdit(id) {
-  var p=(appData.projekte||[]).find(function(x){return x.id===id;}); if(!p) return; editId=id;
-  document.getElementById('m-title').textContent='Projekt bearbeiten';
-  document.getElementById('p-name').value=p.name||''; document.getElementById('p-obj').value=p.objekt||''; document.getElementById('p-beschr').value=p.beschreibung||''; document.getElementById('p-status').value=p.status||'Planung'; document.getElementById('p-prior').value=p.prioritaet||'Normal'; document.getElementById('p-start').value=p.start||''; document.getElementById('p-ende').value=p.ende||''; document.getElementById('p-budget').value=p.budget||''; document.getElementById('p-fort').value=p.fortschritt||0; document.getElementById('p-verantw').value=p.verantwortlich||''; document.getElementById('p-hw').value=p.handwerker||'';
-  document.getElementById('add-modal').style.display='flex';
+  var p = getData(KEYS.projekte, []).find(function(x){ return x.id===id; });
+  if (!p) return;
+  editId = id;
+  document.getElementById('p-name').value = p.name||'';
+  document.getElementById('p-adr').value = p.adr||'';
+  document.getElementById('p-auftraggeber').value = p.auftraggeber||'';
+  document.getElementById('p-start').value = p.start||'';
+  document.getElementById('p-end').value = p.end||'';
+  document.getElementById('p-budget').value = p.budget||'';
+  document.getElementById('p-status').value = p.status||'Geplant';
+  document.getElementById('p-gewerke').value = p.gewerke||'';
+  document.getElementById('p-beschr').value = p.beschreibung||'';
+  showModal('proj-modal');
 }
-function closeAdd() { document.getElementById('add-modal').style.display='none'; }
-function saveP() {
-  var name=document.getElementById('p-name').value.trim(); if(!name){alert('Projektname eingeben.');return;}
-  var proj=appData.projekte||[];
-  var existing = editId?(proj.find(function(x){return x.id===editId;})||{}):{};
-  var obj={id:editId||gid(),name:name,objekt:document.getElementById('p-obj').value.trim(),beschreibung:document.getElementById('p-beschr').value.trim(),status:document.getElementById('p-status').value,prioritaet:document.getElementById('p-prior').value,start:document.getElementById('p-start').value,ende:document.getElementById('p-ende').value,budget:document.getElementById('p-budget').value,fortschritt:parseInt(document.getElementById('p-fort').value)||0,verantwortlich:document.getElementById('p-verantw').value.trim(),handwerker:document.getElementById('p-hw').value.trim(),aufgaben:existing.aufgaben||[]};
-  if(editId){var idx=proj.findIndex(function(x){return x.id===editId;}); if(idx>=0) proj[idx]=obj;}else proj.unshift(obj);
-  appData.projekte=proj; syncToFirebase(uid); closeAdd(); render();
+
+function saveProj() {
+  var name = document.getElementById('p-name').value.trim();
+  if (!name) { alert('Bitte Projektname eingeben.'); return; }
+  var list = getData(KEYS.projekte, []);
+  var obj = {
+    id: editId || gid(),
+    name: name,
+    adr: document.getElementById('p-adr').value.trim(),
+    auftraggeber: document.getElementById('p-auftraggeber').value.trim(),
+    start: document.getElementById('p-start').value,
+    end: document.getElementById('p-end').value,
+    budget: parseFloat(document.getElementById('p-budget').value)||0,
+    status: document.getElementById('p-status').value,
+    gewerke: document.getElementById('p-gewerke').value.trim(),
+    beschreibung: document.getElementById('p-beschr').value.trim()
+  };
+  if (editId) {
+    var idx = list.findIndex(function(x){ return x.id===editId; });
+    if (idx >= 0) list[idx] = obj;
+  } else {
+    list.unshift(obj);
+  }
+  setData(KEYS.projekte, list);
+  syncToFirebase(uid);
+  addNotif('🏗️','Projekt "'+name+'" gespeichert');
+  editId = null;
+  hideModal('proj-modal');
+  render();
 }
-function deleteP(id) { if(!confirm('Projekt löschen?')) return; appData.projekte=(appData.projekte||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
-function toggleTask(projektId, taskId) {
-  var p=(appData.projekte||[]).find(function(x){return x.id===projektId;}); if(!p||!p.aufgaben) return;
-  var t=p.aufgaben.find(function(x){return x.id===taskId;}); if(!t) return;
-  t.erledigt=!t.erledigt; syncToFirebase(uid); render();
+
+function changeStatus(id, status) {
+  var list = getData(KEYS.projekte, []);
+  var p = list.find(function(x){ return x.id===id; });
+  if (!p) return;
+  p.status = status;
+  setData(KEYS.projekte, list);
+  syncToFirebase(uid);
+  render();
 }
+
+function deleteProj(id) {
+  if (!confirm('Projekt wirklich löschen?')) return;
+  var list = getData(KEYS.projekte, []).filter(function(x){ return x.id!==id; });
+  setData(KEYS.projekte, list);
+  syncToFirebase(uid);
+  render();
+}
+
+function switchTab(t) { activeTab = t; render(); }
 
 initFirebase();
-loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.projekte) appData.projekte=[]; render(); });
+loadFromFirebase(uid, function(){ render(); });
 </script>
 </body>
 </html>

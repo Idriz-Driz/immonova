@@ -13,211 +13,175 @@
 <body>
 <script>
 checkAuth(); checkTrial();
-var user = getUser();
-var uid = user.uid;
-var appData = {};
-var editId = null;
-var readId = null;
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
-var ICONS = {Strom:'⚡',Wasser:'💧',Gas:'🔥',Wärme:'🌡️',Sonstiges:'📊'};
-var COLORS = {Strom:'#f59e0b',Wasser:'#2563eb',Gas:'#dc2626',Wärme:'#ea580c',Sonstiges:'#64748b'};
+var user = getUser(); var uid = user.uid;
+var editWohnung = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
+
+var ZAEHLER_TYPEN = [
+  { key: 'strom',      label: 'Strom',       unit: 'kWh', ico: '⚡' },
+  { key: 'wasser_k',  label: 'Wasser kalt',  unit: 'm³',  ico: '💧' },
+  { key: 'wasser_w',  label: 'Wasser warm',  unit: 'm³',  ico: '🌡️' },
+  { key: 'gas',        label: 'Gas',          unit: 'm³',  ico: '🔥' }
+];
+
 function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function fmtNum(n) { return Number(n||0).toLocaleString('de-DE'); }
-function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
-function today() { return new Date().toISOString().slice(0,10); }
+function lbl(t) { return '<label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;">'+t+'</label>'; }
 
 function render() {
-  var zaehler = appData.zaehler || [];
-  var qTyp = (document.getElementById('f-typ')||{}).value || '';
-  var qObj = ((document.getElementById('f-obj')||{}).value||'').toLowerCase();
-  var filtered = zaehler.filter(function(z){
-    if (qTyp && z.typ !== qTyp) return false;
-    if (qObj && !(z.objekt||'').toLowerCase().includes(qObj)) return false;
+  var mieter = getData(KEYS.mieter, []);
+  var zaehler = getData(KEYS.zaehler, {});
+  var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
+
+  var filtered = mieter.filter(function(m) {
+    if (qQ && !(m.name+m.wn+'').toLowerCase().includes(qQ)) return false;
     return true;
   });
-  var ohneStand = zaehler.filter(function(z){ return !z.aktuell && z.aktuell!==0; }).length;
-  var letzteAbl = zaehler.reduce(function(b,z){ return z.datum&&z.datum>b?z.datum:b; },'');
 
-  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">'
-    +kpi('📊','Gesamt Zähler',zaehler.length,'')
-    +kpi('⚠️','Ohne Stand',ohneStand,'Noch nicht abgelesen')
-    +kpi('📅','Letzte Ablesung',letzteAbl?fmtDate(letzteAbl):'–','')
+  // KPIs
+  var totalStrom = 0, totalWasser = 0, totalGas = 0;
+  mieter.forEach(function(m) {
+    var z = zaehler[m.wn] || {};
+    totalStrom += parseFloat(z.strom_aktuell||0);
+    totalWasser += parseFloat(z.wasser_k_aktuell||0) + parseFloat(z.wasser_w_aktuell||0);
+    totalGas += parseFloat(z.gas_aktuell||0);
+  });
+
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">'
+    +kpi('🏘️','Wohnungen',mieter.length,'')
+    +kpi('⚡','Strom ges.',totalStrom.toLocaleString('de-DE',{maximumFractionDigits:1}),'kWh')
+    +kpi('💧','Wasser ges.',(totalWasser).toLocaleString('de-DE',{maximumFractionDigits:1}),'m³')
+    +kpi('🔥','Gas ges.',totalGas.toLocaleString('de-DE',{maximumFractionDigits:1}),'m³')
     +'</div>';
 
   var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
-    +'<select id="f-typ" onchange="render()" style="'+inputStyle+'max-width:180px;">'
-    +'<option value="">Alle Typen</option>'
-    +Object.keys(ICONS).map(function(t){ return '<option value="'+t+'"'+(qTyp===t?' selected':'')+'>'+ICONS[t]+' '+t+'</option>'; }).join('')
-    +'</select>'
-    +'<input id="f-obj" oninput="render()" value="'+esc(qObj)+'" placeholder="🔍 Objekt suchen..." style="'+inputStyle+'max-width:220px;">'
+    +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Mieter, Wohnung..." style="'+inputStyle+'max-width:240px;">'
     +'</div>';
 
   var cardsHtml = '';
   if (!filtered.length) {
-    cardsHtml = emptyState('📊','Keine Zähler vorhanden','Füge deinen ersten Zähler hinzu','+ Zähler hinzufügen','openAdd()');
+    cardsHtml = emptyState('⚡','Keine Wohnungen','Lege zuerst Mieter an, um Zählerstände zu erfassen','Mieter anlegen','window.location.href=\'mieter.html\'');
   } else {
-    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">';
-    filtered.forEach(function(z){
-      var ico = ICONS[z.typ]||'📊';
-      var col = COLORS[z.typ]||'#64748b';
-      var verbrauch = (z.aktuell!=null&&z.letzterStand!=null) ? (z.aktuell-z.letzterStand) : null;
-      var vCol = verbrauch===null?'#94a3b8':verbrauch>100?'#dc2626':'#16a34a';
+    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">';
+    filtered.forEach(function(m) {
+      var z = zaehler[m.wn] || {};
       cardsHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
-        +'<div style="display:flex;align-items:center;gap:10px;">'
-        +'<div style="width:44px;height:44px;border-radius:12px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:22px;">'+ico+'</div>'
-        +'<div><div style="font-size:15px;font-weight:700;color:#0f172a;">'+esc(z.name||'Zähler')+'</div>'
-        +'<div style="font-size:12px;color:#94a3b8;">Nr. '+esc(z.nummer||'–')+'</div></div></div>'
-        +'<span style="background:'+col+'20;color:'+col+';font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(z.typ)+'</span></div>'
-        +'<div style="margin-bottom:12px;">'
-        +'<div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Aktueller Stand</div>'
-        +'<div style="font-size:28px;font-weight:800;color:#0f172a;">'+(z.aktuell!=null?fmtNum(z.aktuell):'–')+'<span style="font-size:14px;font-weight:500;color:#94a3b8;margin-left:4px;">'+esc(z.einheitName||'')+'</span></div></div>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'
-        +'<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">'
-        +'<div style="font-size:10px;color:#94a3b8;">Letzter Stand</div>'
-        +'<div style="font-size:13px;font-weight:600;color:#475569;">'+(z.letzterStand!=null?fmtNum(z.letzterStand):'–')+'</div>'
-        +'<div style="font-size:10px;color:#cbd5e1;">'+fmtDate(z.datum)+'</div></div>'
-        +'<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">'
-        +'<div style="font-size:10px;color:#94a3b8;">Verbrauch</div>'
-        +'<div style="font-size:13px;font-weight:600;color:'+vCol+';">'+(verbrauch!==null?fmtNum(verbrauch)+' '+esc(z.einheitName||''):'–')+'</div></div></div>'
-        +'<div style="font-size:12px;color:#64748b;margin-bottom:14px;">📍 '+esc(z.objekt||'–')+' · '+esc(z.einheit||'–')+'</div>'
-        +'<div style="display:flex;gap:8px;">'
-        +'<button onclick="openRead(\''+z.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📖 Ablesen</button>'
-        +'<button onclick="openEdit(\''+z.id+'\')" style="width:36px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;">✏️</button>'
-        +'<button onclick="deleteZ(\''+z.id+'\')" style="width:36px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;">🗑️</button>'
-        +'</div></div>';
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+        +'<div>'
+        +'<div style="font-size:16px;font-weight:700;color:#0f172a;">'+esc(m.name||'–')+'</div>'
+        +'<div style="font-size:12px;color:#64748b;">'+esc(m.wn||'Wohnung unbekannt')+'</div>'
+        +'</div>'
+        +'<button onclick="openRead(\''+esc(m.wn)+'\')" style="padding:7px 14px;border-radius:9px;border:none;background:#eff6ff;color:#2563eb;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📝 Ablesen</button>'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+        +ZAEHLER_TYPEN.map(function(t) {
+          var aktuell = parseFloat(z[t.key+'_aktuell']||0);
+          var vorjahr = parseFloat(z[t.key+'_vorjahr']||0);
+          var diff = aktuell - vorjahr;
+          var hasDiff = z[t.key+'_vorjahr'] !== undefined && z[t.key+'_vorjahr'] !== '';
+          return '<div style="background:#f8fafc;border-radius:10px;padding:12px;">'
+            +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
+            +'<span style="font-size:16px;">'+t.ico+'</span>'
+            +'<span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">'+t.label+'</span>'
+            +'</div>'
+            +'<div style="font-size:20px;font-weight:800;color:#0f172a;">'+(z[t.key+'_aktuell']||'–')+'<span style="font-size:12px;font-weight:400;color:#94a3b8;"> '+t.unit+'</span></div>'
+            +(hasDiff?'<div style="font-size:11px;color:'+(diff>0?'#dc2626':'#16a34a')+';">Δ '+(diff>0?'+':'')+diff.toLocaleString('de-DE',{maximumFractionDigits:1})+' '+t.unit+' vs. Vorjahr</div>':'<div style="font-size:11px;color:#94a3b8;">Kein Vorjahr</div>')
+            +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Vorjahr: '+(z[t.key+'_vorjahr']||'–')+' '+t.unit+'</div>'
+            +(z[t.key+'_datum']?'<div style="font-size:10px;color:#94a3b8;">Abgelesen: '+fmtDate(z[t.key+'_datum'])+'</div>':'')
+            +'</div>';
+        }).join('')
+        +'</div>'
+        +(z.notiz?'<div style="margin-top:12px;font-size:12px;color:#64748b;background:#f8fafc;border-radius:8px;padding:8px;">📝 '+esc(z.notiz)+'</div>':'')
+        +'</div>';
     });
     cardsHtml += '</div>';
   }
 
-  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Zähler hinzufügen</button>';
+  var actionBtn = '<button onclick="openAddWohnung()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Manuell erfassen</button>';
   var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+cardsHtml+'</div>';
-  var modals = buildAddModal()+buildReadModal();
-  document.body.innerHTML = renderLayout('zaehler','Zählerstände',actionBtn,main,modals);
+  renderLayout('zaehler','Zählerstände', actionBtn, main, buildReadModal(mieter)+buildManualModal());
 }
 
-function kpi(ico,label,val,sub) {
+function kpi(ico,l,v,s) {
   return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
-    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">'+label+'</div>'
-    +'<div style="font-size:26px;font-weight:800;color:#0f172a;">'+val+'</div>'
-    +(sub?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+sub+'</div>':'')
+    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div>'
+    +'<div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'
+    +(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')
     +'</div>';
 }
 
-function buildAddModal() {
-  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:500px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="modal-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Zähler hinzufügen</h3>'
-    +fg('Name','z-name','text','z.B. Strom EG')
-    +fg('Zählernummer','z-nummer','text','1234567')
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Typ</label><select id="z-typ" style="'+inputStyle+'">'+Object.keys(ICONS).map(function(t){ return '<option>'+t+'</option>'; }).join('')+'</select></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Objekt','z-objekt','text','Musterstr. 1')
-    +fg('Einheit/Wohnung','z-einheit','text','EG links')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Messeinheit</label><select id="z-einheitname" style="'+inputStyle+'"><option>kWh</option><option>m³</option><option>l</option><option>MWh</option></select></div>'
-    +fg('Aktueller Stand','z-aktuell','number','0')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Letzter Stand','z-letzter','number','0')
-    +fg('Datum Ablesung','z-datum','date','')
-    +'</div>'
-    +'<div id="z-err" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px;border-radius:8px;font-size:13px;margin-top:8px;"></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveZ()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
-}
-
-function buildReadModal() {
+function buildReadModal(mieter) {
   return '<div id="read-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:420px;width:100%;margin:20px;">'
-    +'<h3 style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:8px;">📖 Zählerstand ablesen</h3>'
-    +'<p style="font-size:13px;color:#64748b;margin-bottom:20px;">Bitte aktuellen Stand eingeben.</p>'
-    +fg('Datum','r-datum','date','')
-    +fg('Aktueller Zählerstand','r-stand','number','z.B. 12345')
-    +'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;margin-top:4px;font-size:12px;color:#d97706;">📸 Bitte Foto des Zählerstands als Beleg aufnehmen.</div>'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="read-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:4px;">Zähler ablesen</h3>'
+    +'<div id="read-wohnung-label" style="font-size:13px;color:#64748b;margin-bottom:20px;"></div>'
+    +ZAEHLER_TYPEN.map(function(t) {
+      return '<div style="background:#f8fafc;border-radius:12px;padding:14px;margin-bottom:12px;">'
+        +'<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">'+t.ico+' '+t.label+' ('+t.unit+')</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+        +'<div>'+lbl('Aktuell')+'<input id="r-'+t.key+'-a" type="number" step="0.1" placeholder="0" style="'+inputStyle+'"></div>'
+        +'<div>'+lbl('Vorjahr')+'<input id="r-'+t.key+'-v" type="number" step="0.1" placeholder="0" style="'+inputStyle+'"></div>'
+        +'</div>'
+        +'</div>';
+    }).join('')
+    +'<div style="margin-bottom:12px;">'+lbl('Ablesedatum')+'<input id="r-datum" type="date" style="'+inputStyle+'"></div>'
+    +'<div style="margin-bottom:12px;">'+lbl('Notiz')+'<textarea id="r-notiz" style="'+inputStyle+'height:60px;resize:vertical;"></textarea></div>'
     +'<div style="display:flex;gap:10px;margin-top:18px;">'
     +'<button onclick="closeRead()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
     +'<button onclick="saveRead()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
     +'</div></div></div>';
 }
 
-function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px;'; }
-function fg(label,id,type,ph) {
-  return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label>'
-    +'<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>';
+function buildManualModal() {
+  return '<div id="manual-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:360px;width:100%;margin:20px;">'
+    +'<h3 style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:16px;">Wohnung eingeben</h3>'
+    +'<div style="margin-bottom:16px;">'+lbl('Wohnungsbezeichnung')+'<input id="man-wn" style="'+inputStyle+'" placeholder="z.B. EG Links / OG 2"></div>'
+    +'<div style="display:flex;gap:10px;">'
+    +'<button onclick="closeManual()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="startManual()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Weiter</button>'
+    +'</div></div></div>';
 }
 
-function openAdd() {
-  editId = null;
-  document.getElementById('modal-title').textContent = 'Zähler hinzufügen';
-  ['z-name','z-nummer','z-objekt','z-einheit','z-aktuell','z-letzter'].forEach(function(i){ document.getElementById(i).value=''; });
-  document.getElementById('z-datum').value = today();
-  document.getElementById('z-err').style.display = 'none';
-  document.getElementById('add-modal').style.display = 'flex';
+function openRead(wn) {
+  editWohnung = wn;
+  var z = getData(KEYS.zaehler, {})[wn] || {};
+  document.getElementById('read-title').textContent = 'Zähler ablesen';
+  document.getElementById('read-wohnung-label').textContent = wn;
+  ZAEHLER_TYPEN.forEach(function(t) {
+    document.getElementById('r-'+t.key+'-a').value = z[t.key+'_aktuell']||'';
+    document.getElementById('r-'+t.key+'-v').value = z[t.key+'_vorjahr']||'';
+  });
+  document.getElementById('r-datum').value = z.datum || today();
+  document.getElementById('r-notiz').value = z.notiz||'';
+  document.getElementById('read-modal').style.display = 'flex';
 }
-function openEdit(id) {
-  var z = (appData.zaehler||[]).find(function(x){ return x.id===id; });
-  if (!z) return;
-  editId = id;
-  document.getElementById('modal-title').textContent = 'Zähler bearbeiten';
-  document.getElementById('z-name').value = z.name||'';
-  document.getElementById('z-nummer').value = z.nummer||'';
-  document.getElementById('z-typ').value = z.typ||'Strom';
-  document.getElementById('z-objekt').value = z.objekt||'';
-  document.getElementById('z-einheit').value = z.einheit||'';
-  document.getElementById('z-einheitname').value = z.einheitName||'kWh';
-  document.getElementById('z-aktuell').value = z.aktuell||'';
-  document.getElementById('z-letzter').value = z.letzterStand||'';
-  document.getElementById('z-datum').value = z.datum||'';
-  document.getElementById('z-err').style.display = 'none';
-  document.getElementById('add-modal').style.display = 'flex';
-}
-function closeAdd() { document.getElementById('add-modal').style.display = 'none'; }
 
-function saveZ() {
-  var name = document.getElementById('z-name').value.trim();
-  if (!name) { var e=document.getElementById('z-err'); e.textContent='⚠️ Bitte Name eingeben.'; e.style.display='block'; return; }
-  var zaehler = appData.zaehler || [];
-  var obj = {
-    id: editId||gid(), name: name,
-    nummer: document.getElementById('z-nummer').value.trim(),
-    typ: document.getElementById('z-typ').value,
-    objekt: document.getElementById('z-objekt').value.trim(),
-    einheit: document.getElementById('z-einheit').value.trim(),
-    einheitName: document.getElementById('z-einheitname').value,
-    aktuell: parseFloat(document.getElementById('z-aktuell').value)||0,
-    letzterStand: parseFloat(document.getElementById('z-letzter').value)||0,
-    datum: document.getElementById('z-datum').value
-  };
-  if (editId) { var idx=zaehler.findIndex(function(x){return x.id===editId;}); if(idx>=0) zaehler[idx]=obj; }
-  else zaehler.unshift(obj);
-  appData.zaehler = zaehler;
-  syncToFirebase(uid); closeAdd(); render();
+function openAddWohnung() { document.getElementById('manual-modal').style.display='flex'; document.getElementById('man-wn').value=''; }
+function closeManual() { document.getElementById('manual-modal').style.display='none'; }
+function startManual() {
+  var wn = document.getElementById('man-wn').value.trim();
+  if (!wn) { alert('Bitte Wohnung eingeben.'); return; }
+  closeManual();
+  openRead(wn);
 }
-function openRead(id) { readId=id; document.getElementById('r-datum').value=today(); document.getElementById('r-stand').value=''; document.getElementById('read-modal').style.display='flex'; }
+
 function closeRead() { document.getElementById('read-modal').style.display='none'; }
+
 function saveRead() {
-  var stand = parseFloat(document.getElementById('r-stand').value);
-  if (isNaN(stand)) { alert('Bitte Zählerstand eingeben.'); return; }
-  var z = (appData.zaehler||[]).find(function(x){return x.id===readId;});
-  if (!z) return;
-  z.letzterStand = z.aktuell||0; z.aktuell = stand; z.datum = document.getElementById('r-datum').value;
-  if (!z.verlauf) z.verlauf = [];
-  z.verlauf.unshift({datum:z.datum,stand:stand});
-  syncToFirebase(uid); closeRead(); render();
-}
-function deleteZ(id) {
-  if (!confirm('Zähler wirklich löschen?')) return;
-  appData.zaehler = (appData.zaehler||[]).filter(function(x){return x.id!==id;});
-  syncToFirebase(uid); render();
+  if (!editWohnung) return;
+  var all = getData(KEYS.zaehler, {});
+  var obj = { datum: document.getElementById('r-datum').value, notiz: document.getElementById('r-notiz').value.trim() };
+  ZAEHLER_TYPEN.forEach(function(t) {
+    obj[t.key+'_aktuell'] = document.getElementById('r-'+t.key+'-a').value;
+    obj[t.key+'_vorjahr'] = document.getElementById('r-'+t.key+'-v').value;
+  });
+  all[editWohnung] = obj;
+  setData(KEYS.zaehler, all); syncToFirebase(uid); closeRead(); render();
 }
 
 initFirebase();
-loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.zaehler) appData.zaehler=[]; render(); });
+loadFromFirebase(uid, function(){ render(); });
 </script>
 </body>
 </html>
