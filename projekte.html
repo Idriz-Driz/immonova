@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoNova – Projekte</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+<script>
+if(!checkAuth()) { window.location.href='login.html'; }
+var user = getUser();
+var activeTab = 'liste';
+
+function addProjekt() {
+  var nm = document.getElementById('p-nm').value.trim();
+  if(!nm) { alert('Bitte Projektname eingeben!'); return; }
+  var proj = getData(KEYS.projekte, []);
+  proj.push({nm:nm,ad:document.getElementById('p-ad').value.trim(),ag:document.getElementById('p-ag').value.trim(),start:document.getElementById('p-start').value,end:document.getElementById('p-end').value,budget:parseInt(document.getElementById('p-budget').value)||0,status:document.getElementById('p-status').value,gewerke:document.getElementById('p-gewerke').value,desc:document.getElementById('p-desc').value.trim()});
+  setData(KEYS.projekte, proj);
+  addNotif('🏗️','Neues Projekt: '+nm);
+  syncToFirebase(user.uid);
+  hideModal('modal-proj');
+  document.getElementById('p-nm').value='';
+  document.getElementById('p-desc').value='';
+  render();
+}
+
+function setStatus(i,s) {
+  var proj = getData(KEYS.projekte, []);
+  proj[i].status=s; setData(KEYS.projekte, proj);
+  syncToFirebase(user.uid); render();
+}
+
+function delProjekt(i) {
+  if(!confirm('Projekt löschen?')) return;
+  var proj = getData(KEYS.projekte, []);
+  proj.splice(i,1); setData(KEYS.projekte, proj);
+  syncToFirebase(user.uid); render();
+}
+
+function setTab(t) { activeTab=t; render(); }
+
+function render() {
+  var projekte = getData(KEYS.projekte, []);
+  var colors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
+
+  function tabBtn(id,label) {
+    var isActive=activeTab===id;
+    return '<button onclick="setTab(\''+id+'\')" style="padding:10px 16px;font-size:13px;font-weight:600;color:'+(isActive?'#2563eb':'#64748b')+';border:none;background:none;cursor:pointer;font-family:inherit;border-bottom:2px solid '+(isActive?'#2563eb':'transparent')+';margin-bottom:-2px;">'+label+'</button>';
+  }
+
+  var listeHTML = projekte.length ? projekte.map(function(p,i) {
+    var gw = (p.gewerke||'').split(',').map(function(g){return g.trim();}).filter(Boolean);
+    var start = new Date(p.start); var end = new Date(p.end);
+    var pct = 0;
+    if(!isNaN(start) && !isNaN(end) && end>start) {
+      pct = Math.min(100,Math.max(0,Math.round((Date.now()-start)/(end-start)*100)));
+    }
+    var statusColor = p.status==='Abgeschlossen'?'#16a34a':p.status==='In Bearbeitung'?'#2563eb':'#64748b';
+    var statusBg = p.status==='Abgeschlossen'?'#f0fdf4':p.status==='In Bearbeitung'?'#eff6ff':'#f1f5f9';
+    return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
+      +'<div><div style="font-size:16px;font-weight:700;margin-bottom:4px;">'+p.nm+'</div>'
+      +'<div style="font-size:12px;color:#64748b;">📍 '+(p.ad||'–')+' · 👤 '+(p.ag||'–')+'</div></div>'
+      +'<span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:'+statusBg+';color:'+statusColor+';">'+p.status+'</span>'
+      +'</div>'
+      +'<div style="font-size:12px;color:#64748b;margin-bottom:10px;">📅 '+fmtDate(p.start)+' – '+fmtDate(p.end)+' · Budget: €'+fmt(p.budget)+'</div>'
+      +'<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin-bottom:12px;"><div style="height:100%;width:'+pct+'%;background:#2563eb;border-radius:3px;transition:width 0.3s;"></div></div>'
+      +(gw.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">'+gw.map(function(g){return '<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#f1f5f9;color:#64748b;">'+g+'</span>';}).join('')+'</div>':'')
+      +(p.desc?'<div style="font-size:13px;color:#64748b;margin-bottom:14px;">'+p.desc+'</div>':'')
+      +'<div style="display:flex;gap:8px;align-items:center;">'
+      +'<select onchange="setStatus('+i+',this.value)" style="padding:6px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;outline:none;">'
+      +'<option '+(p.status==='Geplant'?'selected':'')+'>Geplant</option>'
+      +'<option '+(p.status==='In Bearbeitung'?'selected':'')+'>In Bearbeitung</option>'
+      +'<option '+(p.status==='Abgeschlossen'?'selected':'')+'>Abgeschlossen</option>'
+      +'</select>'
+      +'<button onclick="delProjekt('+i+')" style="padding:6px 12px;background:#fef2f2;color:#dc2626;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;">🗑 Löschen</button>'
+      +'</div></div>';
+  }).join('') : '<div style="padding:40px;text-align:center;"><div style="font-size:48px;margin-bottom:12px;">🏗️</div><div style="font-size:16px;font-weight:700;margin-bottom:6px;">Keine Projekte</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Erstelle dein erstes Bauprojekt</div><button onclick="showModal(\'modal-proj\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button></div>';
+
+  // PLANTAFEL
+  var plantafelHTML = '';
+  if(projekte.length) {
+    var allDates = projekte.flatMap(function(p){return [new Date(p.start),new Date(p.end)];}).filter(function(d){return !isNaN(d);});
+    var minD = new Date(Math.min.apply(null,allDates));
+    var maxD = new Date(Math.max.apply(null,allDates));
+    var totalDays = Math.max(1,(maxD-minD)/86400000);
+    plantafelHTML = '<div style="overflow-x:auto;">'
+      +'<div style="min-width:700px;">'
+      +'<div style="display:grid;grid-template-columns:180px 1fr;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:8px;">'
+      +'<div style="font-size:11px;font-weight:600;color:#64748b;padding:0 10px;">PROJEKT</div>'
+      +'<div style="font-size:11px;font-weight:600;color:#64748b;">ZEITPLAN</div>'
+      +'</div>'
+      +projekte.map(function(p,i) {
+        var start = new Date(p.start); var end = new Date(p.end);
+        if(isNaN(start)||isNaN(end)) return '';
+        var leftPct = Math.max(0,(start-minD)/86400000/totalDays*100);
+        var widthPct = Math.min(100-leftPct,(end-start)/86400000/totalDays*100);
+        return '<div style="display:grid;grid-template-columns:180px 1fr;margin-bottom:8px;align-items:center;">'
+          +'<div style="font-size:12px;font-weight:600;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+p.nm+'">'+p.nm+'</div>'
+          +'<div style="position:relative;height:32px;background:#f1f5f9;border-radius:6px;overflow:hidden;">'
+          +'<div style="position:absolute;left:'+leftPct+'%;width:'+Math.max(2,widthPct)+'%;height:100%;background:'+colors[i%colors.length]+';border-radius:6px;display:flex;align-items:center;padding:0 8px;">'
+          +'<span style="font-size:11px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;">'+p.nm+'</span>'
+          +'</div></div></div>';
+      }).join('')
+      +'</div></div>';
+  } else {
+    plantafelHTML = '<div style="padding:40px;text-align:center;"><div style="font-size:48px;margin-bottom:12px;">📅</div><div style="font-size:16px;font-weight:700;margin-bottom:6px;">Keine Projekte für Plantafel</div></div>';
+  }
+
+  // GEWERKE
+  var alle = projekte.flatMap(function(p) {
+    return (p.gewerke||'').split(',').map(function(g){return g.trim();}).filter(Boolean).map(function(g){return {projekt:p.nm,gewerk:g};});
+  });
+  var gewerkeHTML = alle.length ? '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">'
+    +alle.map(function(g) {
+      return '<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">'
+        +'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">'+g.projekt+'</div>'
+        +'<div style="font-size:14px;font-weight:700;">'+g.gewerk+'</div>'
+        +'</div>';
+    }).join('')+'</div>'
+    : '<div style="padding:40px;text-align:center;"><div style="font-size:48px;margin-bottom:12px;">🔨</div><div style="font-size:16px;font-weight:700;">Keine Gewerke</div></div>';
+
+  var modal = modalHTML('modal-proj','🏗️ Projekt erstellen',
+    formGroup('Projektname','<input id="p-nm" '+inputStyle+' placeholder="Sanierung Musterstraße 5">')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Adresse','<input id="p-ad" '+inputStyle+' placeholder="Musterstraße 5, Dortmund">')
+    +formGroup('Auftraggeber','<input id="p-ag" '+inputStyle+' placeholder="Max Mustermann">')
+    +formGroup('Startdatum','<input id="p-start" type="date" '+inputStyle+'>')
+    +formGroup('Enddatum','<input id="p-end" type="date" '+inputStyle+'>')
+    +formGroup('Budget €','<input id="p-budget" type="number" '+inputStyle+' placeholder="50000">')
+    +formGroup('Status','<select id="p-status" '+inputStyle+'><option>Geplant</option><option>In Bearbeitung</option><option>Abgeschlossen</option></select>')
+    +'</div>'
+    +formGroup('Gewerke (kommagetrennt)','<input id="p-gewerke" '+inputStyle+' placeholder="Abbruch, Trockenbau, Maler, Sanitär, Elektro">')
+    +formGroup('Beschreibung','<textarea id="p-desc" '+inputStyle+' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;min-height:70px;resize:vertical;box-sizing:border-box;" placeholder="Projektbeschreibung..."></textarea>')
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
+    +'<button onclick="hideModal(\'modal-proj\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="addProjekt()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">🏗️ Erstellen</button>'
+    +'</div>'
+  );
+
+  var tabContent = activeTab==='liste'?listeHTML:activeTab==='plantafel'?plantafelHTML:gewerkeHTML;
+  var actionBtn = '<button onclick="showModal(\'modal-proj\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>';
+
+  var main =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+    +'<div><div style="font-size:18px;font-weight:700;">🏗️ Projekte & Baustellen</div>'
+    +'<div style="font-size:13px;color:#64748b;">'+projekte.length+' Projekte · '+projekte.filter(function(p){return p.status==='In Bearbeitung';}).length+' aktiv</div></div>'
+    +'<button onclick="showModal(\'modal-proj\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>'
+    +'</div>'
+    +'<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    +'<div style="display:flex;border-bottom:2px solid #e2e8f0;padding:0 20px;">'
+    +tabBtn('liste','📋 Projektliste')
+    +tabBtn('plantafel','📅 Plantafel')
+    +tabBtn('gewerke','🔨 Gewerke')
+    +'</div>'
+    +'<div style="padding:'+(activeTab==='liste'?'0':'20px')+';">'+tabContent+'</div>'
+    +'</div>';
+
+  renderLayout('projekte','Projekte & Baustellen',actionBtn,main,modal);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoNova – Mieter</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+<script>
+if(!checkAuth()) { window.location.href='login.html'; }
+var user = getUser();
+var activeTab = 'alle';
+
+function setStatus(i, s) {
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  mieter[i].status = s;
+  setData(KEYS.mieter, mieter);
+  addNotif(s==='bezahlt'?'✅':'⚠️', s==='bezahlt'?'Miete bezahlt: '+mieter[i].name:'Offene Miete: '+mieter[i].name);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function addMieter() {
+  var nm = document.getElementById('m-name').value.trim();
+  var wn = document.getElementById('m-wn').value.trim();
+  if(!nm||!wn) { alert('Name und Wohnung sind Pflichtfelder!'); return; }
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  mieter.push({name:nm,wn:wn,miete:parseInt(document.getElementById('m-miete').value)||0,kau:parseInt(document.getElementById('m-kau').value)||0,tel:document.getElementById('m-tel').value.trim(),em:document.getElementById('m-em').value.trim(),dat:document.getElementById('m-dat').value,sco:parseInt(document.getElementById('m-sco').value)||80,status:'offen'});
+  setData(KEYS.mieter, mieter);
+  addNotif('👥','Neuer Mieter: '+nm);
+  syncToFirebase(user.uid);
+  hideModal('modal-mieter');
+  render();
+}
+
+function delMieter(i) {
+  if(!confirm('Mieter entfernen?')) return;
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  mieter.splice(i,1);
+  setData(KEYS.mieter, mieter);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function setTab(t) { activeTab=t; render(); }
+
+function render() {
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+
+  var thStyle = 'style="text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e2e8f0;background:#f8fafc;"';
+  var tdStyle = 'style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;"';
+
+  var alleHTML = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">'
+    +'<thead><tr><th '+thStyle+'>Mieter</th><th '+thStyle+'>Wohnung</th><th '+thStyle+'>Miete</th><th '+thStyle+'>Status</th><th '+thStyle+'>Score</th><th '+thStyle+'>Kaution</th><th '+thStyle+'>Einzug</th><th '+thStyle+'>Aktionen</th></tr></thead><tbody>'
+    +mieter.map(function(m,i) {
+      var sc = m.sco||80;
+      var scColor = sc>80?'#16a34a':sc>60?'#d97706':'#dc2626';
+      return '<tr onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
+        +'<td '+tdStyle+'><div style="display:flex;align-items:center;gap:10px;"><div style="width:36px;height:36px;border-radius:50%;background:#eff6ff;color:#2563eb;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">'+m.name[0]+'</div><div><div style="font-size:13px;font-weight:600;">'+m.name+'</div><div style="font-size:11px;color:#64748b;">'+(m.em||'–')+'</div></div></div></td>'
+        +'<td '+tdStyle+'><span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;">'+m.wn+'</span></td>'
+        +'<td '+tdStyle+'><strong>€'+fmt(m.miete)+'</strong></td>'
+        +'<td '+tdStyle+'><div style="display:flex;gap:4px;"><button onclick="setStatus('+i+',\'bezahlt\')" style="padding:5px 10px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;background:'+(m.status==='bezahlt'?'#16a34a':'#f1f5f9')+';color:'+(m.status==='bezahlt'?'white':'#64748b')+';">✅</button><button onclick="setStatus('+i+',\'offen\')" style="padding:5px 10px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;background:'+(m.status==='offen'?'#dc2626':'#f1f5f9')+';color:'+(m.status==='offen'?'white':'#64748b')+';">❌</button></div></td>'
+        +'<td '+tdStyle+'><div style="display:flex;align-items:center;gap:8px;"><div style="width:60px;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+sc+'%;background:'+scColor+';border-radius:3px;"></div></div><strong style="font-size:12px;color:'+scColor+';">'+sc+'</strong></div></td>'
+        +'<td '+tdStyle+'>€'+fmt(m.kau)+'</td>'
+        +'<td '+tdStyle+' style="padding:12px;font-size:12px;color:#64748b;border-bottom:1px solid #f1f5f9;vertical-align:middle;">'+fmtDate(m.dat)+'</td>'
+        +'<td '+tdStyle+'><div style="display:flex;gap:5px;">'
+        +(m.status==='offen'?'<a href="https://wa.me/'+m.tel+'?text=Hallo%20'+encodeURIComponent(m.name)+'%2C%20Miete%20f%C3%A4llig." target="_blank" style="width:30px;height:30px;background:#16a34a;color:white;border-radius:7px;display:flex;align-items:center;justify-content:center;text-decoration:none;">📲</a>':'')
+        +'<button onclick="delMieter('+i+')" style="width:30px;height:30px;background:#fef2f2;color:#dc2626;border:none;border-radius:7px;cursor:pointer;">🗑</button>'
+        +'</div></td></tr>';
+    }).join('')
+    +'</tbody></table></div>';
+
+  var mon = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  var histRows = '';
+  for(var i=5;i>=0;i--) {
+    var d = new Date(); d.setMonth(d.getMonth()-i);
+    mieter.forEach(function(m) {
+      histRows += '<tr onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
+        +'<td '+tdStyle+'><strong>'+m.name+'</strong></td>'
+        +'<td '+tdStyle+'><span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;">'+m.wn+'</span></td>'
+        +'<td '+tdStyle+'>'+mon[d.getMonth()]+' '+d.getFullYear()+'</td>'
+        +'<td '+tdStyle+'><strong>€'+fmt(m.miete)+'</strong></td>'
+        +'<td '+tdStyle+'><span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(i===0&&m.status==='offen'?'#fef2f2':'#f0fdf4')+';color:'+(i===0&&m.status==='offen'?'#dc2626':'#16a34a')+'">'+(i===0&&m.status==='offen'?'❌ Offen':'✅ Bezahlt')+'</span></td>'
+        +'</tr>';
+    });
+  }
+
+  var kautionHTML = '<table style="width:100%;border-collapse:collapse;"><thead><tr><th '+thStyle+'>Mieter</th><th '+thStyle+'>Wohnung</th><th '+thStyle+'>Status</th><th '+thStyle+'>Betrag</th><th '+thStyle+'>Einzug</th></tr></thead><tbody>'
+    +mieter.map(function(m) {
+      return '<tr><td '+tdStyle+'><strong>'+m.name+'</strong></td><td '+tdStyle+'><span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;">'+m.wn+'</span></td><td '+tdStyle+'><span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#f0fdf4;color:#16a34a;">✅ Hinterlegt</span></td><td '+tdStyle+'><strong>€'+fmt(m.kau)+'</strong></td><td '+tdStyle+' style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-size:12px;color:#64748b;">'+fmtDate(m.dat)+'</td></tr>';
+    }).join('')+'</tbody></table>';
+
+  var historieHTML = '<table style="width:100%;border-collapse:collapse;"><thead><tr><th '+thStyle+'>Mieter</th><th '+thStyle+'>Wohnung</th><th '+thStyle+'>Monat</th><th '+thStyle+'>Betrag</th><th '+thStyle+'>Status</th></tr></thead><tbody>'+histRows+'</tbody></table>';
+
+  function tabBtn(id, label) {
+    var isActive = activeTab===id;
+    return '<button onclick="setTab(\''+id+'\')" style="padding:10px 16px;font-size:13px;font-weight:600;color:'+(isActive?'#2563eb':'#64748b')+';border:none;background:none;cursor:pointer;font-family:inherit;border-bottom:2px solid '+(isActive?'#2563eb':'transparent')+';margin-bottom:-2px;">'+label+'</button>';
+  }
+
+  var tabContent = activeTab==='alle'?alleHTML:activeTab==='kaution'?kautionHTML:historieHTML;
+
+  var modal = modalHTML('modal-mieter','👥 Mieter hinzufügen',
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Name','<input id="m-name" '+inputStyle+' placeholder="Max Mustermann">')
+    +formGroup('Wohnung','<input id="m-wn" '+inputStyle+' placeholder="1 OG">')
+    +formGroup('Kaltmiete €','<input id="m-miete" type="number" '+inputStyle+' placeholder="950">')
+    +formGroup('Kaution €','<input id="m-kau" type="number" '+inputStyle+' placeholder="2850">')
+    +formGroup('Telefon','<input id="m-tel" '+inputStyle+' placeholder="+49 151 ...">')
+    +formGroup('Email','<input id="m-em" type="email" '+inputStyle+' placeholder="email@mail.de">')
+    +formGroup('Einzugsdatum','<input id="m-dat" type="date" '+inputStyle+'>')
+    +formGroup('Score','<input id="m-sco" type="number" value="80" '+inputStyle+'>')
+    +'</div>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
+    +'<button onclick="hideModal(\'modal-mieter\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="addMieter()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">✅ Hinzufügen</button>'
+    +'</div>'
+  );
+
+  var actionBtn = '<button onclick="showModal(\'modal-mieter\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Mieter</button>';
+
+  var main =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+    +'<div><div style="font-size:18px;font-weight:700;">👥 Mieter</div>'
+    +'<div style="font-size:13px;color:#64748b;">'+mieter.length+' Mieter · '+mieter.filter(function(m){return m.status==='bezahlt';}).length+' bezahlt · '+mieter.filter(function(m){return m.status==='offen';}).length+' offen</div></div>'
+    +'<button onclick="showModal(\'modal-mieter\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Mieter hinzufügen</button>'
+    +'</div>'
+    +'<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    +'<div style="display:flex;border-bottom:2px solid #e2e8f0;padding:0 20px;">'
+    +tabBtn('alle','👥 Alle Mieter')
+    +tabBtn('kaution','💰 Kautionen')
+    +tabBtn('historie','📅 Miethistorie')
+    +'</div>'
+    +'<div>'+tabContent+'</div>'
+    +'</div>';
+
+  renderLayout('mieter','Mieter',actionBtn,main,modal);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
+</script>
+</body>
+</html>

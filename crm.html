@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoNova – CRM</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+<script>
+if(!checkAuth()) { window.location.href='login.html'; }
+var user = getUser();
+var intFilter = 'alle';
+var activeTab = 'followup';
+
+function addFollowUp() {
+  var nm = document.getElementById('fu-nm').value.trim();
+  var dat = document.getElementById('fu-dat').value;
+  if(!nm||!dat) { alert('Bitte Name und Datum!'); return; }
+  var fu = getData(KEYS.followups, []);
+  fu.push({nm:nm,tel:document.getElementById('fu-tel').value.trim(),not:document.getElementById('fu-not').value.trim(),dat:dat,zt:document.getElementById('fu-zt').value,pr:document.getElementById('fu-pr').value,done:false,erstellt:today()});
+  setData(KEYS.followups, fu);
+  addNotif('🎯','Follow-Up: '+nm+' am '+fmtDate(dat));
+  syncToFirebase(user.uid);
+  hideModal('modal-fu');
+  document.getElementById('fu-nm').value='';
+  document.getElementById('fu-not').value='';
+  render();
+}
+
+function toggleFU(i) {
+  var fu = getData(KEYS.followups, []);
+  fu[i].done = !fu[i].done;
+  setData(KEYS.followups, fu);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function delFU(i) {
+  if(!confirm('Löschen?')) return;
+  var fu = getData(KEYS.followups, []);
+  fu.splice(i,1); setData(KEYS.followups, fu);
+  syncToFirebase(user.uid); render();
+}
+
+function addInteressent() {
+  var nm = document.getElementById('int-nm').value.trim();
+  if(!nm) { alert('Bitte Name eingeben!'); return; }
+  var arr = getData(KEYS.interessenten, []);
+  arr.push({nm:nm,tel:document.getElementById('int-tel').value.trim(),em:document.getElementById('int-em').value.trim(),int:document.getElementById('int-int').value.trim(),st:document.getElementById('int-st').value,not:document.getElementById('int-not').value.trim(),dat:today()});
+  setData(KEYS.interessenten, arr);
+  addNotif('🔍','Neuer Interessent: '+nm);
+  syncToFirebase(user.uid);
+  hideModal('modal-int');
+  document.getElementById('int-nm').value='';
+  document.getElementById('int-not').value='';
+  render();
+}
+
+function setIntStatus(i,s) {
+  var arr = getData(KEYS.interessenten, []);
+  arr[i].st=s; setData(KEYS.interessenten, arr);
+  syncToFirebase(user.uid); render();
+}
+
+function delInt(i) {
+  if(!confirm('Löschen?')) return;
+  var arr = getData(KEYS.interessenten, []);
+  arr.splice(i,1); setData(KEYS.interessenten, arr);
+  syncToFirebase(user.uid); render();
+}
+
+function fuVonInt(i) {
+  var arr = getData(KEYS.interessenten, []);
+  var x = arr[i];
+  document.getElementById('fu-nm').value = x.nm;
+  document.getElementById('fu-tel').value = x.tel||'';
+  document.getElementById('fu-not').value = x.int;
+  var d = new Date(); d.setDate(d.getDate()+3);
+  document.getElementById('fu-dat').value = d.toISOString().split('T')[0];
+  activeTab='followup'; render();
+  setTimeout(function(){showModal('modal-fu');},100);
+}
+
+function setFilter(f) { intFilter=f; render(); }
+function setTab(t) { activeTab=t; render(); }
+
+function render() {
+  var fu = getData(KEYS.followups, []);
+  var int = getData(KEYS.interessenten, []);
+  var heute = today();
+
+  var offen = fu.filter(function(f){return !f.done;}).length;
+  var fuHeute = fu.filter(function(f){return !f.done&&f.dat===heute;}).length;
+  var erl = fu.filter(function(f){return f.done;}).length;
+
+  var statRow = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">'
+    +'<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:12px;padding:20px;"><div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;">Offen</div><div style="font-size:28px;font-weight:700;">'+offen+'</div></div>'
+    +'<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:12px;padding:20px;"><div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;">Heute fällig</div><div style="font-size:28px;font-weight:700;color:#dc2626;">'+fuHeute+'</div></div>'
+    +'<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:12px;padding:20px;"><div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;">Erledigt</div><div style="font-size:28px;font-weight:700;color:#16a34a;">'+erl+'</div></div>'
+    +'</div>';
+
+  var fuList = fu.length ? fu.slice().sort(function(a,b){return new Date(a.dat)-new Date(b.dat);}).map(function(f) {
+    var i = fu.indexOf(f);
+    var isHeute = f.dat===heute;
+    var past = f.dat<heute && !f.done;
+    return '<div style="display:flex;align-items:flex-start;gap:14px;padding:16px;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="font-size:24px;">'+(f.done?'✅':past?'⚠️':isHeute?'🔥':'📞')+'</div>'
+      +'<div style="flex:1;">'
+      +'<div style="font-size:14px;font-weight:700;'+(f.done?'text-decoration:line-through;color:#94a3b8;':'')+'">'+f.nm+'</div>'
+      +'<div style="font-size:12px;color:#64748b;margin:2px 0;">'+f.not+'</div>'
+      +'<div style="font-size:11px;color:'+(past&&!f.done?'#dc2626':isHeute?'#d97706':'#94a3b8')+';">📅 '+fmtDate(f.dat)+(f.zt?' · '+f.zt:'')+'</div>'
+      +'</div>'
+      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(f.pr==='hoch'?'#fef2f2':f.pr==='mittel'?'#fffbeb':'#f0fdf4')+';color:'+(f.pr==='hoch'?'#dc2626':f.pr==='mittel'?'#d97706':'#16a34a')+';">'+f.pr+'</span>'
+      +'<div style="display:flex;gap:5px;">'
+      +(f.tel?'<a href="https://wa.me/'+f.tel.replace(/\D/g,'')+'" target="_blank" style="width:30px;height:30px;background:#16a34a;color:white;border-radius:7px;display:flex;align-items:center;justify-content:center;text-decoration:none;">📲</a>':'')
+      +'<button onclick="toggleFU('+i+')" style="width:30px;height:30px;border:1px solid #e2e8f0;background:white;border-radius:7px;cursor:pointer;" title="'+(f.done?'Wieder öffnen':'Erledigt')+'">'+(f.done?'↩':'✅')+'</button>'
+      +'<button onclick="delFU('+i+')" style="width:30px;height:30px;background:#fef2f2;color:#dc2626;border:none;border-radius:7px;cursor:pointer;">🗑</button>'
+      +'</div></div>';
+  }).join('') : '<div style="padding:40px;text-align:center;"><div style="font-size:48px;margin-bottom:12px;">🎯</div><div style="font-size:16px;font-weight:700;margin-bottom:6px;">Keine Follow-Ups</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Nach jedem Gespräch einen Follow-Up anlegen!</div><button onclick="showModal(\'modal-fu\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Follow-Up anlegen</button></div>';
+
+  var filtered = intFilter==='alle'?int:int.filter(function(x){return x.st===intFilter;});
+  var intList = filtered.length ? filtered.map(function(x) {
+    var i = int.indexOf(x);
+    return '<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="width:40px;height:40px;border-radius:50%;background:'+(x.st==='warm'?'#fffbeb':x.st==='abschluss'?'#f0fdf4':'#eff6ff')+';display:flex;align-items:center;justify-content:center;font-size:18px;">'+(x.st==='warm'?'🔥':x.st==='abschluss'?'✅':'❄️')+'</div>'
+      +'<div style="flex:1;">'
+      +'<div style="font-size:14px;font-weight:700;">'+x.nm+'</div>'
+      +'<div style="font-size:12px;color:#64748b;">'+x.int+'</div>'
+      +'<div style="font-size:11px;color:#94a3b8;">'+x.not+'</div>'
+      +'</div>'
+      +'<select onchange="setIntStatus('+i+',this.value)" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;outline:none;">'
+      +'<option value="warm" '+(x.st==='warm'?'selected':'')+'>🔥 Warm</option>'
+      +'<option value="kalt" '+(x.st==='kalt'?'selected':'')+'>❄️ Kalt</option>'
+      +'<option value="abschluss" '+(x.st==='abschluss'?'selected':'')+'>✅ Abschluss</option>'
+      +'</select>'
+      +'<div style="display:flex;gap:5px;">'
+      +(x.tel?'<a href="https://wa.me/'+x.tel.replace(/\D/g,'')+'" target="_blank" style="width:30px;height:30px;background:#16a34a;color:white;border-radius:7px;display:flex;align-items:center;justify-content:center;text-decoration:none;">📲</a>':'')
+      +'<button onclick="fuVonInt('+i+')" style="padding:5px 10px;background:#eff6ff;color:#2563eb;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;">🎯 Follow-Up</button>'
+      +'<button onclick="delInt('+i+')" style="width:30px;height:30px;background:#fef2f2;color:#dc2626;border:none;border-radius:7px;cursor:pointer;">🗑</button>'
+      +'</div></div>';
+  }).join('') : '<div style="padding:40px;text-align:center;"><div style="font-size:48px;margin-bottom:12px;">🔍</div><div style="font-size:16px;font-weight:700;margin-bottom:6px;">Keine Interessenten</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Erfasse alle Interessenten – auch für später!</div><button onclick="showModal(\'modal-int\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Interessent hinzufügen</button></div>';
+
+  var intFilterRow = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">'
+    +'<div onclick="setFilter(\'alle\')" style="background:white;border:2px solid '+(intFilter==='alle'?'#2563eb':'#e2e8f0')+';border-radius:12px;padding:14px;text-align:center;cursor:pointer;"><div style="font-size:11px;color:#64748b;">Alle</div><div style="font-size:22px;font-weight:700;">'+int.length+'</div></div>'
+    +'<div onclick="setFilter(\'warm\')" style="background:white;border:2px solid '+(intFilter==='warm'?'#d97706':'#e2e8f0')+';border-radius:12px;padding:14px;text-align:center;cursor:pointer;"><div style="font-size:11px;color:#d97706;">🔥 Warm</div><div style="font-size:22px;font-weight:700;color:#d97706;">'+int.filter(function(x){return x.st==='warm';}).length+'</div></div>'
+    +'<div onclick="setFilter(\'kalt\')" style="background:white;border:2px solid '+(intFilter==='kalt'?'#2563eb':'#e2e8f0')+';border-radius:12px;padding:14px;text-align:center;cursor:pointer;"><div style="font-size:11px;color:#2563eb;">❄️ Kalt</div><div style="font-size:22px;font-weight:700;color:#2563eb;">'+int.filter(function(x){return x.st==='kalt';}).length+'</div></div>'
+    +'<div onclick="setFilter(\'abschluss\')" style="background:white;border:2px solid '+(intFilter==='abschluss'?'#16a34a':'#e2e8f0')+';border-radius:12px;padding:14px;text-align:center;cursor:pointer;"><div style="font-size:11px;color:#16a34a;">✅ Abschluss</div><div style="font-size:22px;font-weight:700;color:#16a34a;">'+int.filter(function(x){return x.st==='abschluss';}).length+'</div></div>'
+    +'</div>';
+
+  function tabBtn(id,label) {
+    var isActive=activeTab===id;
+    return '<button onclick="setTab(\''+id+'\')" style="padding:10px 16px;font-size:13px;font-weight:600;color:'+(isActive?'#2563eb':'#64748b')+';border:none;background:none;cursor:pointer;font-family:inherit;border-bottom:2px solid '+(isActive?'#2563eb':'transparent')+';margin-bottom:-2px;">'+label+'</button>';
+  }
+
+  var fuModal = modalHTML('modal-fu','🎯 Follow-Up anlegen',
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Name','<input id="fu-nm" '+inputStyle+' placeholder="Max Mustermann">')
+    +formGroup('Telefon','<input id="fu-tel" '+inputStyle+' placeholder="+49 151 ...">')
+    +'</div>'
+    +formGroup('Thema / Notiz','<textarea id="fu-not" '+inputStyle+' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;min-height:80px;resize:vertical;box-sizing:border-box;" placeholder="Was wurde besprochen?"></textarea>')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Rückruf Datum','<input id="fu-dat" type="date" '+inputStyle+'>')
+    +formGroup('Uhrzeit','<input id="fu-zt" type="time" value="10:00" '+inputStyle+'>')
+    +'</div>'
+    +formGroup('Priorität','<select id="fu-pr" '+inputStyle+'><option value="hoch">🔴 Hoch – Heute zurückrufen</option><option value="mittel" selected>🟡 Mittel – Diese Woche</option><option value="niedrig">🟢 Niedrig – Nächste Woche</option></select>')
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
+    +'<button onclick="hideModal(\'modal-fu\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="addFollowUp()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">🎯 Speichern</button>'
+    +'</div>'
+  );
+
+  var intModal = modalHTML('modal-int','🔍 Interessent hinzufügen',
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Name','<input id="int-nm" '+inputStyle+' placeholder="Max Mustermann">')
+    +formGroup('Telefon','<input id="int-tel" '+inputStyle+' placeholder="+49 151 ...">')
+    +formGroup('Email','<input id="int-em" type="email" '+inputStyle+' placeholder="email@mail.de">')
+    +formGroup('Status','<select id="int-st" '+inputStyle+'><option value="warm">🔥 Warm</option><option value="kalt">❄️ Kalt</option><option value="abschluss">✅ Abschluss</option></select>')
+    +'</div>'
+    +formGroup('Gesuchtes Objekt','<input id="int-int" '+inputStyle+' placeholder="3-Zimmer, max. 1000€, Dortmund">')
+    +formGroup('Notiz','<textarea id="int-not" '+inputStyle+' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;min-height:60px;resize:vertical;box-sizing:border-box;" placeholder="Hat angerufen am..."></textarea>')
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
+    +'<button onclick="hideModal(\'modal-int\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="addInteressent()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">✅ Speichern</button>'
+    +'</div>'
+  );
+
+  var actionBtn = activeTab==='followup'
+    ? '<button onclick="showModal(\'modal-fu\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Follow-Up</button>'
+    : '<button onclick="showModal(\'modal-int\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Interessent</button>';
+
+  var main =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+    +'<div><div style="font-size:18px;font-weight:700;">🎯 Follow-Up CRM</div>'
+    +'<div style="font-size:13px;color:#64748b;">Verbindlichkeit nach jedem Gespräch</div></div>'
+    +actionBtn+'</div>'
+    +(activeTab==='followup'?statRow:'')
+    +'<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+    +'<div style="display:flex;border-bottom:2px solid #e2e8f0;padding:0 20px;">'
+    +tabBtn('followup','🎯 Follow-Ups')
+    +tabBtn('interessenten','🔍 Interessenten')
+    +'</div>'
+    +'<div>'+(activeTab==='followup'?fuList:intFilterRow+intList)+'</div>'
+    +'</div>';
+
+  renderLayout('crm','Follow-Up CRM',actionBtn,main,fuModal+intModal);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
+</script>
+</body>
+</html>

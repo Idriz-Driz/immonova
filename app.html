@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoNova – Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+<script>
+if(!checkAuth()) { window.location.href='login.html'; }
+
+var user = getUser();
+
+function render() {
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  var tickets = getData(KEYS.tickets, []);
+  var aufgaben = getData(KEYS.aufgaben, []);
+  var followups = getData(KEYS.followups, []);
+  var termine = getData(KEYS.termine, []);
+
+  var bez = mieter.filter(function(m){return m.status==='bezahlt';});
+  var off = mieter.filter(function(m){return m.status==='offen';});
+  var ein = bez.reduce(function(s,m){return s+(m.miete||0);},0);
+  var offTix = tickets.filter(function(t){return t.status==='Offen';});
+  var h = new Date().getHours();
+  var greet = h<12?'Guten Morgen':h<18?'Guten Tag':'Guten Abend';
+  var heute = today();
+  var ges = mieter.reduce(function(s,m){return s+(m.miete||0);},0);
+
+  function statCard(label, value, sub, ico) {
+    return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:8px;">'
+      +'<div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">'+label+'</div>'
+      +'<div style="font-size:22px;">'+ico+'</div></div>'
+      +'<div style="font-size:28px;font-weight:700;line-height:1;margin-bottom:4px;">'+value+'</div>'
+      +'<div style="font-size:12px;color:#64748b;">'+sub+'</div></div>';
+  }
+
+  var mieterHTML = mieter.map(function(m) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="width:36px;height:36px;border-radius:50%;background:'+(m.status==='bezahlt'?'#f0fdf4':'#fef2f2')+';color:'+(m.status==='bezahlt'?'#16a34a':'#dc2626')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">'+m.name[0]+'</div>'
+      +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;">'+m.name+'</div><div style="font-size:11px;color:#64748b;">'+m.wn+' · €'+fmt(m.miete)+'/Mo</div></div>'
+      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(m.status==='bezahlt'?'#f0fdf4':'#fef2f2')+';color:'+(m.status==='bezahlt'?'#16a34a':'#dc2626')+';">'+(m.status==='bezahlt'?'✅ Bezahlt':'❌ Offen')+'</span>'
+      +'</div>';
+  }).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine Mieter. <a href="mieter.html" style="color:#2563eb;">Hinzufügen →</a></div>';
+
+  var renditeHTML = mieter.map(function(m) {
+    var pct = ges ? Math.round((m.miete||0)/ges*100) : 0;
+    return '<div style="padding:8px 0;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;"><span>'+m.wn+'</span><strong>€'+fmt(m.miete)+'</strong></div>'
+      +'<div style="height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+(m.status==='bezahlt'?'#2563eb':'#dc2626')+';border-radius:3px;"></div></div>'
+      +'</div>';
+  }).join('');
+
+  var fuHeute = followups.filter(function(f){return !f.done && f.dat===heute;});
+  var fuHTML = fuHeute.length ? fuHeute.map(function(f) {
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="font-size:22px;">🔥</div>'
+      +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;">'+f.nm+'</div><div style="font-size:11px;color:#64748b;">'+f.not+'</div></div>'
+      +(f.tel?'<a href="https://wa.me/'+f.tel.replace(/\D/g,'')+'" target="_blank" style="background:#16a34a;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;text-decoration:none;">📲</a>':'')
+      +'</div>';
+  }).join('') : '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine Follow-Ups heute ✅</div>';
+
+  var komTermine = termine.filter(function(t){return new Date(t.dat)>=new Date();}).sort(function(a,b){return new Date(a.dat)-new Date(b.dat);}).slice(0,4);
+  var termineHTML = komTermine.length ? komTermine.map(function(t) {
+    var ico = t.kat==='wartung'?'🔧':t.kat==='uebergabe'?'🔑':t.kat==='zahlung'?'💳':'📅';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="font-size:22px;">'+ico+'</div>'
+      +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;">'+t.ttl+'</div><div style="font-size:11px;color:#64748b;">'+fmtDate(t.dat)+(t.zt?' · '+t.zt:'')+'</div></div>'
+      +'</div>';
+  }).join('') : '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine Termine 📅</div>';
+
+  var tixHTML = offTix.slice(0,4).map(function(t) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(t.prio==='Hoch'?'#fef2f2':t.prio==='Mittel'?'#fffbeb':'#f0fdf4')+';color:'+(t.prio==='Hoch'?'#dc2626':t.prio==='Mittel'?'#d97706':'#16a34a')+';">'+t.prio+'</span>'
+      +'<div style="flex:1;font-size:13px;">'+((t.pb||'').substring(0,45))+'</div>'
+      +'</div>';
+  }).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine offenen Tickets 🎉</div>';
+
+  var aufHTML = aufgaben.filter(function(a){return !a.done;}).slice(0,4).map(function(a) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      +'<div style="width:20px;height:20px;border-radius:50%;border:2px solid #e2e8f0;flex-shrink:0;"></div>'
+      +'<div style="flex:1;font-size:13px;">'+a.txt+'</div>'
+      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(a.pr==='hoch'?'#fef2f2':a.pr==='mittel'?'#fffbeb':'#f0fdf4')+';color:'+(a.pr==='hoch'?'#dc2626':a.pr==='mittel'?'#d97706':'#16a34a')+';">'+a.pr+'</span>'
+      +'</div>';
+  }).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8;">Alle Aufgaben erledigt ✅</div>';
+
+  var main =
+    '<div style="margin-bottom:20px;">'
+    +'<div style="font-size:22px;font-weight:700;">'+greet+', '+user.name.split(' ')[0]+'! 👋</div>'
+    +'<div style="font-size:13px;color:#64748b;">'+new Date().toLocaleDateString('de-DE',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
+    +'<a href="mieter.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">👥 Mieter</a>'
+    +'<a href="tickets.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">🎫 Ticket melden</a>'
+    +'<a href="kalender.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">📅 Termin</a>'
+    +'<a href="projekte.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">🏗️ Projekt</a>'
+    +'<a href="crm.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">🎯 Follow-Up</a>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;">'
+    +statCard('Monatliche Einnahmen','€ '+fmt(ein),bez.length+' von '+mieter.length+' bezahlt','💰')
+    +statCard('Auslastung',mieter.length>0?Math.round(bez.length/mieter.length*100)+'%':'0%',mieter.length+' Einheiten belegt','🏠')
+    +statCard('Offene Tickets',offTix.length,'Bearbeitung nötig','🎫')
+    +statCard('Offene Mieten',off.length,'Erinnerung empfohlen','⚠️')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">'
+    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">🏠 Wohnungsübersicht</div>'+mieterHTML)
+    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">📊 Rendite-Übersicht</div>'+renditeHTML)
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">'
+    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">🎯 Follow-Up fällig heute</div>'+fuHTML)
+    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">📅 Nächste Termine</div>'+termineHTML)
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
+    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">🎫 Neueste Tickets</div>'+tixHTML)
+    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">✅ Offene Aufgaben</div>'+aufHTML)
+    +'</div>';
+
+  renderLayout('dashboard', 'Dashboard', '', main);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
+</script>
+</body>
+</html>

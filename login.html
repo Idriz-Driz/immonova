@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmoNova – Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f7f8fc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .wrap { width: 100%; max-width: 460px; }
+    .logo { text-align: center; margin-bottom: 24px; }
+    .logo-icon { width: 56px; height: 56px; background: #2563eb; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 10px; box-shadow: 0 8px 24px rgba(37,99,235,0.25); }
+    .logo h1 { font-size: 26px; font-weight: 800; color: #0f172a; }
+    .logo h1 span { color: #2563eb; }
+    .logo p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+    .banner { background: linear-gradient(135deg, #2563eb, #1d4ed8); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; color: white; text-align: center; }
+    .banner-badge { display: inline-block; background: #fbbf24; color: #000; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; margin-bottom: 8px; }
+    .banner h3 { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+    .banner p { font-size: 12px; opacity: 0.85; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    .tabs { display: flex; background: #f7f8fc; border-radius: 10px; padding: 4px; margin-bottom: 22px; gap: 3px; }
+    .tab { flex: 1; padding: 9px 6px; text-align: center; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: #94a3b8; border: none; background: none; font-family: inherit; }
+    .tab.active { background: white; color: #0f172a; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .sec { display: none; }
+    .sec.active { display: block; }
+    .fg { margin-bottom: 14px; }
+    .fl { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .fi, .fs { width: 100%; padding: 10px 13px; border: 1px solid #e2e8f0; border-radius: 9px; font-size: 14px; font-family: inherit; color: #0f172a; background: white; outline: none; }
+    .fi:focus, .fs:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .fi::placeholder { color: #94a3b8; }
+    .fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn { width: 100%; padding: 12px; border-radius: 9px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; margin-top: 8px; transition: all 0.15s; }
+    .btn-blue { background: #2563eb; color: white; }
+    .btn-blue:hover { background: #1d4ed8; }
+    .btn-green { background: #16a34a; color: white; }
+    .btn-green:hover { background: #15803d; }
+    .err { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 10px 13px; border-radius: 8px; font-size: 13px; margin-top: 10px; display: none; }
+    .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; padding: 10px 13px; border-radius: 8px; font-size: 13px; margin-top: 10px; display: none; }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: #94a3b8; font-size: 12px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+    .demo-box { margin-top: 14px; padding: 12px; background: #f7f8fc; border-radius: 8px; font-size: 12px; }
+    .demo-box strong { display: block; margin-bottom: 5px; color: #475569; }
+    .demo-box span { color: #94a3b8; line-height: 1.8; }
+    .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
+    .plan { border: 2px solid #e2e8f0; border-radius: 10px; padding: 11px; cursor: pointer; text-align: center; transition: all 0.15s; }
+    .plan:hover { border-color: #2563eb; }
+    .plan.sel { border-color: #2563eb; background: #eff6ff; }
+    .plan-ico { font-size: 20px; margin-bottom: 4px; }
+    .plan-nm { font-size: 12px; font-weight: 700; }
+    .plan-pr { font-size: 10px; color: #94a3b8; }
+    .plan-bdg { background: #2563eb; color: white; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; margin-top: 3px; display: inline-block; }
+    .features { background: #f7f8fc; border-radius: 9px; padding: 13px 15px; margin-top: 14px; }
+    .feat { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #475569; padding: 3px 0; }
+    .feat span { color: #16a34a; }
+    .footer { text-align: center; margin-top: 14px; font-size: 12px; color: #94a3b8; }
+    .footer a { color: #2563eb; text-decoration: none; }
+    .spinner-wrap { display: none; text-align: center; padding: 10px; }
+    .spinner { width: 22px; height: 22px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-icon">🏢</div>
+    <h1>Immo<span>Nova</span></h1>
+    <p>Intelligente Immobilienverwaltung – KI-gestützt</p>
+  </div>
+
+  <div class="banner">
+    <div class="banner-badge">🚀 TESTPHASE GESTARTET</div>
+    <h3>Jetzt kostenlos 30 Tage testen!</h3>
+    <p>Keine Kreditkarte nötig · Sofortiger Zugang · Persönliche Betreuung</p>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('login')">🔐 Einloggen</button>
+      <button class="tab" onclick="showTab('register')">✨ Registrieren</button>
+      <button class="tab" onclick="showTab('mieter')">🏠 Mieter-Portal</button>
+    </div>
+
+    <div class="sec active" id="sec-login">
+      <div class="fg"><label class="fl">Email-Adresse</label><input class="fi" id="l-email" type="email" placeholder="ihre@email.de"></div>
+      <div class="fg"><label class="fl">Passwort</label><input class="fi" id="l-pass" type="password" placeholder="••••••••"></div>
+      <div style="text-align:right;margin-bottom:6px;"><a href="#" style="font-size:12px;color:#2563eb;">Passwort vergessen?</a></div>
+      <button class="btn btn-blue" id="l-btn" onclick="doLogin()">🔐 Einloggen</button>
+      <div class="spinner-wrap" id="l-spin"><div class="spinner"></div>Einloggen...</div>
+      <div class="err" id="l-err">Falsche Email oder Passwort.</div>
+      <div class="divider">oder</div>
+      <div style="font-size:13px;color:#94a3b8;text-align:center;">
+        Noch kein Konto? <span style="color:#2563eb;cursor:pointer;font-weight:600;" onclick="showTab('register')">Jetzt registrieren →</span>
+      </div>
+      <div class="demo-box">
+        <strong>🎯 Demo-Zugang:</strong>
+        <span><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fe9f9a939790be979393919091889fd09a9b">[email&#160;protected]</a> / admin123</span>
+      </div>
+    </div>
+
+    <div class="sec" id="sec-register">
+      <div style="font-size:13px;font-weight:700;margin-bottom:14px;">👤 Persönliche Daten</div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Vorname</label><input class="fi" id="r-vn" placeholder="Max"></div>
+        <div class="fg"><label class="fl">Nachname</label><input class="fi" id="r-nn" placeholder="Mustermann"></div>
+      </div>
+      <div class="fg"><label class="fl">Email</label><input class="fi" id="r-em" type="email" placeholder="ihre@email.de"></div>
+      <div class="fg"><label class="fl">Telefon</label><input class="fi" id="r-tel" placeholder="+49 151 ..."></div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Passwort</label><input class="fi" id="r-pw" type="password" placeholder="Min. 8 Zeichen"></div>
+        <div class="fg"><label class="fl">Bestätigen</label><input class="fi" id="r-pw2" type="password" placeholder="Wiederholen"></div>
+      </div>
+      <div style="font-size:13px;font-weight:700;margin:14px 0 10px;">🏢 Plan wählen</div>
+      <div class="plan-grid">
+        <div class="plan sel" id="p-starter" onclick="selPlan('starter')"><div class="plan-ico">🌱</div><div class="plan-nm">Starter</div><div class="plan-pr">bis 5 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
+        <div class="plan" id="p-pro" onclick="selPlan('pro')"><div class="plan-ico">🚀</div><div class="plan-nm">Pro</div><div class="plan-pr">bis 50 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
+        <div class="plan" id="p-business" onclick="selPlan('business')"><div class="plan-ico">🏙️</div><div class="plan-nm">Business</div><div class="plan-pr">bis 200 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
+        <div class="plan" id="p-enterprise" onclick="selPlan('enterprise')"><div class="plan-ico">🌍</div><div class="plan-nm">Enterprise</div><div class="plan-pr">Unbegrenzt</div><div class="plan-bdg">30T GRATIS</div></div>
+      </div>
+      <div class="fg"><label class="fl">Firma (optional)</label><input class="fi" id="r-firma" placeholder="Immobilien GmbH"></div>
+      <div class="fg"><label class="fl">Anzahl Einheiten</label>
+        <select class="fs" id="r-einh"><option>1-5</option><option>6-20</option><option>21-50</option><option>51-200</option><option>200+</option></select>
+      </div>
+      <div class="fg">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#475569;cursor:pointer;">
+          <input type="checkbox" id="r-agb" style="margin-top:2px;flex-shrink:0;">
+          Ich stimme den <a href="impressum.html" style="color:#2563eb;">AGB</a> und der <a href="datenschutz.html" style="color:#2563eb;">Datenschutzerklärung</a> zu.
+        </label>
+      </div>
+      <button class="btn btn-green" id="r-btn" onclick="doRegister()">✨ Kostenlos registrieren – 30 Tage testen</button>
+      <div class="spinner-wrap" id="r-spin"><div class="spinner"></div>Registrierung läuft...</div>
+      <div class="err" id="r-err"></div>
+      <div class="ok" id="r-ok">✅ Erfolgreich! Du wirst weitergeleitet...</div>
+      <div class="features">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:7px;">✅ Das bekommst du kostenlos:</div>
+        <div class="feat"><span>✓</span> Dashboard, Mieter, Tickets, Handwerker</div>
+        <div class="feat"><span>✓</span> Nachrichten & Chat</div>
+        <div class="feat"><span>✓</span> Terminkalender & Kontakte</div>
+        <div class="feat"><span>✓</span> Zählerstände & Objekte</div>
+        <div class="feat"><span>✓</span> 10 Dokumentvorlagen</div>
+        <div class="feat"><span>✓</span> Qualitätsmanagement & QR-Codes</div>
+        <div class="feat"><span>✓</span> Persönliche Betreuung</div>
+      </div>
+    </div>
+
+    <div class="sec" id="sec-mieter">
+      <div style="font-size:13px;color:#94a3b8;margin-bottom:14px;padding:10px 12px;background:#f7f8fc;border-radius:8px;">
+        🏠 Als Mieter kannst du Schäden melden und mit deinem Verwalter kommunizieren.
+      </div>
+      <div class="fg"><label class="fl">Dein vollständiger Name</label><input class="fi" id="m-name" placeholder="Max Mustermann"></div>
+      <div class="fg"><label class="fl">Deine Wohnung / Einheit</label><input class="fi" id="m-wohn" placeholder="z.B. 1 OG"></div>
+      <button class="btn btn-green" onclick="doMieter()">🏠 Als Mieter einloggen</button>
+      <div class="err" id="m-err">Zugang nicht erlaubt. Bitte Name und Wohnung prüfen.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="#">AGB</a> · <a href="#">Support</a>
+  </div>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
+  authDomain: "immonova-2e0f2.firebaseapp.com",
+  projectId: "immonova-2e0f2",
+  storageBucket: "immonova-2e0f2.firebasestorage.app",
+  messagingSenderId: "639601807117",
+  appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+var plan = 'starter';
+
+window.showTab = function(t) {
+  document.querySelectorAll('.tab').forEach(function(el, i) {
+    el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1)||(t==='mieter'&&i===2));
+  });
+  document.querySelectorAll('.sec').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('sec-'+t).classList.add('active');
+};
+
+window.selPlan = function(p) {
+  plan = p;
+  ['starter','pro','business','enterprise'].forEach(function(x) {
+    document.getElementById('p-'+x).classList.toggle('sel', x===p);
+  });
+};
+
+window.doLogin = async function() {
+  var email = document.getElementById('l-email').value.trim();
+  var pass = document.getElementById('l-pass').value;
+  var err = document.getElementById('l-err');
+  var btn = document.getElementById('l-btn');
+  var spin = document.getElementById('l-spin');
+  err.style.display = 'none';
+
+  if (email === 'admin@immonova.de' && pass === 'admin123') {
+    localStorage.setItem('in_role', 'admin');
+    localStorage.setItem('in_user_name', 'Admin');
+    localStorage.setItem('in_user_plan', 'pro');
+    localStorage.setItem('in_user_email', email);
+    localStorage.setItem('in_user_uid', 'admin');
+    window.location.href = 'app.html';
+    return;
+  }
+
+  btn.style.display = 'none';
+  spin.style.display = 'block';
+
+  try {
+    var cred = await signInWithEmailAndPassword(auth, email, pass);
+    var userDoc = await getDoc(doc(db, 'users', cred.user.uid));
+    if (userDoc.exists()) {
+      var data = userDoc.data();
+      localStorage.setItem('in_role', 'admin');
+      localStorage.setItem('in_user_name', (data.vn||'') + ' ' + (data.nn||''));
+      localStorage.setItem('in_user_plan', data.plan || 'starter');
+      localStorage.setItem('in_user_email', email);
+      localStorage.setItem('in_user_uid', cred.user.uid);
+    }
+    window.location.href = 'app.html';
+  } catch(e) {
+    btn.style.display = 'block';
+    spin.style.display = 'none';
+    err.textContent = 'Falsche Email oder Passwort.';
+    err.style.display = 'block';
+  }
+};
+
+window.doRegister = async function() {
+  var vn = document.getElementById('r-vn').value.trim();
+  var nn = document.getElementById('r-nn').value.trim();
+  var em = document.getElementById('r-em').value.trim();
+  var tel = document.getElementById('r-tel').value.trim();
+  var pw = document.getElementById('r-pw').value;
+  var pw2 = document.getElementById('r-pw2').value;
+  var firma = document.getElementById('r-firma').value.trim();
+  var einh = document.getElementById('r-einh').value;
+  var agb = document.getElementById('r-agb').checked;
+  var err = document.getElementById('r-err');
+  var ok = document.getElementById('r-ok');
+  var btn = document.getElementById('r-btn');
+  var spin = document.getElementById('r-spin');
+
+  err.style.display = 'none';
+  ok.style.display = 'none';
+
+  if (!vn||!nn) { err.textContent='⚠️ Bitte Vor- und Nachname eingeben.'; err.style.display='block'; return; }
+  if (!em||em.indexOf('@')<0) { err.textContent='⚠️ Bitte gültige Email eingeben.'; err.style.display='block'; return; }
+  if (pw.length<8) { err.textContent='⚠️ Passwort mindestens 8 Zeichen.'; err.style.display='block'; return; }
+  if (pw!==pw2) { err.textContent='⚠️ Passwörter stimmen nicht überein.'; err.style.display='block'; return; }
+  if (!agb) { err.textContent='⚠️ Bitte AGB akzeptieren.'; err.style.display='block'; return; }
+
+  btn.style.display = 'none';
+  spin.style.display = 'block';
+
+  try {
+    var cred = await createUserWithEmailAndPassword(auth, em, pw);
+    var datum = new Date().toLocaleDateString('de-DE');
+
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      vn: vn, nn: nn, email: em, tel: tel, firma: firma,
+      einh: einh, plan: plan, datum: datum, rolle: 'admin', aktiv: true
+    });
+
+    await setDoc(doc(db, 'data', cred.user.uid), {
+      mieter: [], tickets: [], handwerker: [], termine: [],
+      kontakte: [], aufgaben: [], zaehler: [], objekte: [],
+      versicherungen: [], notifs: []
+    });
+
+    localStorage.setItem('in_role', 'admin');
+    localStorage.setItem('in_user_name', vn+' '+nn);
+    localStorage.setItem('in_user_plan', plan);
+    localStorage.setItem('in_user_email', em);
+    localStorage.setItem('in_user_uid', cred.user.uid);
+
+    ok.style.display = 'block';
+    setTimeout(function() { window.location.href = 'app.html'; }, 1500);
+  } catch(e) {
+    btn.style.display = 'block';
+    spin.style.display = 'none';
+    if (e.code === 'auth/email-already-in-use') {
+      err.textContent = '⚠️ Diese Email ist bereits registriert.';
+    } else {
+      err.textContent = '⚠️ Fehler bei der Registrierung. Bitte versuche es erneut.';
+    }
+    err.style.display = 'block';
+  }
+};
+
+window.doMieter = function() {
+  var name = document.getElementById('m-name').value.trim();
+  var wohn = document.getElementById('m-wohn').value.trim();
+  var err = document.getElementById('m-err');
+  var liste = JSON.parse(localStorage.getItem('in_m') || '[]');
+  var found = liste.some(function(m) { return m.name===name && m.wn===wohn; });
+  if (found) {
+    localStorage.setItem('in_role', 'mieter');
+    localStorage.setItem('in_mieter_name', name);
+    localStorage.setItem('in_mieter_wohnung', wohn);
+    window.location.href = 'mieter.html';
+  } else {
+    err.style.display = 'block';
+  }
+};
+
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  var active = document.querySelector('.sec.active');
+  if (!active) return;
+  if (active.id === 'sec-login') doLogin();
+  else if (active.id === 'sec-register') doRegister();
+  else if (active.id === 'sec-mieter') doMieter();
+});
+</script>
+</body>
+</html>

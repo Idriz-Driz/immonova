@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoNova – Tickets</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="shared.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+<script>
+if(!checkAuth()) { window.location.href='login.html'; }
+var user = getUser();
+var ticketBild = null;
+
+function handleImg(inp) {
+  var f = inp.files[0]; if(!f) return;
+  if(f.size > 5*1024*1024) { alert('Bild zu groß! Max 5MB.'); return; }
+  var r = new FileReader();
+  r.onload = function(ev) {
+    ticketBild = ev.target.result;
+    var prev = document.getElementById('t-preview');
+    prev.src = ticketBild; prev.style.display='block';
+    document.getElementById('t-hint').textContent = '✅ Bild ausgewählt';
+  };
+  r.readAsDataURL(f);
+}
+
+function addTicket() {
+  var wn = document.getElementById('t-wn').value;
+  var pb = document.getElementById('t-pb').value.trim();
+  if(!pb) { alert('Bitte Schaden beschreiben!'); return; }
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  var m = mieter.find(function(x){return x.wn===wn;});
+  var tickets = getData(KEYS.tickets, []);
+  tickets.push({wn:wn,pb:pb,prio:document.getElementById('t-pr').value,mieter:m?m.name:'–',status:'Offen',dat:new Date().toLocaleDateString('de-DE'),bild:ticketBild,hw:document.getElementById('t-hw').value||null});
+  setData(KEYS.tickets, tickets);
+  ticketBild=null;
+  addNotif('🎫','Neues Ticket: '+pb.substring(0,40));
+  syncToFirebase(user.uid);
+  hideModal('modal-ticket');
+  document.getElementById('t-pb').value='';
+  render();
+}
+
+function setStatus(i, s) {
+  var tickets = getData(KEYS.tickets, []);
+  tickets[i].status = s;
+  setData(KEYS.tickets, tickets);
+  addNotif(s==='Erledigt'?'✅':'🔵','Ticket '+s);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function zuweisen() {
+  var i = parseInt(document.getElementById('z-idx').value);
+  var hw = document.getElementById('z-hw').value;
+  var tickets = getData(KEYS.tickets, []);
+  tickets[i].hw = hw; tickets[i].status = 'In Bearbeitung';
+  setData(KEYS.tickets, tickets);
+  syncToFirebase(user.uid);
+  hideModal('modal-zuw');
+  render();
+}
+
+function openZuw(i) {
+  document.getElementById('z-idx').value = i;
+  var hw = getData(KEYS.handwerker, []);
+  document.getElementById('z-hw').innerHTML = hw.length ? hw.map(function(h){return '<option value="'+h.nm+'">'+h.nm+' – '+h.fm+'</option>';}).join('') : '<option>Keine Handwerker</option>';
+  showModal('modal-zuw');
+}
+
+function delTicket(i) {
+  if(!confirm('Ticket löschen?')) return;
+  var tickets = getData(KEYS.tickets, []);
+  tickets.splice(i,1); setData(KEYS.tickets, tickets);
+  syncToFirebase(user.uid); render();
+}
+
+function render() {
+  var tickets = getData(KEYS.tickets, []);
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  var hw = getData(KEYS.handwerker, []);
+
+  var thStyle = 'style="text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;background:#f8fafc;"';
+  var tdStyle = 'style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;"';
+
+  function prioBadge(p) { return '<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(p==='Hoch'?'#fef2f2':p==='Mittel'?'#fffbeb':'#f0fdf4')+';color:'+(p==='Hoch'?'#dc2626':p==='Mittel'?'#d97706':'#16a34a')+';">'+p+'</span>'; }
+  function statusBadge(s) { return '<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(s==='Erledigt'?'#f0fdf4':s==='In Bearbeitung'?'#eff6ff':'#fffbeb')+';color:'+(s==='Erledigt'?'#16a34a':s==='In Bearbeitung'?'#2563eb':'#d97706')+';">'+s+'</span>'; }
+
+  var tabelleHTML = tickets.length ? '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">'
+    +'<thead><tr><th '+thStyle+'>Wohnung</th><th '+thStyle+'>Mieter</th><th '+thStyle+'>Beschreibung</th><th '+thStyle+'>Foto</th><th '+thStyle+'>Priorität</th><th '+thStyle+'>Status</th><th '+thStyle+'>Handwerker</th><th '+thStyle+'>Datum</th><th '+thStyle+'>Aktionen</th></tr></thead><tbody>'
+    +tickets.map(function(t,i) {
+      return '<tr onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
+        +'<td '+tdStyle+'><span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;">'+t.wn+'</span></td>'
+        +'<td '+tdStyle+' style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-size:12px;">'+t.mieter+'</td>'
+        +'<td '+tdStyle+' style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;max-width:200px;font-size:13px;">'+((t.pb||'').substring(0,50))+'</td>'
+        +'<td '+tdStyle+'>'+(t.bild?'<img src="'+t.bild+'" onclick="window.open().document.write(\'<img src='+t.bild+' style=max-width:100%>\')" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer;">':'–')+'</td>'
+        +'<td '+tdStyle+'>'+prioBadge(t.prio)+'</td>'
+        +'<td '+tdStyle+'>'+statusBadge(t.status)+'</td>'
+        +'<td '+tdStyle+' style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-size:12px;">'+(t.hw||'–')+'</td>'
+        +'<td '+tdStyle+' style="padding:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-size:11px;color:#64748b;">'+(t.dat||'–')+'</td>'
+        +'<td '+tdStyle+'><div style="display:flex;gap:4px;">'
+        +'<button onclick="openZuw('+i+')" style="width:28px;height:28px;border:1px solid #e2e8f0;background:white;border-radius:6px;cursor:pointer;" title="Handwerker">🔧</button>'
+        +'<button onclick="setStatus('+i+',\'In Bearbeitung\')" style="width:28px;height:28px;border:1px solid #e2e8f0;background:white;border-radius:6px;cursor:pointer;" title="In Bearbeitung">🔵</button>'
+        +'<button onclick="setStatus('+i+',\'Erledigt\')" style="width:28px;height:28px;border:none;background:#f0fdf4;color:#16a34a;border-radius:6px;cursor:pointer;" title="Erledigt">✅</button>'
+        +'<button onclick="delTicket('+i+')" style="width:28px;height:28px;border:none;background:#fef2f2;color:#dc2626;border-radius:6px;cursor:pointer;">🗑</button>'
+        +'</div></td></tr>';
+    }).join('')+'</tbody></table></div>'
+    : '<div style="padding:40px;text-align:center;"><div style="font-size:48px;margin-bottom:12px;">🎉</div><div style="font-size:16px;font-weight:700;margin-bottom:6px;">Keine Tickets</div><div style="font-size:13px;color:#64748b;margin-bottom:20px;">Alles in Ordnung!</div><button onclick="showModal(\'modal-ticket\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket melden</button></div>';
+
+  var wohnOptions = mieter.map(function(m){return '<option value="'+m.wn+'">'+m.wn+' – '+m.name+'</option>';}).join('');
+  var hwOptions = '<option value="">– Keinen –</option>'+hw.map(function(h){return '<option value="'+h.nm+'">'+h.nm+' ('+h.sp+')</option>';}).join('');
+
+  var modal = modalHTML('modal-ticket','🎫 Ticket melden',
+    formGroup('Wohnung','<select id="t-wn" '+inputStyle+'>'+wohnOptions+'</select>')
+    +formGroup('Schadensbeschreibung','<textarea id="t-pb" '+inputStyle+' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;min-height:80px;resize:vertical;box-sizing:border-box;" placeholder="Beschreibe den Schaden genau..."></textarea>')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Priorität','<select id="t-pr" '+inputStyle+'><option>Hoch</option><option selected>Mittel</option><option>Niedrig</option></select>')
+    +formGroup('Handwerker','<select id="t-hw" '+inputStyle+'>'+hwOptions+'</select>')
+    +'</div>'
+    +formGroup('Foto','<div onclick="document.getElementById(\'t-file\').click()" style="border:2px dashed #e2e8f0;border-radius:10px;padding:20px;text-align:center;cursor:pointer;"><div id="t-hint">📷 Klicken zum Hochladen</div><img id="t-preview" style="max-width:100%;max-height:150px;display:none;border-radius:8px;margin-top:8px;"></div><input type="file" id="t-file" accept="image/*" style="display:none;" onchange="handleImg(this)">')
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
+    +'<button onclick="hideModal(\'modal-ticket\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="addTicket()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">🎫 Erstellen</button>'
+    +'</div>'
+  );
+
+  var zuwModal = modalHTML('modal-zuw','🔧 Handwerker zuweisen',
+    '<input type="hidden" id="z-idx">'
+    +formGroup('Handwerker','<select id="z-hw" '+inputStyle+'></select>')
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
+    +'<button onclick="hideModal(\'modal-zuw\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="zuweisen()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">🔧 Zuweisen</button>'
+    +'</div>'
+  );
+
+  var offen = tickets.filter(function(t){return t.status==='Offen';}).length;
+  var actionBtn = '<button onclick="showModal(\'modal-ticket\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket melden</button>';
+
+  var main =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+    +'<div><div style="font-size:18px;font-weight:700;">🎫 Tickets & Schäden</div>'
+    +'<div style="font-size:13px;color:#64748b;">'+tickets.length+' Tickets · '+offen+' offen</div></div>'
+    +'<button onclick="showModal(\'modal-ticket\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Ticket melden</button>'
+    +'</div>'
+    +'<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'+tabelleHTML+'</div>';
+
+  renderLayout('tickets','Tickets & Schäden',actionBtn,main,modal+zuwModal);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
+</script>
+</body>
+</html>
