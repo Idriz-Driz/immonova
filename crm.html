@@ -3,433 +3,207 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CRM – ImmoNova</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>ImmoNova – CRM</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;">
+<body>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
-var user = getUser();
-var activeTab = 0;
-var intFilter = 'Alle';
-
-// Demo data seeds
-var DEMO_FOLLOWUPS_SEEDED = false;
-var DEMO_INTERESSENTEN_SEEDED = false;
-
-function getTodayStr() {
-  return today();
-}
-
-function getDateStr(offset) {
-  var d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().split('T')[0];
-}
-
-function seedDemoData() {
-  var fus = getData(KEYS.followups, []);
-  if (!fus || fus.length === 0) {
-    var demoFus = [
-      {id: 9001, nm: 'Max Mustermann', tel: '0151 555001', dat: getTodayStr(), kat: 'Mieter', not: 'Miete besprechen', done: false},
-      {id: 9002, nm: 'Sandra Klein',   tel: '0151 887766', dat: getDateStr(-1), kat: 'Interessent', not: 'Rückruf vereinbart', done: false},
-      {id: 9003, nm: 'Peter Wagner',   tel: '0151 334455', dat: getDateStr(2),  kat: 'Interessent', not: 'Besichtigung Termin', done: false}
-    ];
-    setData(KEYS.followups, demoFus);
-  }
-  var ints = getData(KEYS.interessenten, []);
-  if (!ints || ints.length === 0) {
-    var demoInts = [
-      {id: 8001, vn: 'Sandra', nn: 'Klein',   tel: '0151 887766', email: 'sandra.klein@mail.de',  obj: '2 OG', status: 'Warm',      datum: getDateStr(0),  not: 'Sehr interessiert, Besichtigung vereinbart'},
-      {id: 8002, vn: 'Peter',  nn: 'Wagner',  tel: '0151 334455', email: 'p.wagner@mail.de',      obj: 'EG',   status: 'Kalt',      datum: getDateStr(-3), not: 'Hat sich nicht zurückgemeldet'},
-      {id: 8003, vn: 'Maria',  nn: 'Hofmann', tel: '0151 221133', email: 'maria.hofmann@mail.de', obj: '1 OG', status: 'Abschluss', datum: getDateStr(-7), not: 'Mietvertrag unterschrieben ✅'}
-    ];
-    setData(KEYS.interessenten, demoInts);
-  }
-}
-
-// ==================== FOLLOW-UPS ====================
-
-function getFollowUps() {
-  return getData(KEYS.followups, []) || [];
-}
-
-function saveFollowUps(arr) {
-  setData(KEYS.followups, arr);
-  if (user && user.uid) syncToFirebase(user.uid);
-}
-
-function openFuModal(id) {
-  var fu = (id && id !== -1) ? (getFollowUps().filter(function(x){ return x.id === id; })[0] || {}) : {};
-  document.getElementById('fu-id').value = fu.id || '';
-  document.getElementById('fu-nm').value = fu.nm || '';
-  document.getElementById('fu-tel').value = fu.tel || '';
-  document.getElementById('fu-dat').value = fu.dat || getTodayStr();
-  document.getElementById('fu-kat').value = fu.kat || 'Mieter';
-  document.getElementById('fu-not').value = fu.not || '';
-  showModal('fu-modal');
-}
-
-function saveFuModal() {
-  var nm = document.getElementById('fu-nm').value.trim();
-  if (!nm) { alert('Name erforderlich'); return; }
-  var arr = getFollowUps();
-  var existingId = document.getElementById('fu-id').value;
-  var obj = {
-    id: existingId ? parseInt(existingId) : Date.now(),
-    nm: nm,
-    tel: document.getElementById('fu-tel').value.trim(),
-    dat: document.getElementById('fu-dat').value,
-    kat: document.getElementById('fu-kat').value,
-    not: document.getElementById('fu-not').value.trim(),
-    done: false
-  };
-  if (existingId) {
-    var found = false;
-    for (var i = 0; i < arr.length; i++) {
-      if (arr[i].id === obj.id) { arr[i] = obj; found = true; break; }
-    }
-    if (!found) arr.push(obj);
-  } else {
-    arr.push(obj);
-  }
-  saveFollowUps(arr);
-  hideModal('fu-modal');
-  render();
-}
-
-function erledigtFu(id) {
-  var arr = getFollowUps();
-  for (var i = 0; i < arr.length; i++) {
-    if (arr[i].id === id) {
-      arr[i].done = true;
-      addNotif('✅', 'Follow-Up erledigt: ' + arr[i].nm);
-      break;
-    }
-  }
-  saveFollowUps(arr);
-  render();
-}
-
-function deleteFu(id) {
-  if (!confirm('Follow-Up löschen?')) return;
-  var arr = getFollowUps().filter(function(f){ return f.id !== id; });
-  saveFollowUps(arr);
-  render();
-}
-
-function getFuStatus(f) {
-  if (f.done) return 'erledigt';
-  if (f.dat < getTodayStr()) return 'ueberfaellig';
-  if (f.dat === getTodayStr()) return 'heute';
-  return 'zukunft';
-}
-
-function getFuSortKey(f) {
-  var s = getFuStatus(f);
-  if (s === 'ueberfaellig') return '0_' + f.dat;
-  if (s === 'heute') return '1_' + f.dat;
-  if (s === 'zukunft') return '2_' + f.dat;
-  return '3_' + f.dat;
-}
-
-// ==================== INTERESSENTEN ====================
-
-function getInteressenten() {
-  return getData(KEYS.interessenten, []) || [];
-}
-
-function saveInteressenten(arr) {
-  setData(KEYS.interessenten, arr);
-  if (user && user.uid) syncToFirebase(user.uid);
-}
-
-function openIntModal() {
-  document.getElementById('int-id').value = '';
-  document.getElementById('int-vn').value = '';
-  document.getElementById('int-nn').value = '';
-  document.getElementById('int-tel').value = '';
-  document.getElementById('int-email').value = '';
-  document.getElementById('int-obj').value = '';
-  document.getElementById('int-status').value = 'Warm';
-  document.getElementById('int-datum').value = getTodayStr();
-  document.getElementById('int-not').value = '';
-  showModal('int-modal');
-}
-
-function saveIntModal() {
-  var vn = document.getElementById('int-vn').value.trim();
-  var nn = document.getElementById('int-nn').value.trim();
-  if (!vn && !nn) { alert('Name erforderlich'); return; }
-  var arr = getInteressenten();
-  var existingId = document.getElementById('int-id').value;
-  var obj = {
-    id: existingId ? parseInt(existingId) : Date.now(),
-    vn: vn,
-    nn: nn,
-    tel: document.getElementById('int-tel').value.trim(),
-    email: document.getElementById('int-email').value.trim(),
-    obj: document.getElementById('int-obj').value.trim(),
-    status: document.getElementById('int-status').value,
-    datum: document.getElementById('int-datum').value,
-    not: document.getElementById('int-not').value.trim()
-  };
-  if (existingId) {
-    var found = false;
-    for (var i = 0; i < arr.length; i++) {
-      if (arr[i].id === obj.id) { arr[i] = obj; found = true; break; }
-    }
-    if (!found) arr.push(obj);
-  } else {
-    arr.push(obj);
-  }
-  saveInteressenten(arr);
-  hideModal('int-modal');
-  render();
-}
-
-function updateIntStatus(id, newStatus) {
-  var arr = getInteressenten();
-  for (var i = 0; i < arr.length; i++) {
-    if (arr[i].id === id) { arr[i].status = newStatus; break; }
-  }
-  saveInteressenten(arr);
-  render();
-}
-
-function createFollowUpForInt(id) {
-  var arr = getInteressenten();
-  var p = arr.filter(function(x){ return x.id === id; })[0];
-  if (!p) return;
-  var vn = p.vn, nn = p.nn, tel = p.tel, notiz = p.not;
-  var fu = getFollowUps();
-  var d = new Date();
-  d.setDate(d.getDate() + 3);
-  var datStr = d.toISOString().split('T')[0];
-  fu.push({id: Date.now(), nm: vn + ' ' + nn, tel: tel, dat: datStr, kat: 'Interessent', not: notiz || 'Nachfassen', done: false});
-  setData(KEYS.followups, fu);
-  addNotif('🎯', 'Follow-Up erstellt für ' + vn + ' ' + nn);
-  if (user && user.uid) syncToFirebase(user.uid);
-  render();
-  alert('Follow-Up für ' + vn + ' ' + nn + ' erstellt (fällig: ' + datStr + ')');
-}
-
-function deleteInt(id) {
-  if (!confirm('Interessent löschen?')) return;
-  var arr = getInteressenten().filter(function(x){ return x.id !== id; });
-  saveInteressenten(arr);
-  render();
-}
-
-function setTab(n) {
-  activeTab = n;
-  render();
-}
-
-function setIntFilter(f) {
-  intFilter = f;
-  render();
-}
-
-// ==================== RENDER ====================
-
-function buildFollowUpTab() {
-  var fus = getFollowUps();
-  var todayStr = getTodayStr();
-  var offen = fus.filter(function(f){ return !f.done; }).length;
-  var heuteFaellig = fus.filter(function(f){ return !f.done && f.dat === todayStr; }).length;
-  var erledigt = fus.filter(function(f){ return f.done; }).length;
-
-  // KPIs
-  var kpi = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">'
-    + '<div style="background:#fff;border-radius:12px;padding:16px 20px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-    + '<div style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:.5px;margin-bottom:4px;">OFFEN GESAMT</div>'
-    + '<div style="font-size:28px;font-weight:700;color:#1e293b;">' + offen + '</div></div>'
-    + '<div style="background:#fffbeb;border-radius:12px;padding:16px 20px;border:2px solid #fbbf24;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-    + '<div style="font-size:11px;color:#d97706;font-weight:700;letter-spacing:.5px;margin-bottom:4px;">HEUTE FÄLLIG 🔥</div>'
-    + '<div style="font-size:32px;font-weight:700;color:#d97706;">' + heuteFaellig + '</div></div>'
-    + '<div style="background:#fff;border-radius:12px;padding:16px 20px;border:1px solid #bbf7d0;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-    + '<div style="font-size:11px;color:#16a34a;font-weight:600;letter-spacing:.5px;margin-bottom:4px;">ERLEDIGT</div>'
-    + '<div style="font-size:28px;font-weight:700;color:#16a34a;">' + erledigt + '</div></div>'
-    + '</div>';
-
-  // Sort follow-ups
-  var sorted = fus.slice().sort(function(a,b){
-    return getFuSortKey(a).localeCompare(getFuSortKey(b));
-  });
-
-  var list = '';
-  if (sorted.length === 0) {
-    list = '<div style="text-align:center;padding:60px;color:#94a3b8;font-size:15px;">Keine Follow-Ups vorhanden. Klicken Sie auf "+ Hinzufügen".</div>';
-  } else {
-    sorted.forEach(function(f) {
-      var st = getFuStatus(f);
-      var borderColor, bgColor, badge = '';
-      if (st === 'ueberfaellig') {
-        borderColor = '#dc2626'; bgColor = '#fef2f2';
-        badge = '<span style="background:#dc2626;color:#fff;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:6px;">ÜBERFÄLLIG</span>';
-      } else if (st === 'heute') {
-        borderColor = '#d97706'; bgColor = '#fffbeb';
-        badge = '<span style="background:#d97706;color:#fff;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:6px;">🔥 HEUTE</span>';
-      } else if (st === 'zukunft') {
-        borderColor = '#e2e8f0'; bgColor = '#fff';
-      } else {
-        borderColor = '#e2e8f0'; bgColor = '#fff';
-      }
-      var katColor = f.kat === 'Mieter' ? '#2563eb' : f.kat === 'Interessent' ? '#d97706' : '#64748b';
-      var nameStyle = f.done ? 'text-decoration:line-through;color:#94a3b8;' : '';
-      var notStyle = f.done ? 'color:#94a3b8;font-size:12px;' : 'color:#64748b;font-size:12px;';
-
-      list += '<div style="background:' + bgColor + ';border-radius:12px;border:1px solid #e2e8f0;border-left:4px solid ' + borderColor + ';padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:10px;">'
-        // Left: date + category
-        + '<div style="min-width:80px;text-align:center;">'
-        + '<div style="font-size:13px;font-weight:700;color:#1e293b;">' + fmtDate(f.dat) + '</div>'
-        + '<span style="background:' + katColor + '18;color:' + katColor + ';border-radius:5px;padding:2px 7px;font-size:10px;font-weight:600;margin-top:4px;display:inline-block;">' + (f.kat||'Allgemein') + '</span>'
-        + '</div>'
-        // Middle: name + note
-        + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:14px;font-weight:700;color:#1e293b;' + nameStyle + 'display:flex;align-items:center;flex-wrap:wrap;gap:4px;">' + f.nm + badge + '</div>'
-        + '<div style="' + notStyle + 'margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (f.not||'') + '</div>'
-        + '</div>'
-        // Right: actions
-        + '<div style="display:flex;gap:7px;align-items:center;flex-shrink:0;">'
-        + (f.tel ? '<a href="https://wa.me/' + f.tel.replace(/[^0-9]/g,'') + '" target="_blank" style="background:#25d366;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;text-decoration:none;display:inline-block;">WhatsApp</a>' : '')
-        + (!f.done ? '<button onclick="erledigtFu(' + f.id + ')" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;white-space:nowrap;">✅ Erledigt</button>' : '')
-        + '<button onclick="deleteFu(' + f.id + ')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">🗑️</button>'
-        + '</div>'
-        + '</div>';
-    });
-  }
-
-  return kpi + list;
-}
-
-function buildInteressentenTab() {
-  var ints = getInteressenten();
-
-  // Filter buttons
-  var filterBtns = '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">'
-    + ['Alle','Warm','Kalt','Abschluss'].map(function(f) {
-        var active = intFilter === f;
-        return '<button onclick="setIntFilter(\'' + f + '\')" style="padding:7px 16px;border-radius:8px;border:1px solid ' + (active?'#2563eb':'#e2e8f0') + ';background:' + (active?'#2563eb':'#fff') + ';color:' + (active?'#fff':'#475569') + ';font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">' + f + '</button>';
-      }).join('')
-    + '</div>';
-
-  // Filter
-  var filtered = intFilter === 'Alle' ? ints : ints.filter(function(x){ return x.status === intFilter; });
-
-  var warmList = filtered.filter(function(x){ return x.status === 'Warm'; });
-  var kaltList = filtered.filter(function(x){ return x.status === 'Kalt'; });
-  var abschlussList = filtered.filter(function(x){ return x.status === 'Abschluss'; });
-
-  function buildIntCard(p) {
-    var waNum = p.tel ? p.tel.replace(/[^0-9]/g,'') : '';
-    return '<div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'
-      + '<div>'
-      + '<div style="font-size:15px;font-weight:700;color:#1e293b;">' + p.vn + ' ' + p.nn + '</div>'
-      + '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + fmtDate(p.datum||'') + '</div>'
-      + '</div>'
-      + '<span style="font-size:11px;color:#64748b;background:#f1f5f9;border-radius:5px;padding:2px 8px;font-weight:600;">' + (p.obj||'–') + '</span>'
-      + '</div>'
-      + (p.not ? '<div style="font-size:12px;color:#64748b;font-style:italic;margin-bottom:10px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + p.not + '</div>' : '')
-      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">'
-      + '<span style="font-size:12px;color:#475569;font-weight:500;">' + (p.tel||'–') + '</span>'
-      + (waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" style="background:#25d366;color:#fff;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;text-decoration:none;">WhatsApp</a>' : '')
-      + '</div>'
-      + '<div style="margin-bottom:10px;">'
-      + '<select onchange="updateIntStatus(' + p.id + ',this.value)" style="width:100%;border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:600;color:#1e293b;background:#f8fafc;cursor:pointer;font-family:\'DM Sans\',sans-serif;outline:none;">'
-      + '<option value="Warm"' + (p.status==='Warm'?' selected':'') + '>🔥 Warm</option>'
-      + '<option value="Kalt"' + (p.status==='Kalt'?' selected':'') + '>❄️ Kalt</option>'
-      + '<option value="Abschluss"' + (p.status==='Abschluss'?' selected':'') + '>✅ Abschluss</option>'
-      + '</select>'
-      + '</div>'
-      + '<div style="display:flex;gap:7px;">'
-      + '<button onclick="createFollowUpForInt(' + p.id + ')" style="flex:1;background:#fff;color:#2563eb;border:1px solid #bfdbfe;border-radius:8px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">+ Follow-Up</button>'
-      + '<button onclick="deleteInt(' + p.id + ')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">🗑️</button>'
-      + '</div>'
-      + '</div>';
-  }
-
-  function buildColumn(title, headerBg, headerColor, list, emptyText) {
-    var badgeBg = 'rgba(255,255,255,.25)';
-    var cards = list.length === 0
-      ? '<div style="text-align:center;padding:30px 10px;color:#94a3b8;font-size:13px;">' + emptyText + '</div>'
-      : list.map(buildIntCard).join('');
-    return '<div style="background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">'
-      + '<div style="background:' + headerBg + ';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">'
-      + '<span style="font-size:14px;font-weight:700;color:' + headerColor + ';">' + title + '</span>'
-      + '<span style="background:' + badgeBg + ';color:' + headerColor + ';border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700;border:1px solid ' + headerColor + '44;">' + list.length + '</span>'
-      + '</div>'
-      + '<div style="padding:12px;max-height:600px;overflow-y:auto;">' + cards + '</div>'
-      + '</div>';
-  }
-
-  var kanban = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">'
-    + buildColumn('🔥 Warm', '#fffbeb', '#d97706', warmList, 'Keine warmen Interessenten')
-    + buildColumn('❄️ Kalt', '#f8fafc', '#64748b', kaltList, 'Keine kalten Interessenten')
-    + buildColumn('✅ Abschluss', '#f0fdf4', '#16a34a', abschlussList, 'Keine Abschlüsse')
-    + '</div>';
-
-  return filterBtns + kanban;
-}
+checkAuth(); checkTrial();
+var user = getUser(); var uid = user.uid;
+var appData = {}; var editId = null; var activeTab = 'pipeline';
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
+var STAGES = ['Lead','Kontaktiert','Qualifiziert','Angebot','Abschluss'];
+var STAGE_COLS = {Lead:'#64748b',Kontaktiert:'#2563eb',Qualifiziert:'#d97706',Angebot:'#7c3aed',Abschluss:'#16a34a'};
+var PRIOR_COLS = {Hoch:'#dc2626',Normal:'#d97706',Niedrig:'#64748b'};
+function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
+function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
+function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+function isOverdue(d) { return d && new Date(d) < new Date(); }
 
 function render() {
-  seedDemoData();
+  var fu = appData.followups || [];
+  var today = new Date().toISOString().slice(0,10);
+  var overdue = fu.filter(function(f){ return f.faellig && f.faellig < today && f.status !== 'Erledigt'; });
+  var todayItems = fu.filter(function(f){ return f.faellig === today && f.status !== 'Erledigt'; });
 
-  // Tabs
-  var tabs = '<div style="display:flex;gap:4px;margin-bottom:24px;background:#f1f5f9;border-radius:10px;padding:4px;width:fit-content;">'
-    + ['Follow-Ups','Interessenten'].map(function(t, i){
-        return '<button onclick="setTab(' + i + ')" style="padding:8px 22px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;transition:all .15s;background:' + (activeTab===i?'#fff':'transparent') + ';color:' + (activeTab===i?'#1e293b':'#64748b') + ';box-shadow:' + (activeTab===i?'0 1px 4px rgba(0,0,0,.08)':'none') + ';">' + t + '</button>';
-      }).join('')
-    + '</div>';
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">'
+    +kpi('📋','Gesamt Follow-Ups',fu.length,'')
+    +kpi('⚠️','Überfällig',overdue.length,'Sofort bearbeiten')
+    +kpi('📅','Heute fällig',todayItems.length,'')
+    +kpi('✅','Erledigt',fu.filter(function(f){return f.status==='Erledigt';}).length,'')
+    +'</div>';
 
-  var tabContent = activeTab === 0 ? buildFollowUpTab() : buildInteressentenTab();
-  var mainHTML = tabs + tabContent;
+  var tabsHtml = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
+    +'<button onclick="switchTab(\'pipeline\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab==='pipeline'?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">🏢 Pipeline (Kanban)</button>'
+    +'<button onclick="switchTab(\'followups\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab==='followups'?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">📋 Follow-Up Liste</button>'
+    +'</div>';
 
-  // Follow-Up Modal
-  var fuModalContent = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">'
-    + '<input type="hidden" id="fu-id">'
-    + formGroup('Name', '<input id="fu-nm" placeholder="Max Mustermann" style="' + inputStyle + '">')
-    + formGroup('Telefon', '<input id="fu-tel" placeholder="0151 123456" style="' + inputStyle + '">')
-    + formGroup('Datum', '<input id="fu-dat" type="date" style="' + inputStyle + '">')
-    + formGroup('Kategorie', '<select id="fu-kat" style="' + inputStyle + '"><option value="Mieter">Mieter</option><option value="Interessent">Interessent</option><option value="Allgemein">Allgemein</option></select>')
-    + '</div>'
-    + formGroup('Notiz', '<textarea id="fu-not" rows="3" placeholder="Worum geht es?" style="' + inputStyle + 'resize:vertical;min-height:70px;"></textarea>');
+  var content = '';
+  if (activeTab === 'pipeline') {
+    // Kanban board using interessenten with stages
+    var ints = appData.interessenten || [];
+    content = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;overflow-x:auto;">';
+    STAGES.forEach(function(stage) {
+      var col = STAGE_COLS[stage];
+      var items = ints.filter(function(i){ return (i.stage||'Lead') === stage; });
+      content += '<div ondragover="event.preventDefault()" ondrop="dropCard(event,\''+stage+'\')" style="background:#f8fafc;border-radius:14px;padding:14px;min-height:300px;">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+        +'<div style="display:flex;align-items:center;gap:8px;">'
+        +'<div style="width:10px;height:10px;border-radius:50%;background:'+col+';"></div>'
+        +'<span style="font-size:12px;font-weight:700;color:#475569;">'+stage+'</span></div>'
+        +'<span style="background:'+col+'20;color:'+col+';font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;">'+items.length+'</span></div>';
+      items.forEach(function(item) {
+        var name = (item.vn||'')+' '+(item.nn||'');
+        content += '<div draggable="true" ondragstart="dragCard(event,\''+item.id+'\')" '
+          +'style="background:white;border-radius:10px;padding:12px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,0.08);">'
+          +'<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">'+esc(name)+'</div>'
+          +(item.objekt?'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">📍 '+esc(item.objekt)+'</div>':'')
+          +(item.budget?'<div style="font-size:11px;color:#2563eb;font-weight:600;">💰 '+item.budget+' €</div>':'')
+          +'<div style="display:flex;gap:4px;margin-top:8px;">'
+          +(item.tel?'<a href="https://wa.me/'+item.tel.replace(/\D/g,'')+'" target="_blank" style="font-size:12px;text-decoration:none;">💬</a>':'')
+          +'<button onclick="openEditInt(\''+item.id+'\')" style="font-size:11px;border:none;background:none;cursor:pointer;color:#2563eb;padding:0;">✏️</button>'
+          +'</div></div>';
+      });
+      content += '</div>';
+    });
+    content += '</div>';
 
-  var fuModalFooter = '<button onclick="saveFuModal()" style="background:#2563eb;color:#fff;border:none;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Speichern</button>'
-    + '<button onclick="hideModal(\'fu-modal\')" style="background:#f1f5f9;color:#64748b;border:none;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-left:8px;">Abbrechen</button>';
+  } else {
+    // Follow-Up list
+    if (overdue.length) {
+      content += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
+        +'<span style="font-size:22px;">⚠️</span>'
+        +'<strong style="color:#dc2626;">'+overdue.length+' überfällige Follow-Up'+(overdue.length>1?'s'!'')+' – sofort bearbeiten!</strong></div>';
+    }
+    var sorted = fu.slice().sort(function(a,b){ return (a.faellig||'').localeCompare(b.faellig||''); });
+    if (!sorted.length) {
+      content += emptyState('📋','Keine Follow-Ups','Plane deinen nächsten Kontakt','+ Follow-Up erstellen','openAdd()');
+    } else {
+      content += '<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
+      sorted.forEach(function(f) {
+        var overd = isOverdue(f.faellig) && f.status !== 'Erledigt';
+        var pcol = PRIOR_COLS[f.prioritaet]||'#64748b';
+        var scol = f.status==='Erledigt'?'#16a34a':overd?'#dc2626':'#d97706';
+        content += '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #f1f5f9;background:'+(overd?'#fff5f5':'white')+';">'
+          +'<div style="width:10px;height:10px;border-radius:50%;background:'+pcol+';flex-shrink:0;"></div>'
+          +'<div style="flex:1;min-width:0;">'
+          +'<div style="font-size:14px;font-weight:600;color:#0f172a;">'+esc(f.titel||'–')+'</div>'
+          +'<div style="font-size:12px;color:#64748b;">'+esc(f.kontakt||'–')+' · '+esc(f.typ||'')+'</div></div>'
+          +'<div style="text-align:right;flex-shrink:0;">'
+          +'<div style="font-size:12px;font-weight:600;color:'+(overd?'#dc2626':'#475569')+';">'+fmtDate(f.faellig)+'</div>'
+          +'<span style="background:'+scol+'20;color:'+scol+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">'+esc(f.status||'Offen')+'</span>'
+          +'</div>'
+          +'<div style="display:flex;gap:6px;flex-shrink:0;">'
+          +'<button onclick="toggleFU(\''+f.id+'\')" style="padding:6px 10px;border-radius:8px;border:none;background:'+(f.status==='Erledigt'?'#f1f5f9':'#f0fdf4')+';color:'+(f.status==='Erledigt'?'#94a3b8':'#16a34a')+';font-size:11px;font-weight:700;cursor:pointer;">'+(f.status==='Erledigt'?'↩ Öffnen':'✓ Erledigt')+'</button>'
+          +'<button onclick="editFU(\''+f.id+'\')" style="width:30px;height:30px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
+          +'<button onclick="deleteFU(\''+f.id+'\')" style="width:30px;height:30px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
+          +'</div></div>';
+      });
+      content += '</div>';
+    }
+  }
 
-  // Interessent Modal
-  var intModalContent = '<input type="hidden" id="int-id">'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">'
-    + formGroup('Vorname', '<input id="int-vn" placeholder="Sandra" style="' + inputStyle + '">')
-    + formGroup('Nachname', '<input id="int-nn" placeholder="Klein" style="' + inputStyle + '">')
-    + formGroup('Telefon', '<input id="int-tel" placeholder="0151 887766" style="' + inputStyle + '">')
-    + formGroup('E-Mail', '<input id="int-email" type="email" placeholder="mail@example.de" style="' + inputStyle + '">')
-    + formGroup('Interessiert an (Wohnung/Objekt)', '<input id="int-obj" placeholder="2 OG, Gartenweg 3" style="' + inputStyle + '">')
-    + formGroup('Status', '<select id="int-status" style="' + inputStyle + '"><option value="Warm">🔥 Warm</option><option value="Kalt">❄️ Kalt</option><option value="Abschluss">✅ Abschluss</option></select>')
-    + formGroup('Datum', '<input id="int-datum" type="date" style="' + inputStyle + '">')
-    + '</div>'
-    + formGroup('Notiz', '<textarea id="int-not" rows="3" placeholder="Weitere Informationen..." style="' + inputStyle + 'resize:vertical;min-height:70px;"></textarea>');
+  var actionBtn = activeTab==='pipeline'
+    ? '<button onclick="openEditInt(\'\')" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Interessent</button>'
+    : '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Follow-Up</button>';
 
-  var intModalFooter = '<button onclick="saveIntModal()" style="background:#2563eb;color:#fff;border:none;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Speichern</button>'
-    + '<button onclick="hideModal(\'int-modal\')" style="background:#f1f5f9;color:#64748b;border:none;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-left:8px;">Abbrechen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+tabsHtml+content+'</div>';
+  document.body.innerHTML = renderLayout('crm','CRM & Follow-Up',actionBtn,main,buildFUModal()+buildIntModal());
+}
 
-  var modalsHTML = modalHTML('fu-modal', 'Follow-Up hinzufügen', fuModalContent, fuModalFooter)
-    + modalHTML('int-modal', 'Interessent hinzufügen', intModalContent, intModalFooter);
+function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
+function switchTab(t) { activeTab=t; render(); }
 
-  var actionBtn = '<button onclick="showModal(activeTab===0?\'fu-modal\':\'int-modal\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">+ Hinzufügen</button>';
+var draggedId = '';
+function dragCard(e,id) { draggedId=id; e.dataTransfer.effectAllowed='move'; }
+function dropCard(e,stage) {
+  e.preventDefault();
+  var item=(appData.interessenten||[]).find(function(x){return x.id===draggedId;});
+  if(item){ item.stage=stage; syncToFirebase(uid); render(); }
+}
 
-  renderLayout('crm', 'CRM', actionBtn, mainHTML, modalsHTML);
+function buildFUModal() {
+  return '<div id="fu-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="fu-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Follow-Up erstellen</h3>'
+    +fg('Titel','fu-titel','text','z.B. Rückruf vereinbaren')
+    +fg('Kontakt / Person','fu-kontakt','text','Name des Kontakts')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Typ</label><select id="fu-typ" style="'+inputStyle+'"><option>Anruf</option><option>Email</option><option>Besichtigung</option><option>Meeting</option><option>Sonstiges</option></select></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Priorität</label><select id="fu-prior" style="'+inputStyle+'"><option>Normal</option><option>Hoch</option><option>Niedrig</option></select></div>'
+    +'</div>'
+    +fg('Fällig am','fu-faellig','date','')
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="fu-status" style="'+inputStyle+'"><option>Offen</option><option>Erledigt</option><option>Verschoben</option></select></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Notizen</label><textarea id="fu-notizen" style="'+inputStyle+'height:80px;resize:vertical;"></textarea></div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeFU()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveFU()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function buildIntModal() {
+  return '<div id="int-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="int-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Interessent</h3>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Vorname','int-vn','text','Max')+fg('Nachname','int-nn','text','Mustermann')
+    +'</div>'
+    +fg('Email','int-em','email','') +fg('Telefon','int-tel','tel','')
+    +fg('Gewünschtes Objekt','int-obj','text','')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Budget (€/Mo)','int-budget','number','')
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Pipeline-Stage</label><select id="int-stage" style="'+inputStyle+'">'+STAGES.map(function(s){ return '<option>'+s+'</option>'; }).join('')+'</select></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeIntModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveIntModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function openAdd() { editId=null; document.getElementById('fu-title').textContent='Follow-Up erstellen'; ['fu-titel','fu-kontakt','fu-notizen'].forEach(function(x){document.getElementById(x).value='';}); document.getElementById('fu-faellig').value=new Date().toISOString().slice(0,10); document.getElementById('fu-modal').style.display='flex'; }
+function editFU(id) {
+  var f=(appData.followups||[]).find(function(x){return x.id===id;}); if(!f) return; editId=id;
+  document.getElementById('fu-title').textContent='Follow-Up bearbeiten';
+  document.getElementById('fu-titel').value=f.titel||''; document.getElementById('fu-kontakt').value=f.kontakt||''; document.getElementById('fu-typ').value=f.typ||'Anruf'; document.getElementById('fu-prior').value=f.prioritaet||'Normal'; document.getElementById('fu-faellig').value=f.faellig||''; document.getElementById('fu-status').value=f.status||'Offen'; document.getElementById('fu-notizen').value=f.notizen||'';
+  document.getElementById('fu-modal').style.display='flex';
+}
+function closeFU() { document.getElementById('fu-modal').style.display='none'; }
+function saveFU() {
+  var titel=document.getElementById('fu-titel').value.trim(); if(!titel){alert('Titel eingeben.');return;}
+  var fu=appData.followups||[];
+  var obj={id:editId||gid(),titel:titel,kontakt:document.getElementById('fu-kontakt').value.trim(),typ:document.getElementById('fu-typ').value,prioritaet:document.getElementById('fu-prior').value,faellig:document.getElementById('fu-faellig').value,status:document.getElementById('fu-status').value,notizen:document.getElementById('fu-notizen').value.trim()};
+  if(editId){var idx=fu.findIndex(function(x){return x.id===editId;}); if(idx>=0) fu[idx]=obj;}else fu.unshift(obj);
+  appData.followups=fu; syncToFirebase(uid); closeFU(); render();
+}
+function toggleFU(id) { var f=(appData.followups||[]).find(function(x){return x.id===id;}); if(!f) return; f.status=f.status==='Erledigt'?'Offen':'Erledigt'; syncToFirebase(uid); render(); }
+function deleteFU(id) { if(!confirm('Follow-Up löschen?')) return; appData.followups=(appData.followups||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+
+function openEditInt(id) {
+  editId=id||null;
+  var item=id?(appData.interessenten||[]).find(function(x){return x.id===id;}):null;
+  document.getElementById('int-title').textContent=item?'Interessent bearbeiten':'Interessent hinzufügen';
+  ['int-vn','int-nn','int-em','int-tel','int-obj','int-budget'].forEach(function(x){document.getElementById(x).value=item?item[x.replace('int-','')]||'':'';});
+  if(item) document.getElementById('int-stage').value=item.stage||'Lead';
+  document.getElementById('int-modal').style.display='flex';
+}
+function closeIntModal() { document.getElementById('int-modal').style.display='none'; }
+function saveIntModal() {
+  var vn=document.getElementById('int-vn').value.trim(),nn=document.getElementById('int-nn').value.trim();
+  if(!vn&&!nn){alert('Namen eingeben.');return;}
+  var ints=appData.interessenten||[];
+  var obj={id:editId||gid(),vn:vn,nn:nn,email:document.getElementById('int-em').value.trim(),tel:document.getElementById('int-tel').value.trim(),objekt:document.getElementById('int-obj').value.trim(),budget:document.getElementById('int-budget').value,stage:document.getElementById('int-stage').value,status:'Neu'};
+  if(editId){var idx=ints.findIndex(function(x){return x.id===editId;}); if(idx>=0) ints[idx]=obj;}else ints.unshift(obj);
+  appData.interessenten=ints; syncToFirebase(uid); closeIntModal(); render();
 }
 
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.followups) appData.followups=[]; if(!appData.interessenten) appData.interessenten=[]; render(); });
 </script>
 </body>
 </html>

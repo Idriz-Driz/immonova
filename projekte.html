@@ -3,511 +3,199 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Projekte – ImmoNova</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>ImmoNova – Projekte</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;">
+<body>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
-var user = getUser();
-var activeTab = 0;
-var editId = -1;
-var ganttZoom = 'woche';
-
-var DEMO_PROJEKTE = [
-  {
-    id: 1001,
-    name: 'Dachsanierung Hauptstr. 15',
-    adr: 'Hauptstraße 15, Dortmund',
-    auftr: 'Eigenbestand',
-    typ: 'Sanierung',
-    start: '2026-03-01',
-    ende: '2026-05-31',
-    budget: 45000,
-    verbraucht: 12000,
-    status: 'In Bearbeitung',
-    gewerke: [
-      {name:'Zimmermann', status:'Erledigt'},
-      {name:'Dachdecker', status:'In Arbeit'},
-      {name:'Klempner', status:'Offen'}
-    ],
-    not: 'Dach komplett erneuern, inkl. Dämmung.'
-  },
-  {
-    id: 1002,
-    name: 'Modernisierung EG',
-    adr: 'Gartenweg 3, Dortmund',
-    auftr: 'Mustermann GmbH',
-    typ: 'Modernisierung',
-    start: '2026-04-15',
-    ende: '2026-06-30',
-    budget: 28000,
-    verbraucht: 0,
-    status: 'Geplant',
-    gewerke: [
-      {name:'Maler', status:'Offen'},
-      {name:'Elektriker', status:'Offen'},
-      {name:'Fliesenleger', status:'Offen'}
-    ],
-    not: 'Erdgeschoss komplett modernisieren.'
-  },
-  {
-    id: 1003,
-    name: 'Aufzug-Einbau',
-    adr: 'Königsweg 7, Dortmund',
-    auftr: 'Stadt Dortmund',
-    typ: 'Neubau',
-    start: '2025-10-01',
-    ende: '2026-02-28',
-    budget: 85000,
-    verbraucht: 85000,
-    status: 'Abgeschlossen',
-    gewerke: [
-      {name:'Aufzugstechnik', status:'Erledigt'},
-      {name:'Elektro', status:'Erledigt'},
-      {name:'Trockenbau', status:'Erledigt'}
-    ],
-    not: 'Aufzug erfolgreich eingebaut und abgenommen.'
-  }
-];
-
-function getProjekte() {
-  var p = getData(KEYS.projekte, []);
-  if (!p || p.length === 0) {
-    setData(KEYS.projekte, DEMO_PROJEKTE);
-    return JSON.parse(JSON.stringify(DEMO_PROJEKTE));
-  }
-  return p;
-}
-
-function saveProjekte(arr) {
-  setData(KEYS.projekte, arr);
-  if (user && user.uid) syncToFirebase(user.uid);
-}
-
-function getStatusGradient(status) {
-  if (status === 'In Bearbeitung') return 'linear-gradient(135deg,#1d4ed8,#2563eb)';
-  if (status === 'Abgeschlossen') return 'linear-gradient(135deg,#15803d,#16a34a)';
-  return 'linear-gradient(135deg,#475569,#64748b)';
-}
-
-function getProjektFortschritt(p) {
-  if (!p.gewerke || p.gewerke.length === 0) return 0;
-  var done = p.gewerke.filter(function(g){ return g.status === 'Erledigt'; }).length;
-  return Math.round((done / p.gewerke.length) * 100);
-}
-
-function getBudgetColor(p) {
-  if (!p.budget || p.budget === 0) return '#16a34a';
-  var pct = (p.verbraucht / p.budget) * 100;
-  if (pct > 80) return '#dc2626';
-  if (pct > 60) return '#d97706';
-  return '#16a34a';
-}
-
-function getBudgetPct(p) {
-  if (!p.budget || p.budget === 0) return 0;
-  return Math.min(100, Math.round((p.verbraucht / p.budget) * 100));
-}
-
-function openProjektModal(id) {
-  editId = id;
-  var p = (id === -1) ? {} : (getProjekte().filter(function(x){ return x.id === id; })[0] || {});
-  document.getElementById('pm-name').value = p.name || '';
-  document.getElementById('pm-adr').value = p.adr || '';
-  document.getElementById('pm-auftr').value = p.auftr || '';
-  document.getElementById('pm-typ').value = p.typ || 'Sanierung';
-  document.getElementById('pm-start').value = p.start || '';
-  document.getElementById('pm-ende').value = p.ende || '';
-  document.getElementById('pm-budget').value = p.budget || '';
-  document.getElementById('pm-verbraucht').value = p.verbraucht || '';
-  document.getElementById('pm-status').value = p.status || 'Geplant';
-  document.getElementById('pm-gewerke').value = p.gewerke ? p.gewerke.map(function(g){ return g.name; }).join(', ') : '';
-  document.getElementById('pm-not').value = p.not || '';
-  document.getElementById('proj-modal-title').textContent = (id === -1) ? 'Projekt anlegen' : 'Projekt bearbeiten';
-  showModal('proj-modal');
-}
-
-function saveProjektModal() {
-  var name = document.getElementById('pm-name').value.trim();
-  if (!name) { alert('Projektname erforderlich'); return; }
-  var arr = getProjekte();
-  var gewerkeStr = document.getElementById('pm-gewerke').value;
-  var gewerkeArr = gewerkeStr.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
-  var existingGewerke = [];
-  if (editId !== -1) {
-    var existing = arr.filter(function(x){ return x.id === editId; })[0];
-    if (existing) existingGewerke = existing.gewerke || [];
-  }
-  var gewerke = gewerkeArr.map(function(gName) {
-    var found = existingGewerke.filter(function(eg){ return eg.name === gName; })[0];
-    return found || {name: gName, status: 'Offen'};
-  });
-  var obj = {
-    id: (editId === -1) ? Date.now() : editId,
-    name: name,
-    adr: document.getElementById('pm-adr').value.trim(),
-    auftr: document.getElementById('pm-auftr').value.trim(),
-    typ: document.getElementById('pm-typ').value,
-    start: document.getElementById('pm-start').value,
-    ende: document.getElementById('pm-ende').value,
-    budget: parseFloat(document.getElementById('pm-budget').value) || 0,
-    verbraucht: parseFloat(document.getElementById('pm-verbraucht').value) || 0,
-    status: document.getElementById('pm-status').value,
-    gewerke: gewerke,
-    not: document.getElementById('pm-not').value.trim()
-  };
-  if (editId === -1) {
-    arr.push(obj);
-  } else {
-    for (var i = 0; i < arr.length; i++) {
-      if (arr[i].id === editId) { arr[i] = obj; break; }
-    }
-  }
-  saveProjekte(arr);
-  hideModal('proj-modal');
-  render();
-}
-
-function deleteProjekt(id) {
-  if (!confirm('Projekt wirklich löschen?')) return;
-  var arr = getProjekte().filter(function(p){ return p.id !== id; });
-  saveProjekte(arr);
-  render();
-}
-
-function openGewerk(projId) {
-  var arr = getProjekte();
-  var p = arr.filter(function(x){ return x.id === projId; })[0];
-  if (!p) return;
-  var name = prompt('Gewerk-Name:');
-  if (!name || !name.trim()) return;
-  p.gewerke = p.gewerke || [];
-  p.gewerke.push({name: name.trim(), status: 'Offen'});
-  for (var i = 0; i < arr.length; i++) {
-    if (arr[i].id === projId) { arr[i] = p; break; }
-  }
-  saveProjekte(arr);
-  render();
-}
-
-function updateGewerkStatus(projId, gIdx, newStatus) {
-  var arr = getProjekte();
-  for (var i = 0; i < arr.length; i++) {
-    if (arr[i].id === projId) {
-      if (arr[i].gewerke && arr[i].gewerke[gIdx]) {
-        arr[i].gewerke[gIdx].status = newStatus;
-      }
-      break;
-    }
-  }
-  saveProjekte(arr);
-  render();
-}
-
-function setTab(n) {
-  activeTab = n;
-  render();
-}
-
-function setGanttZoom(z) {
-  ganttZoom = z;
-  render();
-}
-
-function getWeekNumber(d) {
-  var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  var dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  var yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
-  return Math.ceil((((date - yearStart) / 86400000) + 1)/7);
-}
-
-function buildGantt() {
-  var projekte = getProjekte();
-  var todayD = new Date();
-  todayD.setHours(0,0,0,0);
-
-  var achseStart, achseEnd, slots, slotLabels, slotIsToday;
-  var monatNamen = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-
-  if (ganttZoom === 'woche') {
-    slots = 12;
-    var tmp = new Date(todayD);
-    tmp.setDate(tmp.getDate() - 28);
-    var dow = tmp.getDay();
-    var diff = (dow === 0) ? -6 : 1 - dow;
-    tmp.setDate(tmp.getDate() + diff);
-    achseStart = new Date(tmp);
-    achseEnd = new Date(achseStart.getTime() + slots * 7 * 24 * 3600 * 1000);
-    slotLabels = [];
-    slotIsToday = [];
-    for (var i = 0; i < slots; i++) {
-      var sd = new Date(achseStart.getTime() + i * 7 * 24 * 3600 * 1000);
-      var ed = new Date(sd.getTime() + 7 * 24 * 3600 * 1000);
-      slotLabels.push('KW ' + getWeekNumber(sd) + '<br>' + sd.getDate() + '.' + (sd.getMonth()+1) + '.');
-      slotIsToday.push(todayD >= sd && todayD < ed);
-    }
-  } else {
-    slots = 12;
-    achseStart = new Date(todayD.getFullYear(), todayD.getMonth() - 2, 1);
-    achseEnd = new Date(achseStart.getFullYear(), achseStart.getMonth() + slots, 1);
-    slotLabels = [];
-    slotIsToday = [];
-    for (var i = 0; i < slots; i++) {
-      var sd = new Date(achseStart.getFullYear(), achseStart.getMonth() + i, 1);
-      var ed = new Date(achseStart.getFullYear(), achseStart.getMonth() + i + 1, 1);
-      slotLabels.push(monatNamen[sd.getMonth()] + '<br>' + sd.getFullYear());
-      slotIsToday.push(todayD >= sd && todayD < ed);
-    }
-  }
-
-  var totalMs = achseEnd.getTime() - achseStart.getTime();
-  var todayPct = Math.max(0, Math.min(100, (todayD.getTime() - achseStart.getTime()) / totalMs * 100));
-
-  // Header cells
-  var headerCells = '';
-  for (var i = 0; i < slots; i++) {
-    headerCells += '<div style="min-width:70px;flex:1;text-align:center;font-size:10px;font-weight:600;color:#64748b;padding:6px 2px;border-right:1px solid #e2e8f0;background:' + (slotIsToday[i] ? '#eff6ff' : 'transparent') + ';line-height:1.5;">' + slotLabels[i] + '</div>';
-  }
-
-  // Project rows
-  var rows = '';
-  projekte.forEach(function(p) {
-    var pStart = p.start ? new Date(p.start) : null;
-    var pEnde = p.ende ? new Date(p.ende) : null;
-    var barLeft = 0, barWidth = 0, hasBar = false;
-    if (pStart && pEnde && pEnde > achseStart && pStart < achseEnd) {
-      var clampedStart = Math.max(pStart.getTime(), achseStart.getTime());
-      var clampedEnd = Math.min(pEnde.getTime(), achseEnd.getTime());
-      barLeft = (clampedStart - achseStart.getTime()) / totalMs * 100;
-      barWidth = (clampedEnd - clampedStart) / totalMs * 100;
-      if (barWidth > 0) hasBar = true;
-    }
-    var barColor = p.status === 'In Bearbeitung' ? '#2563eb' : p.status === 'Abgeschlossen' ? '#16a34a' : '#94a3b8';
-    var dotColor = barColor;
-
-    var slotBgs = '';
-    for (var i = 0; i < slots; i++) {
-      slotBgs += '<div style="min-width:70px;flex:1;height:100%;border-right:1px solid #f1f5f9;background:' + (slotIsToday[i] ? '#f0f7ff' : 'transparent') + ';"></div>';
-    }
-
-    rows += '<div style="display:flex;height:52px;border-bottom:1px solid #f1f5f9;align-items:center;">'
-      + '<div style="width:200px;min-width:200px;display:flex;align-items:center;gap:8px;padding:0 14px;border-right:2px solid #e2e8f0;background:#fff;height:100%;box-sizing:border-box;">'
-      + '<div style="width:9px;height:9px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;"></div>'
-      + '<span style="font-size:12px;font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + p.name + '</span>'
-      + '</div>'
-      + '<div style="flex:1;position:relative;height:100%;overflow:hidden;">'
-      + '<div style="display:flex;height:100%;position:absolute;inset:0;">' + slotBgs + '</div>'
-      + (hasBar
-        ? '<div style="position:absolute;top:50%;transform:translateY(-50%);left:' + barLeft.toFixed(2) + '%;width:' + barWidth.toFixed(2) + '%;background:' + barColor + ';border-radius:5px;height:26px;display:flex;align-items:center;padding:0 8px;box-sizing:border-box;overflow:hidden;z-index:2;">'
-          + '<span style="color:white;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + p.name + '</span>'
-          + '</div>'
-        : '')
-      + '<div style="position:absolute;top:0;bottom:0;left:' + todayPct.toFixed(2) + '%;width:2px;background:#ef4444;opacity:.75;z-index:3;pointer-events:none;"></div>'
-      + '</div>'
-      + '</div>';
-  });
-
-  var legend = '<div style="display:flex;gap:16px;align-items:center;margin-bottom:12px;font-size:12px;">'
-    + '<div style="display:flex;align-items:center;gap:5px;"><div style="width:12px;height:12px;border-radius:3px;background:#2563eb;"></div><span style="color:#64748b;">In Bearbeitung</span></div>'
-    + '<div style="display:flex;align-items:center;gap:5px;"><div style="width:12px;height:12px;border-radius:3px;background:#94a3b8;"></div><span style="color:#64748b;">Geplant</span></div>'
-    + '<div style="display:flex;align-items:center;gap:5px;"><div style="width:12px;height:12px;border-radius:3px;background:#16a34a;"></div><span style="color:#64748b;">Abgeschlossen</span></div>'
-    + '<div style="display:flex;align-items:center;gap:5px;"><div style="width:2px;height:12px;background:#ef4444;"></div><span style="color:#64748b;">Heute</span></div>'
-    + '</div>';
-
-  return legend
-    + '<div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">'
-    + '<div style="overflow-x:auto;">'
-    + '<div style="min-width:' + (200 + slots * 70) + 'px;">'
-    + '<div style="display:flex;border-bottom:2px solid #e2e8f0;background:#f8fafc;">'
-    + '<div style="width:200px;min-width:200px;padding:10px 14px;font-size:11px;font-weight:700;color:#1e293b;border-right:2px solid #e2e8f0;letter-spacing:.5px;">PROJEKT</div>'
-    + '<div style="flex:1;display:flex;">' + headerCells + '</div>'
-    + '</div>'
-    + rows
-    + '</div>'
-    + '</div>'
-    + '</div>';
-}
-
-function buildGewerkeTab() {
-  var projekte = getProjekte();
-  var alle = [];
-  projekte.forEach(function(p) {
-    (p.gewerke || []).forEach(function(g, idx) {
-      alle.push({proj: p, g: g, idx: idx});
-    });
-  });
-  var offen = alle.filter(function(x){ return x.g.status === 'Offen'; }).length;
-  var inArbeit = alle.filter(function(x){ return x.g.status === 'In Arbeit'; }).length;
-  var erledigt = alle.filter(function(x){ return x.g.status === 'Erledigt'; }).length;
-
-  var kpiHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">'
-    + '<div style="background:#fff;border-radius:12px;padding:16px 20px;border:1px solid #e2e8f0;">'
-    + '<div style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:.5px;margin-bottom:4px;">OFFEN</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#1e293b;">' + offen + '</div></div>'
-    + '<div style="background:#fff;border-radius:12px;padding:16px 20px;border:1px solid #fbbf24;">'
-    + '<div style="font-size:11px;color:#d97706;font-weight:600;letter-spacing:.5px;margin-bottom:4px;">IN ARBEIT</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#1e293b;">' + inArbeit + '</div></div>'
-    + '<div style="background:#fff;border-radius:12px;padding:16px 20px;border:1px solid #86efac;">'
-    + '<div style="font-size:11px;color:#16a34a;font-weight:600;letter-spacing:.5px;margin-bottom:4px;">ERLEDIGT</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#1e293b;">' + erledigt + '</div></div>'
-    + '</div>';
-
-  var cards = '';
-  if (alle.length === 0) {
-    cards = '<div style="text-align:center;color:#94a3b8;padding:40px;font-size:14px;">Keine Gewerke vorhanden.</div>';
-  } else {
-    alle.forEach(function(item) {
-      var g = item.g;
-      var p = item.proj;
-      var idx = item.idx;
-      var statusColor = g.status === 'Erledigt' ? '#16a34a' : g.status === 'In Arbeit' ? '#d97706' : '#64748b';
-      var statusBg = g.status === 'Erledigt' ? '#f0fdf4' : g.status === 'In Arbeit' ? '#fffbeb' : '#f8fafc';
-      var projColor = p.status === 'In Bearbeitung' ? '#2563eb' : p.status === 'Abgeschlossen' ? '#16a34a' : '#64748b';
-      cards += '<div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:14px 16px;display:flex;align-items:center;gap:12px;">'
-        + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:5px;">' + g.name + '</div>'
-        + '<span style="display:inline-block;background:' + projColor + '18;color:' + projColor + ';border-radius:5px;padding:2px 8px;font-size:10px;font-weight:600;">' + p.name + '</span>'
-        + '</div>'
-        + '<select onchange="updateGewerkStatus(' + p.id + ',' + idx + ',this.value)" style="border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:600;color:' + statusColor + ';background:' + statusBg + ';cursor:pointer;font-family:\'DM Sans\',sans-serif;outline:none;">'
-        + '<option value="Offen"' + (g.status==='Offen'?' selected':'') + '>Offen</option>'
-        + '<option value="In Arbeit"' + (g.status==='In Arbeit'?' selected':'') + '>In Arbeit</option>'
-        + '<option value="Erledigt"' + (g.status==='Erledigt'?' selected':'') + '>Erledigt</option>'
-        + '</select>'
-        + '</div>';
-    });
-    cards = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' + cards + '</div>';
-  }
-
-  return kpiHtml + cards;
-}
+checkAuth(); checkTrial();
+var user = getUser(); var uid = user.uid;
+var appData = {}; var editId = null; var activeTab = 'liste';
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
+var STATUS_COLS = {Planung:'#64748b',Aktiv:'#2563eb',Pausiert:'#d97706',Abgeschlossen:'#16a34a',Abgebrochen:'#dc2626'};
+var PRIO_COLS = {Hoch:'#dc2626',Normal:'#d97706',Niedrig:'#64748b'};
+function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
+function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
+function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+function fmtEur(n) { return (Number(n)||0).toLocaleString('de-DE')+' €'; }
+function daysDiff(a,b) { return Math.round((new Date(b)-new Date(a))/86400000); }
+function progressBar(pct,col) { return '<div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;"><div style="height:100%;width:'+Math.min(100,Math.max(0,pct))+'%;background:'+col+';border-radius:99px;transition:width 0.3s;"></div></div>'; }
 
 function render() {
-  var projekte = getProjekte();
-  var gesamt = projekte.length;
-  var inBearbeitung = projekte.filter(function(p){ return p.status === 'In Bearbeitung'; }).length;
-  var abgeschlossen = projekte.filter(function(p){ return p.status === 'Abgeschlossen'; }).length;
+  var proj = appData.projekte || [];
+  var aktiv = proj.filter(function(p){ return p.status==='Aktiv'; }).length;
+  var sumBudget = proj.reduce(function(s,p){ return s+(Number(p.budget)||0); },0);
+  var abgeschl = proj.filter(function(p){ return p.status==='Abgeschlossen'; }).length;
 
-  // Tabs Navigation
-  var tabs = '<div style="display:flex;gap:4px;margin-bottom:24px;background:#f1f5f9;border-radius:10px;padding:4px;width:fit-content;">'
-    + ['Projektliste','Plantafel','Gewerke'].map(function(t, i){
-        return '<button onclick="setTab(' + i + ')" style="padding:8px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;transition:all .15s;background:' + (activeTab===i?'#fff':'transparent') + ';color:' + (activeTab===i?'#1e293b':'#64748b') + ';box-shadow:' + (activeTab===i?'0 1px 4px rgba(0,0,0,.08)':'none') + ';">' + t + '</button>';
-      }).join('')
-    + '</div>';
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">'
+    +kpi('📁','Gesamt Projekte',proj.length,'')
+    +kpi('🔵','Aktiv',aktiv,'Laufende Projekte')
+    +kpi('✅','Abgeschlossen',abgeschl,'')
+    +kpi('💰','Gesamtbudget',fmtEur(sumBudget),'')
+    +'</div>';
 
-  var tabContent = '';
+  var tabsHtml = '<div style="display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin-bottom:20px;gap:3px;">'
+    +['liste','gantt','aufgaben'].map(function(t,i){
+      var ls=['📋 Projektliste','📊 Zeitplan (Gantt)','✅ Aufgaben'];
+      return '<button onclick="switchTab(\''+t+'\')" style="flex:1;padding:9px;border-radius:9px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;'+(activeTab===t?'background:white;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.1);':'background:none;color:#94a3b8;')+'">'+ls[i]+'</button>';
+    }).join('')+'</div>';
 
-  if (activeTab === 0) {
-    // KPI Cards
-    var kpiHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:28px;">'
-      + '<div style="background:#fff;border-radius:12px;padding:18px 22px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-      + '<div style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:.5px;margin-bottom:6px;">PROJEKTE GESAMT</div>'
-      + '<div style="font-size:30px;font-weight:700;color:#1e293b;">' + gesamt + '</div></div>'
-      + '<div style="background:#fff;border-radius:12px;padding:18px 22px;border:1px solid #bfdbfe;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-      + '<div style="font-size:11px;color:#2563eb;font-weight:600;letter-spacing:.5px;margin-bottom:6px;">IN BEARBEITUNG</div>'
-      + '<div style="font-size:30px;font-weight:700;color:#2563eb;">' + inBearbeitung + '</div></div>'
-      + '<div style="background:#fff;border-radius:12px;padding:18px 22px;border:1px solid #bbf7d0;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
-      + '<div style="font-size:11px;color:#16a34a;font-weight:600;letter-spacing:.5px;margin-bottom:6px;">ABGESCHLOSSEN</div>'
-      + '<div style="font-size:30px;font-weight:700;color:#16a34a;">' + abgeschlossen + '</div></div>'
-      + '</div>';
+  var content = '';
 
-    var projCards = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">';
-    if (projekte.length === 0) {
-      projCards += '<div style="grid-column:1/-1;text-align:center;padding:60px;color:#94a3b8;font-size:15px;">Noch keine Projekte. Klicken Sie auf "+ Projekt anlegen".</div>';
+  if (activeTab === 'liste') {
+    if (!proj.length) {
+      content = emptyState('📁','Keine Projekte','Erstelle dein erstes Projekt','+ Projekt erstellen','openAdd()');
+    } else {
+      content = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">';
+      proj.forEach(function(p) {
+        var col = STATUS_COLS[p.status]||'#64748b';
+        var pcol = PRIO_COLS[p.prioritaet]||'#64748b';
+        var pct = p.fortschritt || 0;
+        var barCol = pct>=80?'#16a34a':pct>=50?'#d97706':'#2563eb';
+        var dauer = (p.start&&p.ende) ? daysDiff(p.start,p.ende)+' Tage' : '–';
+        content += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-top:4px solid '+col+';">'
+          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
+          +'<div><div style="font-size:16px;font-weight:800;color:#0f172a;">'+esc(p.name||'–')+'</div>'
+          +'<div style="font-size:12px;color:#64748b;margin-top:2px;">📍 '+esc(p.objekt||'–')+'</div></div>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'
+          +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(p.status||'Planung')+'</span>'
+          +'<span style="background:'+pcol+'20;color:'+pcol+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">'+esc(p.prioritaet||'Normal')+'</span>'
+          +'</div></div>'
+          +'<div style="margin-bottom:12px;">'
+          +'<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:12px;color:#64748b;">Fortschritt</span><span style="font-size:12px;font-weight:700;color:'+barCol+';">'+pct+'%</span></div>'
+          +progressBar(pct, barCol)
+          +'</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'
+          +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Budget</div><div style="font-size:13px;font-weight:700;color:#0f172a;">'+fmtEur(p.budget)+'</div></div>'
+          +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Dauer</div><div style="font-size:13px;font-weight:700;color:#0f172a;">'+dauer+'</div></div>'
+          +'</div>'
+          +'<div style="font-size:12px;color:#64748b;margin-bottom:14px;">📅 '+fmtDate(p.start)+' – '+fmtDate(p.ende)+'<br>👤 '+esc(p.verantwortlich||'–')+'</div>'
+          +(p.beschreibung?'<div style="font-size:12px;color:#94a3b8;margin-bottom:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.beschreibung)+'</div>':'')
+          +'<div style="display:flex;gap:8px;">'
+          +'<button onclick="openEdit(\''+p.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Bearbeiten</button>'
+          +'<button onclick="deleteP(\''+p.id+'\')" style="width:36px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;">🗑️</button>'
+          +'</div></div>';
+      });
+      content += '</div>';
     }
-    projekte.forEach(function(p) {
-      var grad = getStatusGradient(p.status);
-      var fortschritt = getProjektFortschritt(p);
-      var budgetPct = getBudgetPct(p);
-      var budgetColor = getBudgetColor(p);
-      var gewerkeTagsHtml = (p.gewerke || []).map(function(g) {
-        var c = g.status === 'Erledigt' ? '#16a34a' : g.status === 'In Arbeit' ? '#d97706' : '#64748b';
-        return '<span style="background:' + c + '18;color:' + c + ';border-radius:5px;padding:2px 8px;font-size:10px;font-weight:600;">' + g.name + '</span>';
-      }).join(' ');
-      projCards += '<div style="background:#fff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05);">'
-        + '<div style="background:' + grad + ';padding:18px 20px;position:relative;">'
-        + '<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;padding-right:80px;">' + p.name + '</div>'
-        + '<div style="font-size:12px;color:rgba(255,255,255,.8);">' + p.adr + '</div>'
-        + '<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;">Auftraggeber: ' + p.auftr + '</div>'
-        + '<span style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:#fff;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;white-space:nowrap;">' + p.status + '</span>'
-        + '</div>'
-        + '<div style="padding:16px 20px;">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
-        + '<span style="font-size:11px;color:#64748b;font-weight:500;">Laufzeit</span>'
-        + '<span style="font-size:12px;font-weight:600;color:#1e293b;">' + (p.start||'–') + ' → ' + (p.ende||'–') + '</span>'
-        + '</div>'
-        + '<div style="margin-bottom:12px;">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">'
-        + '<span style="font-size:11px;color:#64748b;font-weight:500;">Budget-Verbrauch</span>'
-        + '<span style="font-size:11px;font-weight:600;color:' + budgetColor + ';">€' + (p.verbraucht||0).toLocaleString('de-DE') + ' / €' + (p.budget||0).toLocaleString('de-DE') + '</span>'
-        + '</div>'
-        + '<div style="background:#f1f5f9;border-radius:99px;height:7px;">'
-        + '<div style="background:' + budgetColor + ';width:' + budgetPct + '%;height:7px;border-radius:99px;transition:width .4s;"></div>'
-        + '</div></div>'
-        + '<div style="margin-bottom:14px;">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">'
-        + '<span style="font-size:11px;color:#64748b;font-weight:500;">Gesamtfortschritt</span>'
-        + '<span style="font-size:11px;font-weight:600;color:#1e293b;">' + fortschritt + '%</span>'
-        + '</div>'
-        + '<div style="background:#f1f5f9;border-radius:99px;height:7px;">'
-        + '<div style="background:#2563eb;width:' + fortschritt + '%;height:7px;border-radius:99px;transition:width .4s;"></div>'
-        + '</div></div>'
-        + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;min-height:24px;">' + (gewerkeTagsHtml || '<span style="color:#94a3b8;font-size:11px;">Keine Gewerke</span>') + '</div>'
-        + '<div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9;">'
-        + '<button onclick="openProjektModal(' + p.id + ')" style="flex:1;background:#f8fafc;color:#2563eb;border:1px solid #bfdbfe;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">✏️ Bearbeiten</button>'
-        + '<button onclick="openGewerk(' + p.id + ')" style="flex:1;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">+ Gewerk</button>'
-        + '<button onclick="deleteProjekt(' + p.id + ')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">🗑️</button>'
-        + '</div>'
-        + '</div></div>';
-    });
-    projCards += '</div>';
-    tabContent = kpiHtml + projCards;
 
-  } else if (activeTab === 1) {
-    var zoomBtns = '<div style="display:flex;gap:8px;margin-bottom:16px;">'
-      + '<button onclick="setGanttZoom(\'woche\')" style="padding:7px 18px;border-radius:8px;border:1px solid ' + (ganttZoom==='woche'?'#2563eb':'#e2e8f0') + ';background:' + (ganttZoom==='woche'?'#2563eb':'#fff') + ';color:' + (ganttZoom==='woche'?'#fff':'#475569') + ';font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Woche</button>'
-      + '<button onclick="setGanttZoom(\'monat\')" style="padding:7px 18px;border-radius:8px;border:1px solid ' + (ganttZoom==='monat'?'#2563eb':'#e2e8f0') + ';background:' + (ganttZoom==='monat'?'#2563eb':'#fff') + ';color:' + (ganttZoom==='monat'?'#fff':'#475569') + ';font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Monat</button>'
-      + '</div>';
-    tabContent = zoomBtns + buildGantt();
+  } else if (activeTab === 'gantt') {
+    if (!proj.length) {
+      content = emptyState('📊','Kein Zeitplan','Erstelle Projekte um den Gantt-Chart zu sehen','+ Projekt erstellen','openAdd()');
+    } else {
+      // Simple Gantt chart
+      var allDates = proj.filter(function(p){ return p.start&&p.ende; });
+      if (!allDates.length) { content = '<div style="text-align:center;padding:40px;color:#94a3b8;">Keine Projekte mit Start- und Enddatum vorhanden.</div>'; }
+      else {
+        var minDate = allDates.reduce(function(m,p){ return p.start<m?p.start:m; }, allDates[0].start);
+        var maxDate = allDates.reduce(function(m,p){ return p.ende>m?p.ende:m; }, allDates[0].ende);
+        var totalDays = daysDiff(minDate, maxDate) || 1;
+        content = '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);overflow-x:auto;">'
+          +'<div style="min-width:600px;">';
+        allDates.forEach(function(p) {
+          var col = STATUS_COLS[p.status]||'#64748b';
+          var startOff = daysDiff(minDate,p.start);
+          var dur = daysDiff(p.start,p.ende)||1;
+          var leftPct = (startOff/totalDays)*100;
+          var widthPct = (dur/totalDays)*100;
+          content += '<div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;">'
+            +'<div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name)+'</div>'
+            +'<div style="position:relative;height:28px;background:#f1f5f9;border-radius:6px;">'
+            +'<div style="position:absolute;left:'+leftPct+'%;width:'+widthPct+'%;background:'+col+';border-radius:6px;height:100%;display:flex;align-items:center;padding:0 8px;">'
+            +'<span style="font-size:10px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;">'+fmtDate(p.start)+' – '+fmtDate(p.ende)+'</span>'
+            +'</div></div></div>';
+        });
+        content += '</div></div>';
+      }
+    }
 
   } else {
-    tabContent = buildGewerkeTab();
+    // Aufgaben tab – project tasks
+    var allTasks = [];
+    proj.forEach(function(p){ (p.aufgaben||[]).forEach(function(a){ allTasks.push(Object.assign({projektName:p.name,projektId:p.id},a)); }); });
+    if (!allTasks.length) {
+      content = '<div style="text-align:center;padding:60px;color:#94a3b8;"><div style="font-size:48px;margin-bottom:12px;">✅</div><p style="font-size:15px;font-weight:600;">Keine Projektaufgaben</p><p style="font-size:13px;margin-top:4px;">Bearbeite ein Projekt um Aufgaben hinzuzufügen</p></div>';
+    } else {
+      content = '<div style="background:white;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
+      allTasks.forEach(function(t) {
+        var col = t.erledigt?'#16a34a':'#64748b';
+        content += '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
+          +'<div onclick="toggleTask(\''+t.projektId+'\',\''+t.id+'\')" style="width:20px;height:20px;border-radius:5px;border:2px solid '+(t.erledigt?'#16a34a':'#e2e8f0')+';background:'+(t.erledigt?'#16a34a':'white')+';cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">'+(t.erledigt?'✓':'')+'</div>'
+          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#0f172a;'+(t.erledigt?'text-decoration:line-through;opacity:0.5;':'')+'">'+esc(t.titel||'–')+'</div>'
+          +'<div style="font-size:11px;color:#94a3b8;">📁 '+esc(t.projektName)+' · '+(t.faellig?fmtDate(t.faellig):'kein Datum')+'</div></div>'
+          +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">'+(t.erledigt?'Erledigt':'Offen')+'</span>'
+          +'</div>';
+      });
+      content += '</div>';
+    }
   }
 
-  var mainHTML = tabs + tabContent;
+  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+tabsHtml+content+'</div>';
+  document.body.innerHTML = renderLayout('projekte','Projekte',actionBtn,main,buildModal());
+}
 
-  // Modal
-  var modalContent = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">'
-    + formGroup('Projektname', '<input id="pm-name" placeholder="z.B. Dachsanierung Hauptstr." style="' + inputStyle + '">')
-    + formGroup('Adresse', '<input id="pm-adr" placeholder="Straße Nr., Stadt" style="' + inputStyle + '">')
-    + formGroup('Auftraggeber', '<input id="pm-auftr" placeholder="Firma oder Person" style="' + inputStyle + '">')
-    + formGroup('Typ', '<select id="pm-typ" style="' + inputStyle + '"><option value="Sanierung">Sanierung</option><option value="Neubau">Neubau</option><option value="Modernisierung">Modernisierung</option><option value="Reparatur">Reparatur</option></select>')
-    + formGroup('Startdatum', '<input id="pm-start" type="date" style="' + inputStyle + '">')
-    + formGroup('Enddatum', '<input id="pm-ende" type="date" style="' + inputStyle + '">')
-    + formGroup('Budget (€)', '<input id="pm-budget" type="number" min="0" placeholder="45000" style="' + inputStyle + '">')
-    + formGroup('Verbraucht (€)', '<input id="pm-verbraucht" type="number" min="0" placeholder="0" style="' + inputStyle + '">')
-    + '</div>'
-    + formGroup('Status', '<select id="pm-status" style="' + inputStyle + '"><option value="Geplant">Geplant</option><option value="In Bearbeitung">In Bearbeitung</option><option value="Abgeschlossen">Abgeschlossen</option></select>')
-    + formGroup('Gewerke (kommagetrennt)', '<input id="pm-gewerke" placeholder="Sanitär, Elektro, Maler" style="' + inputStyle + '">')
-    + formGroup('Notizen', '<textarea id="pm-not" rows="3" placeholder="Weitere Informationen..." style="' + inputStyle + 'resize:vertical;min-height:70px;"></textarea>');
+function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
+function switchTab(t) { activeTab=t; render(); }
 
-  var modalFooter = '<button onclick="saveProjektModal()" style="background:#2563eb;color:#fff;border:none;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Speichern</button>'
-    + '<button onclick="hideModal(\'proj-modal\')" style="background:#f1f5f9;color:#64748b;border:none;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-left:8px;">Abbrechen</button>';
+function buildModal() {
+  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:560px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Projekt erstellen</h3>'
+    +fg('Projektname','p-name','text','z.B. Dachrenovierung Musterstr. 1')
+    +fg('Objekt / Gebäude','p-obj','text','Musterstr. 1')
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Beschreibung</label><textarea id="p-beschr" style="'+inputStyle+'height:80px;resize:vertical;" placeholder="Kurze Beschreibung des Projekts..."></textarea></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="p-status" style="'+inputStyle+'">'+Object.keys(STATUS_COLS).map(function(s){ return '<option>'+s+'</option>'; }).join('')+'</select></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Priorität</label><select id="p-prior" style="'+inputStyle+'"><option>Normal</option><option>Hoch</option><option>Niedrig</option></select></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Startdatum','p-start','date','')
+    +fg('Enddatum','p-ende','date','')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Budget (€)','p-budget','number','10000')
+    +fg('Fortschritt (%)','p-fort','number','0')
+    +'</div>'
+    +fg('Verantwortlich','p-verantw','text','Name der Person')
+    +fg('Auftragnehmer / Handwerker','p-hw','text','')
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveP()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
 
-  var modalsHTML = modalHTML('proj-modal', '<span id="proj-modal-title">Projekt anlegen</span>', modalContent, modalFooter);
-
-  var actionBtn = '<button onclick="openProjektModal(-1)" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">+ Projekt anlegen</button>';
-
-  renderLayout('projekte', 'Projekte', actionBtn, mainHTML, modalsHTML);
+function openAdd() { editId=null; document.getElementById('m-title').textContent='Projekt erstellen'; ['p-name','p-obj','p-beschr','p-start','p-ende','p-budget','p-verantw','p-hw'].forEach(function(x){document.getElementById(x).value='';}); document.getElementById('p-fort').value='0'; document.getElementById('add-modal').style.display='flex'; }
+function openEdit(id) {
+  var p=(appData.projekte||[]).find(function(x){return x.id===id;}); if(!p) return; editId=id;
+  document.getElementById('m-title').textContent='Projekt bearbeiten';
+  document.getElementById('p-name').value=p.name||''; document.getElementById('p-obj').value=p.objekt||''; document.getElementById('p-beschr').value=p.beschreibung||''; document.getElementById('p-status').value=p.status||'Planung'; document.getElementById('p-prior').value=p.prioritaet||'Normal'; document.getElementById('p-start').value=p.start||''; document.getElementById('p-ende').value=p.ende||''; document.getElementById('p-budget').value=p.budget||''; document.getElementById('p-fort').value=p.fortschritt||0; document.getElementById('p-verantw').value=p.verantwortlich||''; document.getElementById('p-hw').value=p.handwerker||'';
+  document.getElementById('add-modal').style.display='flex';
+}
+function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function saveP() {
+  var name=document.getElementById('p-name').value.trim(); if(!name){alert('Projektname eingeben.');return;}
+  var proj=appData.projekte||[];
+  var existing = editId?(proj.find(function(x){return x.id===editId;})||{}):{};
+  var obj={id:editId||gid(),name:name,objekt:document.getElementById('p-obj').value.trim(),beschreibung:document.getElementById('p-beschr').value.trim(),status:document.getElementById('p-status').value,prioritaet:document.getElementById('p-prior').value,start:document.getElementById('p-start').value,ende:document.getElementById('p-ende').value,budget:document.getElementById('p-budget').value,fortschritt:parseInt(document.getElementById('p-fort').value)||0,verantwortlich:document.getElementById('p-verantw').value.trim(),handwerker:document.getElementById('p-hw').value.trim(),aufgaben:existing.aufgaben||[]};
+  if(editId){var idx=proj.findIndex(function(x){return x.id===editId;}); if(idx>=0) proj[idx]=obj;}else proj.unshift(obj);
+  appData.projekte=proj; syncToFirebase(uid); closeAdd(); render();
+}
+function deleteP(id) { if(!confirm('Projekt löschen?')) return; appData.projekte=(appData.projekte||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+function toggleTask(projektId, taskId) {
+  var p=(appData.projekte||[]).find(function(x){return x.id===projektId;}); if(!p||!p.aufgaben) return;
+  var t=p.aufgaben.find(function(x){return x.id===taskId;}); if(!t) return;
+  t.erledigt=!t.erledigt; syncToFirebase(uid); render();
 }
 
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.projekte) appData.projekte=[]; render(); });
 </script>
 </body>
 </html>

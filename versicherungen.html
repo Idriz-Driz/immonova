@@ -3,274 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Versicherungen – ImmoNova</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>ImmoNova – Versicherungen</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;">
+<body>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
-var user = getUser();
-var editVsId = null;
-
-var DEMO_VS = [
-  {id:'vs1', art:'Gebäudeversicherung', gesellschaft:'Allianz', vnr:'ALZ-2024-001', beitrag:1200, abschluss:'2024-01-01', ablauf:'2026-12-31', not:'Vollkasko inkl. Elementar'},
-  {id:'vs2', art:'Haftpflichtversicherung', gesellschaft:'AXA', vnr:'AXA-2024-007', beitrag:180, abschluss:'2024-01-15', ablauf:'2026-06-30', not:'Deckungssumme 5 Mio. €'},
-  {id:'vs3', art:'Feuerversicherung', gesellschaft:'ERGO', vnr:'ERG-2025-042', beitrag:360, abschluss:'2025-01-01', ablauf:'2027-01-01', not:''},
-  {id:'vs4', art:'Wasserschadenversicherung', gesellschaft:'HDI', vnr:'HDI-2023-019', beitrag:240, abschluss:'2023-04-15', ablauf:'2026-04-15', not:'Inklusive Rohrbruch'},
-  {id:'vs5', art:'Elementarversicherung', gesellschaft:'Zurich', vnr:'ZUR-2024-003', beitrag:480, abschluss:'2024-09-30', ablauf:'2026-09-30', not:'Starkregen, Überschwemmung, Erdrutsch'}
-];
-
-var ART_ICONS = {
-  'Gebäudeversicherung': '🏠',
-  'Feuerversicherung': '🔥',
-  'Wasserschadenversicherung': '💧',
-  'Haftpflichtversicherung': '⚡',
-  'Einbruchversicherung': '🔒',
-  'Elementarversicherung': '🌪️',
-  'Bauleistungsversicherung': '🏗️',
-  'Fahrzeugversicherung': '🚗',
-  'Sonstige': '🛡️'
-};
-
-function getVS() {
-  var stored = getData(KEYS.versicherungen, null);
-  if(!stored || stored.length===0){
-    setData(KEYS.versicherungen, DEMO_VS);
-    return JSON.parse(JSON.stringify(DEMO_VS));
-  }
-  return stored;
-}
-
-function daysUntil(dateStr) {
-  if(!dateStr) return 9999;
-  return Math.ceil((new Date(dateStr) - new Date()) / (1000*60*60*24));
-}
-
-function getStatusInfo(vs) {
-  var days = daysUntil(vs.ablauf);
-  if(days < 0) return {label:'Abgelaufen', color:'red', days:days};
-  if(days < 30) return {label:'Läuft ab in '+days+' Tagen', color:'yellow', days:days};
-  return {label:'Aktiv', color:'green', days:days};
-}
-
-function buildKPIs(vsList) {
-  var aktiv=0, jahresBeitrag=0, baldAblaufend=0, abgelaufen=0;
-  for(var i=0;i<vsList.length;i++){
-    var si = getStatusInfo(vsList[i]);
-    jahresBeitrag += vsList[i].beitrag||0;
-    if(si.color==='green') aktiv++;
-    else if(si.color==='yellow') baldAblaufend++;
-    else if(si.color==='red') abgelaufen++;
-  }
-
-  var kpis = [
-    {ico:'✅', label:'Aktive Versicherungen', val:aktiv, color:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0'},
-    {ico:'💶', label:'Jahresbeitrag Gesamt', val:fmt(jahresBeitrag)+' €', color:'#2563eb', bg:'#eff6ff', border:'#bfdbfe'},
-    {ico:'⏰', label:'Bald ablaufend', val:baldAblaufend, color:'#d97706', bg:'#fffbeb', border:'#fde68a'},
-    {ico:'❌', label:'Abgelaufen', val:abgelaufen, color:'#dc2626', bg:'#fef2f2', border:'#fecaca'}
-  ];
-
-  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px;">';
-  for(var k=0;k<kpis.length;k++){
-    var kpi = kpis[k];
-    html += '<div style="background:white;border:1px solid '+kpi.border+';border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-    html += '<div style="width:42px;height:42px;border-radius:10px;background:'+kpi.bg+';display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px;">'+kpi.ico+'</div>';
-    html += '<div style="font-size:26px;font-weight:800;color:'+kpi.color+';margin-bottom:4px;">'+kpi.val+'</div>';
-    html += '<div style="font-size:12px;color:#64748b;font-weight:500;">'+kpi.label+'</div>';
-    html += '</div>';
-  }
-  html += '</div>';
-  return html;
-}
-
-function buildGrid(vsList) {
-  if(vsList.length===0){
-    return '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">'
-      +'<div style="font-size:48px;margin-bottom:12px;">🛡️</div>'
-      +'<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Noch keine Versicherungen erfasst</div>'
-      +'<div style="font-size:13px;">Klicke auf "+ Versicherung hinzufügen".</div>'
-      +'</div>';
-  }
-
-  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;">';
-  for(var i=0;i<vsList.length;i++){
-    var vs = vsList[i];
-    var si = getStatusInfo(vs);
-    var ico = ART_ICONS[vs.art] || '🛡️';
-    var monatBeitrag = Math.round((vs.beitrag||0)/12*100)/100;
-    var borderColor = si.color==='red'?'#fca5a5':si.color==='yellow'?'#fde68a':'#e2e8f0';
-    var headerBg = si.color==='red'?'linear-gradient(135deg,#fef2f2,#fee2e2)':si.color==='yellow'?'linear-gradient(135deg,#fffbeb,#fef3c7)':'linear-gradient(135deg,#f0fdf4,#dcfce7)';
-
-    html += '<div style="background:white;border:1px solid '+borderColor+';border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">';
-    // Header with gradient
-    html += '<div style="background:'+headerBg+';padding:18px 18px 14px;">';
-    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">';
-    html += '<div style="font-size:36px;">'+ico+'</div>';
-    html += badge(si.label, si.color);
-    html += '</div>';
-    html += '<div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:2px;">'+vs.art+'</div>';
-    html += '<div style="font-size:13px;color:#475569;font-weight:500;">'+vs.gesellschaft+'</div>';
-    html += '</div>';
-    // Body
-    html += '<div style="padding:16px 18px;">';
-    // Beitrag
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
-    html += '<div>';
-    html += '<div style="font-size:22px;font-weight:800;color:#0f172a;">'+fmt(vs.beitrag||0)+' €</div>';
-    html += '<div style="font-size:11px;color:#94a3b8;font-weight:500;">pro Jahr</div>';
-    html += '</div>';
-    html += '<div style="background:#f8fafc;border-radius:8px;padding:6px 12px;text-align:center;">';
-    html += '<div style="font-size:14px;font-weight:700;color:#2563eb;">'+fmt(monatBeitrag)+' €</div>';
-    html += '<div style="font-size:10px;color:#94a3b8;">/ Monat</div>';
-    html += '</div>';
-    html += '</div>';
-    // Details
-    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px 12px;margin-bottom:12px;">';
-    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">';
-    html += '<span style="font-size:12px;color:#64748b;">Vertragsnr.</span>';
-    html += '<span style="font-size:12px;font-weight:600;color:#0f172a;">'+vs.vnr+'</span>';
-    html += '</div>';
-    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">';
-    html += '<span style="font-size:12px;color:#64748b;">Abschluss</span>';
-    html += '<span style="font-size:12px;font-weight:600;color:#0f172a;">'+fmtDate(vs.abschluss)+'</span>';
-    html += '</div>';
-    html += '<div style="display:flex;justify-content:space-between;">';
-    html += '<span style="font-size:12px;color:#64748b;">Ablauf</span>';
-    html += '<span style="font-size:12px;font-weight:700;color:'+(si.color==='red'?'#dc2626':si.color==='yellow'?'#d97706':'#16a34a')+';">'+fmtDate(vs.ablauf)+'</span>';
-    html += '</div>';
-    html += '</div>';
-    if(vs.not){
-      html += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;font-style:italic;">📝 '+vs.not+'</div>';
-    }
-    // Actions
-    html += '<div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9;">';
-    html += '<button onclick="openEditVsModal(\''+vs.id+'\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">✏️ Bearbeiten</button>';
-    html += '<button onclick="deleteVs(\''+vs.id+'\')" style="padding:9px 14px;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fff5f5\'">🗑️</button>';
-    html += '</div>';
-    html += '</div></div>';
-  }
-  html += '</div>';
-  return html;
-}
-
-function deleteVs(id) {
-  if(!confirm('Versicherung wirklich löschen?')) return;
-  var vsList = getVS().filter(function(v){return v.id!==id;});
-  setData(KEYS.versicherungen, vsList);
-  syncToFirebase(user.uid);
-  render();
-}
-
-function openEditVsModal(id) {
-  editVsId = id;
-  var vsList = getVS();
-  var vs = null;
-  for(var i=0;i<vsList.length;i++){ if(vsList[i].id===id){ vs=vsList[i]; break; } }
-  if(!vs) return;
-  document.getElementById('vs-modal-title').textContent = 'Versicherung bearbeiten';
-  document.getElementById('vs-art').value = vs.art||'Gebäudeversicherung';
-  document.getElementById('vs-gesellschaft').value = vs.gesellschaft||'';
-  document.getElementById('vs-vnr').value = vs.vnr||'';
-  document.getElementById('vs-beitrag').value = vs.beitrag||0;
-  document.getElementById('vs-abschluss').value = vs.abschluss||'';
-  document.getElementById('vs-ablauf').value = vs.ablauf||'';
-  document.getElementById('vs-not').value = vs.not||'';
-  showModal('vs-modal');
-}
-
-function openNewVsModal() {
-  editVsId = null;
-  document.getElementById('vs-modal-title').textContent = 'Versicherung hinzufügen';
-  document.getElementById('vs-art').value = 'Gebäudeversicherung';
-  document.getElementById('vs-gesellschaft').value = '';
-  document.getElementById('vs-vnr').value = '';
-  document.getElementById('vs-beitrag').value = '';
-  document.getElementById('vs-abschluss').value = today();
-  document.getElementById('vs-ablauf').value = '';
-  document.getElementById('vs-not').value = '';
-  showModal('vs-modal');
-}
-
-function saveVs() {
-  var art = document.getElementById('vs-art').value;
-  var gesellschaft = document.getElementById('vs-gesellschaft').value.trim();
-  var ablauf = document.getElementById('vs-ablauf').value;
-  if(!gesellschaft || !ablauf){ alert('Gesellschaft und Ablaufdatum sind Pflichtfelder.'); return; }
-  var vsList = getVS();
-  var obj = {
-    id: editVsId || ('vs_'+Date.now()),
-    art: art,
-    gesellschaft: gesellschaft,
-    vnr: document.getElementById('vs-vnr').value.trim(),
-    beitrag: parseFloat(document.getElementById('vs-beitrag').value)||0,
-    abschluss: document.getElementById('vs-abschluss').value,
-    ablauf: ablauf,
-    not: document.getElementById('vs-not').value.trim()
-  };
-  if(editVsId){
-    for(var i=0;i<vsList.length;i++){ if(vsList[i].id===editVsId){ vsList[i]=obj; break; } }
-  } else {
-    vsList.push(obj);
-    addNotif('🛡️', 'Neue Versicherung: '+art+' ('+gesellschaft+')');
-  }
-  // Check if expiring soon
-  var days = daysUntil(ablauf);
-  if(days>=0 && days<30){
-    addNotif('⏰', 'Achtung: '+art+' läuft in '+days+' Tagen ab!');
-  }
-  setData(KEYS.versicherungen, vsList);
-  syncToFirebase(user.uid);
-  hideModal('vs-modal');
-  render();
-}
+checkAuth(); checkTrial();
+var user = getUser(); var uid = user.uid;
+var appData = {}; var editId = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
+var ARTEN = {Gebäude:'🏠',Haftpflicht:'⚖️',Elementar:'🌊',Brand:'🔥',Hausrat:'🛋️',Rechtsschutz:'⚡',Sonstiges:'📋'};
+function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
+function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
+function fmtEur(n) { return (Number(n)||0).toLocaleString('de-DE')+' €'; }
+function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+function daysUntil(d) { if(!d) return 9999; return Math.ceil((new Date(d)-new Date())/(1000*60*60*24)); }
 
 function render() {
-  var vsList = getVS();
+  var vers = appData.versicherungen || [];
+  var qTyp = (document.getElementById('f-typ')||{}).value||'';
+  var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
+  var filtered = vers.filter(function(v){
+    if (qTyp && v.art!==qTyp) return false;
+    if (qQ && !(v.name+v.gesellschaft+v.objekt+'').toLowerCase().includes(qQ)) return false;
+    return true;
+  });
+  var aktiv = vers.filter(function(v){ return daysUntil(v.ende)>=0; }).length;
+  var bald = vers.filter(function(v){ var d=daysUntil(v.ende); return d>=0&&d<=30; }).length;
+  var sumPraemien = vers.reduce(function(s,v){ return s+(Number(v.praemie)||0); },0);
 
-  // Check for expiring soon on load
-  for(var i=0;i<vsList.length;i++){
-    var days = daysUntil(vsList[i].ablauf);
-    if(days>=0 && days<30){
-      // Already notified, skip mass notification
-    }
+  var warnHtml = '';
+  if (bald > 0) {
+    warnHtml = '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">'
+      +'<span style="font-size:22px;">⚠️</span>'
+      +'<div><strong style="color:#d97706;">'+bald+' Versicherung'+(bald>1?'en':'')+' läuft in den nächsten 30 Tagen ab!</strong>'
+      +'<div style="font-size:12px;color:#92400e;margin-top:2px;">Bitte rechtzeitig verlängern.</div></div></div>';
   }
 
-  var artOpts = Object.keys(ART_ICONS);
-  var artOptsHtml = '';
-  for(var a=0;a<artOpts.length;a++){
-    artOptsHtml += '<option value="'+artOpts[a]+'">'+ART_ICONS[artOpts[a]]+' '+artOpts[a]+'</option>';
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">'
+    +kpi('🔒','Gesamt',vers.length,'')
+    +kpi('✅','Aktiv',aktiv,'')
+    +kpi('⚠️','Läuft bald ab',bald,'≤ 30 Tage')
+    +kpi('💰','Jahresprämien',fmtEur(sumPraemien),'')
+    +'</div>';
+
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Suchen..." style="'+inputStyle+'max-width:220px;">'
+    +'<select id="f-typ" onchange="render()" style="'+inputStyle+'max-width:180px;"><option value="">Alle Arten</option>'+Object.keys(ARTEN).map(function(a){ return '<option value="'+a+'"'+(qTyp===a?' selected':'')+'>'+ARTEN[a]+' '+a+'</option>'; }).join('')+'</select>'
+    +'</div>';
+
+  var cardsHtml = '';
+  if (!filtered.length) {
+    cardsHtml = emptyState('🔒','Keine Versicherungen','Füge deine erste Versicherung hinzu','+ Versicherung hinzufügen','openAdd()');
+  } else {
+    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">';
+    filtered.forEach(function(v) {
+      var d = daysUntil(v.ende);
+      var statusCol = d<0?'#dc2626':d<=30?'#ea580c':'#16a34a';
+      var statusTxt = d<0?'Abgelaufen':d<=30?'Läuft ab in '+d+' Tagen':'Aktiv';
+      var ico = ARTEN[v.art]||'📋';
+      cardsHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-top:4px solid '+statusCol+';">'
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;">'
+        +'<div style="font-size:28px;">'+ico+'</div>'
+        +'<div><div style="font-size:15px;font-weight:700;color:#0f172a;">'+esc(v.name||'–')+'</div>'
+        +'<div style="font-size:12px;color:#64748b;">'+esc(v.gesellschaft||'–')+'</div></div></div>'
+        +'<span style="background:'+statusCol+'20;color:'+statusCol+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;">'+statusTxt+'</span></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:10px;"><div style="font-size:10px;color:#94a3b8;">Versicherungssumme</div><div style="font-size:15px;font-weight:700;color:#0f172a;">'+fmtEur(v.summe)+'</div></div>'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:10px;"><div style="font-size:10px;color:#94a3b8;">Jahresprämie</div><div style="font-size:15px;font-weight:700;color:#2563eb;">'+fmtEur(v.praemie)+'</div></div>'
+        +'</div>'
+        +'<div style="font-size:12px;color:#64748b;margin-bottom:4px;">📍 '+esc(v.objekt||'–')+'</div>'
+        +'<div style="font-size:12px;color:#64748b;margin-bottom:4px;">Nr. '+esc(v.nummer||'–')+'</div>'
+        +'<div style="font-size:12px;color:#64748b;margin-bottom:14px;">📅 '+fmtDate(v.beginn)+' – '+fmtDate(v.ende)+'</div>'
+        +'<div style="display:flex;gap:8px;">'
+        +(v.tel?'<a href="tel:'+esc(v.tel)+'" style="flex:1;padding:8px;border-radius:8px;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:700;text-decoration:none;text-align:center;">📞 Anrufen</a>':'')
+        +'<button onclick="openEdit(\''+v.id+'\')" style="'+(v.tel?'':'flex:1;')+'padding:8px'+(v.tel?';width:36px':'')+'px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;">✏️</button>'
+        +'<button onclick="deleteV(\''+v.id+'\')" style="width:36px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;">🗑️</button>'
+        +'</div></div>';
+    });
+    cardsHtml += '</div>';
   }
 
-  var modalBody =
-    formGroup('Versicherungsart', '<select id="vs-art" '+inputStyle+'>' + artOptsHtml + '</select>')
-    + formGroup('Gesellschaft *', '<input id="vs-gesellschaft" '+inputStyle+' placeholder="z.B. Allianz">')
-    + formGroup('Vertragsnummer', '<input id="vs-vnr" '+inputStyle+' placeholder="z.B. ALZ-2024-001">')
-    + formGroup('Jahresbeitrag (€)', '<input id="vs-beitrag" type="number" min="0" step="0.01" '+inputStyle+' placeholder="z.B. 1200">')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Abschlussdatum', '<input id="vs-abschluss" type="date" '+inputStyle+'>')
-    + formGroup('Ablaufdatum *', '<input id="vs-ablauf" type="date" '+inputStyle+'>')
-    + '</div>'
-    + formGroup('Notizen', '<textarea id="vs-not" '+inputStyle+' rows="3" placeholder="Deckungssumme, Besonderheiten..."></textarea>')
-    + '<div style="display:flex;gap:10px;margin-top:8px;">'
-    + '<button onclick="saveVs()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
-    + '<button onclick="hideModal(\'vs-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div>';
-
-  var modalsHTML = modalHTML('vs-modal', '<span id="vs-modal-title">Versicherung hinzufügen</span>', modalBody);
-
-  var actionBtn = '<button onclick="openNewVsModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Versicherung hinzufügen</button>';
-
-  var mainHTML = buildKPIs(vsList) + buildGrid(vsList);
-
-  renderLayout('versicherungen', '🛡️ Versicherungen', actionBtn, mainHTML, modalsHTML);
+  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Versicherung hinzufügen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+warnHtml+kpiHtml+filterHtml+cardsHtml+'</div>';
+  document.body.innerHTML = renderLayout('versicherungen','Versicherungen',actionBtn,main,buildModal());
 }
 
+function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
+
+function buildModal() {
+  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:520px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Versicherung</h3>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Versicherungsart</label><select id="v-art" style="'+inputStyle+'">'+Object.keys(ARTEN).map(function(a){ return '<option>'+a+'</option>'; }).join('')+'</select></div>'
+    +fg('Versicherungsname','v-name','text','z.B. Gebäudeversicherung Musterstr.')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Gesellschaft','v-ges','text','z.B. Allianz')
+    +fg('Objekt','v-obj','text','Musterstr. 1')
+    +'</div>'
+    +fg('Versicherungsnummer','v-nr','text','VN-12345')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Versicherungssumme (€)','v-summe','number','500000')
+    +fg('Jahresprämie (€)','v-praemie','number','1200')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Beginn','v-beginn','date','')
+    +fg('Ende','v-ende','date','')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Selbstbeteiligung (€)','v-sb','number','500')
+    +fg('Telefon Versicherer','v-tel','tel','+49 89 ...')
+    +'</div>'
+    +fg('Ansprechpartner','v-ap','text','Max Muster')
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Notizen</label><textarea id="v-notizen" style="'+inputStyle+'height:80px;resize:vertical;"></textarea></div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveV()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function openAdd() { editId=null; document.getElementById('m-title').textContent='Versicherung hinzufügen'; ['v-name','v-ges','v-obj','v-nr','v-summe','v-praemie','v-beginn','v-ende','v-sb','v-tel','v-ap','v-notizen'].forEach(function(i){ var el=document.getElementById(i); if(el) el.value=''; }); document.getElementById('add-modal').style.display='flex'; }
+function openEdit(id) {
+  var v = (appData.versicherungen||[]).find(function(x){return x.id===id;}); if(!v) return; editId=id;
+  document.getElementById('m-title').textContent='Versicherung bearbeiten';
+  var map = {art:'v-art',name:'v-name',gesellschaft:'v-ges',objekt:'v-obj',nummer:'v-nr',summe:'v-summe',praemie:'v-praemie',beginn:'v-beginn',ende:'v-ende',selbstbeteiligung:'v-sb',tel:'v-tel',ansprechpartner:'v-ap',notizen:'v-notizen'};
+  Object.keys(map).forEach(function(k){ var el=document.getElementById(map[k]); if(el) el.value=v[k]||''; });
+  document.getElementById('add-modal').style.display='flex';
+}
+function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function saveV() {
+  var name=document.getElementById('v-name').value.trim(); if(!name){alert('Bitte Name eingeben.');return;}
+  var vers=appData.versicherungen||[];
+  var obj={id:editId||gid(),art:document.getElementById('v-art').value,name:name,gesellschaft:document.getElementById('v-ges').value.trim(),objekt:document.getElementById('v-obj').value.trim(),nummer:document.getElementById('v-nr').value.trim(),summe:document.getElementById('v-summe').value,praemie:document.getElementById('v-praemie').value,beginn:document.getElementById('v-beginn').value,ende:document.getElementById('v-ende').value,selbstbeteiligung:document.getElementById('v-sb').value,tel:document.getElementById('v-tel').value.trim(),ansprechpartner:document.getElementById('v-ap').value.trim(),notizen:document.getElementById('v-notizen').value.trim()};
+  if(editId){var idx=vers.findIndex(function(x){return x.id===editId;}); if(idx>=0) vers[idx]=obj;}else vers.unshift(obj);
+  appData.versicherungen=vers; syncToFirebase(uid); closeAdd(); render();
+}
+function deleteV(id) { if(!confirm('Versicherung löschen?')) return; appData.versicherungen=(appData.versicherungen||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.versicherungen) appData.versicherungen=[]; render(); });
 </script>
 </body>
 </html>

@@ -1,261 +1,153 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – Interessenten</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmoNova – Interessenten</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;">
+<body>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
-var user = getUser();
-var aktuellerFilter = 'alle';
-
-var DEFAULT_INTERESSENTEN = [
-  { id:'int-1', vn:'Sandra', nn:'Klein',   tel:'0151 887766', email:'sandra@mail.de', obj:'2 OG', status:'warm',      not:'Sehr interessiert, Besichtigung vereinbart', datum:'2026-03-20' },
-  { id:'int-2', vn:'Peter',  nn:'Wagner',  tel:'0151 334455', email:'',               obj:'EG',   status:'kalt',      not:'Hat sich nicht zurückgemeldet',              datum:'2026-03-10' },
-  { id:'int-3', vn:'Maria',  nn:'Hofmann', tel:'0151 221133', email:'maria@mail.de',  obj:'1 OG', status:'abschluss', not:'Mietvertrag unterschrieben \u2705',           datum:'2026-03-25' }
-];
-
-function getInteressenten() {
-  var data = getData(KEYS.interessenten, null);
-  if(!data || data.length === 0) {
-    setData(KEYS.interessenten, DEFAULT_INTERESSENTEN);
-    return DEFAULT_INTERESSENTEN;
-  }
-  return data;
-}
-
-function saveInteressenten(list) {
-  setData(KEYS.interessenten, list);
-  syncToFirebase(user.uid);
-}
-
-function addInteressent() {
-  var vn    = document.getElementById('i-vn')    ? document.getElementById('i-vn').value.trim()    : '';
-  var nn    = document.getElementById('i-nn')    ? document.getElementById('i-nn').value.trim()    : '';
-  var tel   = document.getElementById('i-tel')   ? document.getElementById('i-tel').value.trim()   : '';
-  var email = document.getElementById('i-email') ? document.getElementById('i-email').value.trim() : '';
-  var obj   = document.getElementById('i-obj')   ? document.getElementById('i-obj').value.trim()   : '';
-  var stat  = document.getElementById('i-stat')  ? document.getElementById('i-stat').value         : 'warm';
-  var not   = document.getElementById('i-not')   ? document.getElementById('i-not').value.trim()   : '';
-  var datum = document.getElementById('i-datum') ? document.getElementById('i-datum').value        : today();
-
-  if(!vn) { alert('Bitte Vorname eingeben!'); return; }
-  var list = getInteressenten();
-  list.push({
-    id: 'int-' + Date.now(),
-    vn: vn, nn: nn, tel: tel, email: email,
-    obj: obj, status: stat, not: not,
-    datum: datum || today()
-  });
-  saveInteressenten(list);
-  addNotif('🔍', 'Neuer Interessent: ' + vn + ' ' + nn);
-  hideModal('int-modal');
-  render();
-}
-
-function delInteressent(id) {
-  if(!confirm('Interessent entfernen?')) return;
-  var list = getInteressenten().filter(function(i){ return i.id !== id; });
-  saveInteressenten(list);
-  render();
-}
-
-function changeStatus(id, newStatus) {
-  var list = getInteressenten();
-  list.forEach(function(i){ if(i.id === id) i.status = newStatus; });
-  saveInteressenten(list);
-  render();
-}
-
-function createFollowUp(id) {
-  var list = getInteressenten();
-  var int_ = list.find(function(i){ return i.id === id; });
-  if(!int_) return;
-  var name = (int_.vn + ' ' + int_.nn).trim();
-  var followups = getData(KEYS.followups, []);
-  var dat3 = new Date();
-  dat3.setDate(dat3.getDate() + 3);
-  var dat3str = dat3.toISOString().split('T')[0];
-  followups.push({
-    id: 'fu-' + Date.now(),
-    name: name,
-    not: int_.not || 'Follow-Up Interessent',
-    dat: dat3str,
-    done: false,
-    typ: 'interessent'
-  });
-  setData(KEYS.followups, followups);
-  addNotif('🎯', 'Follow-Up erstellt für ' + name);
-  syncToFirebase(user.uid);
-  // Kurze visuelle Rückmeldung
-  var btn = document.getElementById('fu-btn-' + id);
-  if(btn) {
-    btn.textContent = '✅ Erstellt!';
-    btn.style.background = '#16a34a';
-    setTimeout(function(){ render(); }, 1200);
-  }
-}
-
-function setFilter(f) {
-  aktuellerFilter = f;
-  render();
-}
-
-function renderKarte(int_) {
-  var statusConf = {
-    warm:       { label: 'Warm 🔥',       farbe: '#d97706', bg: '#fffbeb', ring: '#fbbf24' },
-    kalt:       { label: 'Kalt ❄️',       farbe: '#64748b', bg: '#f1f5f9', ring: '#94a3b8' },
-    abschluss:  { label: 'Abschluss ✅', farbe: '#16a34a', bg: '#f0fdf4', ring: '#4ade80' }
-  };
-  var sc = statusConf[int_.status] || statusConf.kalt;
-  var name = (int_.vn + ' ' + int_.nn).trim();
-  var tel = int_.tel || '';
-  var waLink = 'https://wa.me/' + tel.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent('Hallo ' + name + ', ich melde mich bezüglich Ihrer Anfrage zur Wohnung.');
-
-  return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);margin-bottom:12px;border-left:4px solid ' + sc.ring + ';">'
-
-    // Kopf
-    + '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
-      + '<div style="display:flex;align-items:center;gap:10px;">'
-        + '<div style="width:38px;height:38px;border-radius:50%;background:' + sc.bg + ';color:' + sc.farbe + ';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0;">' + (int_.vn||'?')[0].toUpperCase() + '</div>'
-        + '<div>'
-          + '<div style="font-size:14px;font-weight:700;color:#0f172a;">' + name + '</div>'
-          + '<div style="font-size:11px;color:#64748b;">🏠 ' + (int_.obj || '–') + '</div>'
-        + '</div>'
-      + '</div>'
-      + '<button onclick="delInteressent(\'' + int_.id + '\')" style="width:28px;height:28px;background:#fef2f2;color:#dc2626;border:none;border-radius:7px;cursor:pointer;font-size:13px;flex-shrink:0;">🗑</button>'
-    + '</div>'
-
-    // Kontakt
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'
-      + (tel ? '<span style="font-size:12px;color:#64748b;">📞 ' + tel + '</span>' : '')
-      + (tel ?
-        '<a href="' + waLink + '" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#16a34a;color:white;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;text-decoration:none;font-family:inherit;">📲 WhatsApp</a>'
-        : '')
-    + '</div>'
-
-    // Notiz
-    + (int_.not ?
-      '<div style="background:#f8fafc;border-radius:8px;padding:9px 11px;font-size:12px;color:#475569;margin-bottom:10px;line-height:1.5;">' + int_.not + '</div>'
-      : '')
-
-    // Datum
-    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">📅 Kontakt: ' + fmtDate(int_.datum) + '</div>'
-
-    // Status-Dropdown
-    + '<div style="margin-bottom:10px;">'
-      + '<select onchange="changeStatus(\'' + int_.id + '\', this.value)" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;color:#0f172a;background:white;cursor:pointer;outline:none;">'
-        + '<option value="warm"'      + (int_.status==='warm'      ?' selected':'') + '>Warm 🔥</option>'
-        + '<option value="kalt"'      + (int_.status==='kalt'      ?' selected':'') + '>Kalt ❄️</option>'
-        + '<option value="abschluss"' + (int_.status==='abschluss' ?' selected':'') + '>Abschluss ✅</option>'
-      + '</select>'
-    + '</div>'
-
-    // Follow-Up Button
-    + '<button id="fu-btn-' + int_.id + '" onclick="createFollowUp(\'' + int_.id + '\')" style="width:100%;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🎯 Follow-Up in 3 Tagen erstellen</button>'
-
-    + '</div>';
-}
+checkAuth(); checkTrial();
+var user = getUser(); var uid = user.uid;
+var appData = {}; var editId = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
+var STATUS_COLS = {Neu:'#2563eb',Kontaktiert:'#d97706',Besichtigung:'#7c3aed',Zusage:'#16a34a',Absage:'#dc2626',Warteliste:'#64748b'};
+var STATUS_ICOS = {Neu:'🆕',Kontaktiert:'📞',Besichtigung:'👁️',Zusage:'✅',Absage:'❌',Warteliste:'⏳'};
+function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
+function fg(label,id,type,ph) { return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label><input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>'; }
+function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+function avatar(name, col) { var n=(name||'?'); var parts=n.split(' '); var ini=(parts[0][0]||'')+(parts[1]?parts[1][0]:''); return '<div style="width:44px;height:44px;border-radius:12px;background:'+col+';display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;flex-shrink:0;">'+ini.toUpperCase()+'</div>'; }
+var AVA_COLS = ['#2563eb','#7c3aed','#16a34a','#ea580c','#dc2626','#d97706'];
 
 function render() {
-  var alle = getInteressenten();
+  var ints = appData.interessenten || [];
+  var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
+  var qSt = (document.getElementById('f-st')||{}).value||'';
+  var filtered = ints.filter(function(i){
+    if (qSt && i.status!==qSt) return false;
+    if (qQ && !(i.vn+i.nn+i.email+i.tel+i.objekt+'').toLowerCase().includes(qQ)) return false;
+    return true;
+  });
 
-  // Filter
-  var gefiltert = aktuellerFilter === 'alle' ? alle : alle.filter(function(i){ return i.status === aktuellerFilter; });
+  var statusCounts = {};
+  Object.keys(STATUS_COLS).forEach(function(s){ statusCounts[s]=ints.filter(function(i){return i.status===s;}).length; });
 
-  var warm      = alle.filter(function(i){ return i.status === 'warm'; });
-  var kalt      = alle.filter(function(i){ return i.status === 'kalt'; });
-  var abschluss = alle.filter(function(i){ return i.status === 'abschluss'; });
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px;">'
+    +kpi('👥','Gesamt',ints.length,'')
+    +kpi('🆕','Neu',statusCounts.Neu||0,'')
+    +kpi('👁️','Besichtigungen',statusCounts.Besichtigung||0,'')
+    +kpi('✅','Zusagen',statusCounts.Zusage||0,'')
+    +'</div>';
 
-  // Gefilterte Listen für Kanban (wenn Filter aktiv, nur die gefilterte Spalte füllen)
-  var warmList      = aktuellerFilter === 'alle' ? warm      : (aktuellerFilter === 'warm'      ? gefiltert : []);
-  var kaltList      = aktuellerFilter === 'alle' ? kalt      : (aktuellerFilter === 'kalt'      ? gefiltert : []);
-  var abschlussList = aktuellerFilter === 'alle' ? abschluss : (aktuellerFilter === 'abschluss' ? gefiltert : []);
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Name, Email, Objekt..." style="'+inputStyle+'max-width:240px;">'
+    +'<select id="f-st" onchange="render()" style="'+inputStyle+'max-width:180px;"><option value="">Alle Status</option>'+Object.keys(STATUS_COLS).map(function(s){ return '<option value="'+s+'"'+(qSt===s?' selected':'')+'>'+STATUS_ICOS[s]+' '+s+'</option>'; }).join('')+'</select>'
+    +'</div>';
 
-  function filterBtn(val, label) {
-    var active = aktuellerFilter === val;
-    return '<button onclick="setFilter(\'' + val + '\')" style="padding:8px 16px;font-size:12px;font-weight:600;border-radius:20px;border:1px solid ' + (active?'#2563eb':'#e2e8f0') + ';background:' + (active?'#2563eb':'white') + ';color:' + (active?'white':'#64748b') + ';cursor:pointer;font-family:inherit;">' + label + '</button>';
+  var cardsHtml = '';
+  if (!filtered.length) {
+    cardsHtml = emptyState('👥','Keine Interessenten','Füge deinen ersten Interessenten hinzu','+ Interessent hinzufügen','openAdd()');
+  } else {
+    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">';
+    filtered.forEach(function(item, idx) {
+      var col = STATUS_COLS[item.status]||'#64748b';
+      var ico = STATUS_ICOS[item.status]||'👤';
+      var avcol = AVA_COLS[idx%AVA_COLS.length];
+      var name = (item.vn||'')+' '+(item.nn||'');
+      var waLink = item.tel ? 'https://wa.me/'+item.tel.replace(/\D/g,'') : '';
+      cardsHtml += '<div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border-top:3px solid '+col+';">'
+        +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+        +avatar(name,avcol)
+        +'<div style="flex:1;"><div style="font-size:15px;font-weight:700;color:#0f172a;">'+esc(name)+'</div>'
+        +'<div style="font-size:12px;color:#64748b;">'+esc(item.email||'–')+'</div></div>'
+        +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;">'+ico+' '+esc(item.status||'Neu')+'</span>'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Objekt/Wunsch</div><div style="font-size:12px;font-weight:600;color:#0f172a;">'+esc(item.objekt||'–')+'</div></div>'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:8px;"><div style="font-size:10px;color:#94a3b8;">Budget</div><div style="font-size:12px;font-weight:600;color:#0f172a;">'+(item.budget?item.budget+' €':'–')+'</div></div>'
+        +'</div>'
+        +(item.notizen?'<div style="font-size:12px;color:#64748b;margin-bottom:12px;background:#f8fafc;border-radius:8px;padding:8px;">'+esc(item.notizen)+'</div>':'')
+        +'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">📅 '+fmtDate(item.datum)+' · '+(item.zimmer?item.zimmer+' Zi. · ':'')+(item.qm?item.qm+' m² · ':'')+(item.haustiere?'🐾 ':'')+'</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+        +'<select onchange="changeStatus(\''+item.id+'\',this.value)" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:11px;font-family:inherit;color:#475569;">'+Object.keys(STATUS_COLS).map(function(s){ return '<option value="'+s+'"'+(item.status===s?' selected':'')+'>'+s+'</option>'; }).join('')+'</select>'
+        +(waLink?'<a href="'+waLink+'" target="_blank" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f0fdf4;color:#16a34a;text-decoration:none;font-size:14px;">💬</a>':'')
+        +'<button onclick="openEdit(\''+item.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:12px;">✏️</button>'
+        +'<button onclick="deleteInt(\''+item.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:12px;">🗑️</button>'
+        +'</div></div>';
+    });
+    cardsHtml += '</div>';
   }
 
-  function spalte(titel, emoji, farbe, bg, headerBg, list, statusKey) {
-    return '<div style="background:#f8fafc;border-radius:14px;padding:0;overflow:hidden;border:1px solid #e2e8f0;">'
-      + '<div style="background:' + headerBg + ';padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">'
-        + '<div style="display:flex;align-items:center;gap:8px;">'
-          + '<span style="font-size:18px;">' + emoji + '</span>'
-          + '<span style="font-size:14px;font-weight:700;color:' + farbe + ';">' + titel + '</span>'
-        + '</div>'
-        + '<span style="background:white;color:' + farbe + ';font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;">' + list.length + '</span>'
-      + '</div>'
-      + '<div style="padding:14px;min-height:120px;">'
-        + (list.length > 0 ? list.map(renderKarte).join('') : '<div style="text-align:center;padding:24px 12px;color:#94a3b8;font-size:12px;">Keine Einträge</div>')
-      + '</div>'
-      + '</div>';
-  }
-
-  var kanban =
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">'
-      + spalte('Warm',      '🔥', '#d97706', '#fffbeb', '#fffbeb', warmList,      'warm')
-      + spalte('Kalt',      '❄️', '#64748b', '#f1f5f9', '#f1f5f9', kaltList,      'kalt')
-      + spalte('Abschluss', '✅', '#16a34a', '#f0fdf4', '#f0fdf4', abschlussList, 'abschluss')
-    + '</div>';
-
-  // Modal
-  var modal = modalHTML('int-modal', '🔍 Interessent hinzufügen',
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'
-      + formGroup('Vorname', '<input id="i-vn" ' + inputStyle + ' placeholder="Sandra">')
-      + formGroup('Nachname', '<input id="i-nn" ' + inputStyle + ' placeholder="Klein">')
-      + formGroup('Telefon', '<input id="i-tel" ' + inputStyle + ' placeholder="0151 887766">')
-      + formGroup('E-Mail', '<input id="i-email" type="email" ' + inputStyle + ' placeholder="sandra@mail.de">')
-    + '</div>'
-    + formGroup('Interessiert an (Objekt/Wohnung)', '<input id="i-obj" ' + inputStyle + ' placeholder="z.B. 2 OG, EG, Wohnung Nr. 3">')
-    + formGroup('Status', '<select id="i-stat" ' + inputStyle + '><option value="warm">Warm 🔥</option><option value="kalt">Kalt ❄️</option><option value="abschluss">Abschluss ✅</option></select>')
-    + formGroup('Notiz', '<textarea id="i-not" rows="3" ' + inputStyle + ' placeholder="Freitext, Hinweise, Vereinbarungen..." style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>')
-    + formGroup('Datum der ersten Kontaktaufnahme', '<input id="i-datum" type="date" ' + inputStyle + ' value="' + today() + '">')
-    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">'
-      + '<button onclick="hideModal(\'int-modal\')" style="padding:10px 20px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">Abbrechen</button>'
-      + '<button onclick="addInteressent()" style="padding:10px 20px;border-radius:9px;border:none;background:#2563eb;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">✅ Speichern</button>'
-    + '</div>'
-  );
-
-  var main =
-    // Überschrift + Stats
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">'
-      + '<div>'
-        + '<div style="font-size:20px;font-weight:700;color:#0f172a;">🔍 Interessenten-Pipeline</div>'
-        + '<div style="font-size:13px;color:#64748b;margin-top:3px;">'
-          + alle.length + ' gesamt · '
-          + '<span style="color:#d97706;">' + warm.length + ' warm</span> · '
-          + '<span style="color:#64748b;">' + kalt.length + ' kalt</span> · '
-          + '<span style="color:#16a34a;">' + abschluss.length + ' Abschluss</span>'
-        + '</div>'
-      + '</div>'
-    + '</div>'
-
-    // Filter-Leiste
-    + '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">'
-      + filterBtn('alle',      'Alle (' + alle.length + ')')
-      + filterBtn('warm',      '🔥 Warm (' + warm.length + ')')
-      + filterBtn('kalt',      '❄️ Kalt (' + kalt.length + ')')
-      + filterBtn('abschluss', '✅ Abschluss (' + abschluss.length + ')')
-    + '</div>'
-
-    // Kanban-Board
-    + kanban;
-
-  var actionBtn = '<button onclick="showModal(\'int-modal\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Interessent hinzufügen</button>';
-
-  renderLayout('interessenten', 'Interessenten', actionBtn, main, modal);
+  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Interessent hinzufügen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+cardsHtml+'</div>';
+  document.body.innerHTML = renderLayout('interessenten','Interessenten',actionBtn,main,buildModal());
 }
 
+function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
+
+function buildModal() {
+  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:520px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Interessent hinzufügen</h3>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Vorname','i-vn','text','Max')
+    +fg('Nachname','i-nn','text','Mustermann')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Email','i-em','email','max@example.de')
+    +fg('Telefon','i-tel','tel','+49 151 ...')
+    +'</div>'
+    +fg('Gewünschtes Objekt / Bereich','i-obj','text','z.B. Musterstr. 1 oder 3-Zimmer')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
+    +fg('Budget (€/Monat)','i-budget','number','800')
+    +fg('Zimmer','i-zimmer','number','3')
+    +fg('Fläche (m²)','i-qm','number','70')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Status</label><select id="i-status" style="'+inputStyle+'">'+Object.keys(STATUS_COLS).map(function(s){ return '<option>'+s+'</option>'; }).join('')+'</select></div>'
+    +fg('Datum Anfrage','i-datum','date','')
+    +'</div>'
+    +'<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#475569;cursor:pointer;"><input type="checkbox" id="i-haustiere" style="accent-color:#2563eb;"> Haustiere vorhanden</label></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Notizen</label><textarea id="i-notizen" style="'+inputStyle+'height:80px;resize:vertical;"></textarea></div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveInt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function openAdd() { editId=null; document.getElementById('m-title').textContent='Interessent hinzufügen'; ['i-vn','i-nn','i-em','i-tel','i-obj','i-budget','i-zimmer','i-qm','i-notizen'].forEach(function(x){document.getElementById(x).value='';}); document.getElementById('i-datum').value=new Date().toISOString().slice(0,10); document.getElementById('i-haustiere').checked=false; document.getElementById('add-modal').style.display='flex'; }
+function openEdit(id) {
+  var item=(appData.interessenten||[]).find(function(x){return x.id===id;}); if(!item) return; editId=id;
+  document.getElementById('m-title').textContent='Interessent bearbeiten';
+  var map={vn:'i-vn',nn:'i-nn',email:'i-em',tel:'i-tel',objekt:'i-obj',budget:'i-budget',zimmer:'i-zimmer',qm:'i-qm',status:'i-status',datum:'i-datum',notizen:'i-notizen'};
+  Object.keys(map).forEach(function(k){ var el=document.getElementById(map[k]); if(el) el.value=item[k]||''; });
+  document.getElementById('i-haustiere').checked = !!item.haustiere;
+  document.getElementById('add-modal').style.display='flex';
+}
+function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function saveInt() {
+  var vn=document.getElementById('i-vn').value.trim(),nn=document.getElementById('i-nn').value.trim();
+  if(!vn&&!nn){alert('Bitte Namen eingeben.');return;}
+  var ints=appData.interessenten||[];
+  var obj={id:editId||gid(),vn:vn,nn:nn,email:document.getElementById('i-em').value.trim(),tel:document.getElementById('i-tel').value.trim(),objekt:document.getElementById('i-obj').value.trim(),budget:document.getElementById('i-budget').value,zimmer:document.getElementById('i-zimmer').value,qm:document.getElementById('i-qm').value,status:document.getElementById('i-status').value,datum:document.getElementById('i-datum').value,haustiere:document.getElementById('i-haustiere').checked,notizen:document.getElementById('i-notizen').value.trim()};
+  if(editId){var idx=ints.findIndex(function(x){return x.id===editId;}); if(idx>=0) ints[idx]=obj;}else ints.unshift(obj);
+  appData.interessenten=ints; syncToFirebase(uid); closeAdd(); render();
+}
+function changeStatus(id,status) {
+  var item=(appData.interessenten||[]).find(function(x){return x.id===id;}); if(!item) return;
+  item.status=status; syncToFirebase(uid); render();
+}
+function deleteInt(id) { if(!confirm('Interessent löschen?')) return; appData.interessenten=(appData.interessenten||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.interessenten) appData.interessenten=[]; render(); });
 </script>
 </body>
 </html>

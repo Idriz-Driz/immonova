@@ -3,237 +3,221 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zählerstände – ImmoNova</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>ImmoNova – Zählerstände</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;">
+<body>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
+checkAuth(); checkTrial();
 var user = getUser();
-var erfassenId = null;
-
-var DEMO_ZAEHLER = [
-  { id: 3001, wn: 'EG',    mieter: 'Idriz Osmanaj',  strom_vor: 12450, strom_akt: 12680, wasser_k_vor: 245, wasser_k_akt: 252, wasser_w_vor: 48,  wasser_w_akt: 51,  datum: '2026-03-01' },
-  { id: 3002, wn: '1 OG',  mieter: 'Max Mustermann', strom_vor: 8920,  strom_akt: 9105,  wasser_k_vor: 189, wasser_k_akt: 195, wasser_w_vor: 34,  wasser_w_akt: 37,  datum: '2026-03-01' },
-  { id: 3003, wn: '2 OG',  mieter: 'Anna Schmidt',   strom_vor: 11200, strom_akt: 11380, wasser_k_vor: 212, wasser_k_akt: 218, wasser_w_vor: 42,  wasser_w_akt: 44,  datum: '2026-03-01' }
-];
-
-// Average strom diff per unit for highlighting
-var AVG_STROM_DIFF = 200;
-
-function getZaehler() {
-  var stored = getData(KEYS.zaehler, null);
-  if(!stored || stored.length === 0) {
-    setData(KEYS.zaehler, DEMO_ZAEHLER);
-    return DEMO_ZAEHLER;
-  }
-  return stored;
-}
-
-function saveZaehler(arr) { setData(KEYS.zaehler, arr); syncToFirebase(user.uid); }
-
-function openErfassen(id) {
-  erfassenId = id;
-  var arr = getZaehler();
-  var z = arr.find(function(x){ return x.id === id; });
-  if(!z) return;
-  document.getElementById('z-wn').value = z.wn + ' – ' + z.mieter;
-  document.getElementById('z-strom').value = '';
-  document.getElementById('z-wasser-k').value = '';
-  document.getElementById('z-wasser-w').value = '';
-  document.getElementById('z-datum').value = today();
-  // Show hints (previous values)
-  document.getElementById('z-hint-strom').textContent = 'Letzter Stand: ' + fmt(z.strom_akt) + ' kWh';
-  document.getElementById('z-hint-wk').textContent = 'Letzter Stand: ' + fmt(z.wasser_k_akt) + ' m³';
-  document.getElementById('z-hint-ww').textContent = 'Letzter Stand: ' + fmt(z.wasser_w_akt) + ' m³';
-  showModal('zae-modal');
-}
-
-function saveErfassung() {
-  var stromNeu = parseFloat(document.getElementById('z-strom').value);
-  var wasserKNeu = parseFloat(document.getElementById('z-wasser-k').value);
-  var wasserWNeu = parseFloat(document.getElementById('z-wasser-w').value);
-  var datum = document.getElementById('z-datum').value;
-
-  if(isNaN(stromNeu) || isNaN(wasserKNeu) || isNaN(wasserWNeu)) {
-    alert('Bitte alle Zählerwerte eingeben.');
-    return;
-  }
-
-  var arr = getZaehler();
-  var z = arr.find(function(x){ return x.id === erfassenId; });
-  if(!z) return;
-
-  z.strom_vor = z.strom_akt;
-  z.strom_akt = stromNeu;
-  z.wasser_k_vor = z.wasser_k_akt;
-  z.wasser_k_akt = wasserKNeu;
-  z.wasser_w_vor = z.wasser_w_akt;
-  z.wasser_w_akt = wasserWNeu;
-  z.datum = datum;
-
-  saveZaehler(arr);
-  addNotif('🔢', 'Zählerstand für ' + z.wn + ' (' + z.mieter + ') erfasst');
-  hideModal('zae-modal');
-  render();
-}
-
-function diffColor(diff, avg) {
-  if(avg && diff > avg * 1.5) return '#dc2626';
-  return '#16a34a';
-}
-
-function renderZaehlerRow(label, vor, akt, einheit, avg) {
-  var diff = akt - vor;
-  var col = diffColor(diff, avg);
-  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-    + '<div style="font-size:13px;color:#64748b;font-weight:500;">' + label + '</div>'
-    + '<div style="display:flex;align-items:center;gap:16px;">'
-    + '<div style="text-align:right;">'
-    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:1px;">Vorher</div>'
-    + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + fmt(vor) + ' ' + einheit + '</div>'
-    + '</div>'
-    + '<div style="font-size:18px;color:#cbd5e1;">→</div>'
-    + '<div style="text-align:right;">'
-    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:1px;">Aktuell</div>'
-    + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + fmt(akt) + ' ' + einheit + '</div>'
-    + '</div>'
-    + '<div style="min-width:72px;text-align:right;">'
-    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:1px;">Differenz</div>'
-    + '<div style="font-size:13px;font-weight:700;color:' + col + ';">+' + fmt(diff) + ' ' + einheit + '</div>'
-    + '</div>'
-    + '</div></div>';
-}
+var uid = user.uid;
+var appData = {};
+var editId = null;
+var readId = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
+var ICONS = {Strom:'⚡',Wasser:'💧',Gas:'🔥',Wärme:'🌡️',Sonstiges:'📊'};
+var COLORS = {Strom:'#f59e0b',Wasser:'#2563eb',Gas:'#dc2626',Wärme:'#ea580c',Sonstiges:'#64748b'};
+function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtNum(n) { return Number(n||0).toLocaleString('de-DE'); }
+function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
+function today() { return new Date().toISOString().slice(0,10); }
 
 function render() {
-  var alle = getZaehler();
-  var gesamtStrom = alle.reduce(function(s,z){ return s + (z.strom_akt - z.strom_vor); }, 0);
-  var letzteErfassung = alle.reduce(function(best, z){ return !best || z.datum > best ? z.datum : best; }, null);
-  var erfassteAnz = alle.length;
-
-  // KPI
-  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;">'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Erfasste Einheiten</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#2563eb;">' + erfassteAnz + '</div>'
-    + '</div>'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Letzte Erfassung</div>'
-    + '<div style="font-size:18px;font-weight:700;color:#16a34a;">' + (letzteErfassung ? fmtDate(letzteErfassung) : '–') + '</div>'
-    + '</div>'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Gesamtverbrauch Strom</div>'
-    + '<div style="font-size:26px;font-weight:700;color:#d97706;">+ ' + fmt(gesamtStrom) + ' kWh</div>'
-    + '</div>'
-    + '</div>';
-
-  // Cards grid
-  var cardsHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;">';
-  alle.forEach(function(z) {
-    var stromDiff = z.strom_akt - z.strom_vor;
-    var stromHoch = stromDiff > AVG_STROM_DIFF * 1.5;
-
-    cardsHTML += '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 6px 20px rgba(0,0,0,0.1)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,0.06)\'">'
-      // Card header
-      + '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">'
-      + '<div>'
-      + '<div style="font-size:16px;font-weight:700;color:white;">' + z.wn + '</div>'
-      + '<div style="font-size:12px;color:#94a3b8;margin-top:2px;">👤 ' + z.mieter + '</div>'
-      + '</div>'
-      + '<div style="text-align:right;">'
-      + '<div style="font-size:11px;color:#64748b;margin-bottom:2px;">Erfasst am</div>'
-      + '<div style="font-size:12px;color:#94a3b8;font-weight:600;">' + fmtDate(z.datum) + '</div>'
-      + '</div>'
-      + '</div>'
-      // Card body
-      + '<div style="padding:16px 20px;">'
-      // Strom row
-      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      + '<div style="display:flex;align-items:center;gap:8px;">'
-      + '<span style="font-size:18px;">⚡</span>'
-      + '<div><div style="font-size:13px;font-weight:600;color:#0f172a;">Strom</div><div style="font-size:11px;color:#94a3b8;">kWh</div></div>'
-      + '</div>'
-      + '<div style="display:flex;align-items:center;gap:14px;">'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Vorher</div><div style="font-size:12px;font-weight:600;color:#64748b;">' + fmt(z.strom_vor) + '</div></div>'
-      + '<div style="color:#cbd5e1;font-size:16px;">→</div>'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Aktuell</div><div style="font-size:12px;font-weight:700;color:#0f172a;">' + fmt(z.strom_akt) + '</div></div>'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Diff.</div><div style="font-size:13px;font-weight:700;color:' + (stromHoch?'#dc2626':'#16a34a') + ';">+' + fmt(stromDiff) + '</div></div>'
-      + (stromHoch ? '<span style="background:#fef2f2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Hoch</span>' : '')
-      + '</div></div>'
-      // Wasser kalt
-      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      + '<div style="display:flex;align-items:center;gap:8px;">'
-      + '<span style="font-size:18px;">💧</span>'
-      + '<div><div style="font-size:13px;font-weight:600;color:#0f172a;">Wasser kalt</div><div style="font-size:11px;color:#94a3b8;">m³</div></div>'
-      + '</div>'
-      + '<div style="display:flex;align-items:center;gap:14px;">'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Vorher</div><div style="font-size:12px;font-weight:600;color:#64748b;">' + fmt(z.wasser_k_vor) + '</div></div>'
-      + '<div style="color:#cbd5e1;font-size:16px;">→</div>'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Aktuell</div><div style="font-size:12px;font-weight:700;color:#0f172a;">' + fmt(z.wasser_k_akt) + '</div></div>'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Diff.</div><div style="font-size:13px;font-weight:700;color:#16a34a;">+' + fmt(z.wasser_k_akt - z.wasser_k_vor) + '</div></div>'
-      + '</div></div>'
-      // Wasser warm
-      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">'
-      + '<div style="display:flex;align-items:center;gap:8px;">'
-      + '<span style="font-size:18px;">🔥</span>'
-      + '<div><div style="font-size:13px;font-weight:600;color:#0f172a;">Wasser warm</div><div style="font-size:11px;color:#94a3b8;">m³</div></div>'
-      + '</div>'
-      + '<div style="display:flex;align-items:center;gap:14px;">'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Vorher</div><div style="font-size:12px;font-weight:600;color:#64748b;">' + fmt(z.wasser_w_vor) + '</div></div>'
-      + '<div style="color:#cbd5e1;font-size:16px;">→</div>'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Aktuell</div><div style="font-size:12px;font-weight:700;color:#0f172a;">' + fmt(z.wasser_w_akt) + '</div></div>'
-      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Diff.</div><div style="font-size:13px;font-weight:700;color:#16a34a;">+' + fmt(z.wasser_w_akt - z.wasser_w_vor) + '</div></div>'
-      + '</div></div>'
-      + '</div>'
-      // Card footer
-      + '<div style="padding:12px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;">'
-      + '<button onclick="openErfassen(' + z.id + ')" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;">'
-      + '✏️ Erfassen'
-      + '</button></div>'
-      + '</div>';
+  var zaehler = appData.zaehler || [];
+  var qTyp = (document.getElementById('f-typ')||{}).value || '';
+  var qObj = ((document.getElementById('f-obj')||{}).value||'').toLowerCase();
+  var filtered = zaehler.filter(function(z){
+    if (qTyp && z.typ !== qTyp) return false;
+    if (qObj && !(z.objekt||'').toLowerCase().includes(qObj)) return false;
+    return true;
   });
-  cardsHTML += '</div>';
+  var ohneStand = zaehler.filter(function(z){ return !z.aktuell && z.aktuell!==0; }).length;
+  var letzteAbl = zaehler.reduce(function(b,z){ return z.datum&&z.datum>b?z.datum:b; },'');
 
-  var mainHTML = kpiHTML + cardsHTML;
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">'
+    +kpi('📊','Gesamt Zähler',zaehler.length,'')
+    +kpi('⚠️','Ohne Stand',ohneStand,'Noch nicht abgelesen')
+    +kpi('📅','Letzte Ablesung',letzteAbl?fmtDate(letzteAbl):'–','')
+    +'</div>';
 
-  // Modal
-  var modalsHTML = '<div id="zae-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
-    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
-    + '<div style="font-size:16px;font-weight:700;">🔢 Zählerstand erfassen</div>'
-    + '<button onclick="hideModal(\'zae-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;">✕</button>'
-    + '</div>'
-    + formGroup('Wohneinheit', '<input id="z-wn" type="text" readonly ' + inputStyle + ' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#64748b;background:#f8fafc;outline:none;box-sizing:border-box;">')
-    + '<div style="margin-bottom:14px;">'
-    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">⚡ Strom (kWh)</label>'
-    + '<input id="z-strom" type="number" step="0.1" placeholder="Aktueller Zählerstand..." ' + inputStyle + '>'
-    + '<div id="z-hint-strom" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>'
-    + '</div>'
-    + '<div style="margin-bottom:14px;">'
-    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">💧 Wasser kalt (m³)</label>'
-    + '<input id="z-wasser-k" type="number" step="0.001" placeholder="Aktueller Zählerstand..." ' + inputStyle + '>'
-    + '<div id="z-hint-wk" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>'
-    + '</div>'
-    + '<div style="margin-bottom:14px;">'
-    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">🔥 Wasser warm (m³)</label>'
-    + '<input id="z-wasser-w" type="number" step="0.001" placeholder="Aktueller Zählerstand..." ' + inputStyle + '>'
-    + '<div id="z-hint-ww" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>'
-    + '</div>'
-    + formGroup('Datum der Erfassung', '<input id="z-datum" type="date" ' + inputStyle + '>')
-    + '<div style="display:flex;gap:10px;margin-top:20px;">'
-    + '<button onclick="saveErfassung()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
-    + '<button onclick="hideModal(\'zae-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div></div></div>';
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<select id="f-typ" onchange="render()" style="'+inputStyle+'max-width:180px;">'
+    +'<option value="">Alle Typen</option>'
+    +Object.keys(ICONS).map(function(t){ return '<option value="'+t+'"'+(qTyp===t?' selected':'')+'>'+ICONS[t]+' '+t+'</option>'; }).join('')
+    +'</select>'
+    +'<input id="f-obj" oninput="render()" value="'+esc(qObj)+'" placeholder="🔍 Objekt suchen..." style="'+inputStyle+'max-width:220px;">'
+    +'</div>';
 
-  renderLayout('zaehler', 'Zählerstände', '', mainHTML, modalsHTML);
+  var cardsHtml = '';
+  if (!filtered.length) {
+    cardsHtml = emptyState('📊','Keine Zähler vorhanden','Füge deinen ersten Zähler hinzu','+ Zähler hinzufügen','openAdd()');
+  } else {
+    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">';
+    filtered.forEach(function(z){
+      var ico = ICONS[z.typ]||'📊';
+      var col = COLORS[z.typ]||'#64748b';
+      var verbrauch = (z.aktuell!=null&&z.letzterStand!=null) ? (z.aktuell-z.letzterStand) : null;
+      var vCol = verbrauch===null?'#94a3b8':verbrauch>100?'#dc2626':'#16a34a';
+      cardsHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;">'
+        +'<div style="width:44px;height:44px;border-radius:12px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:22px;">'+ico+'</div>'
+        +'<div><div style="font-size:15px;font-weight:700;color:#0f172a;">'+esc(z.name||'Zähler')+'</div>'
+        +'<div style="font-size:12px;color:#94a3b8;">Nr. '+esc(z.nummer||'–')+'</div></div></div>'
+        +'<span style="background:'+col+'20;color:'+col+';font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(z.typ)+'</span></div>'
+        +'<div style="margin-bottom:12px;">'
+        +'<div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Aktueller Stand</div>'
+        +'<div style="font-size:28px;font-weight:800;color:#0f172a;">'+(z.aktuell!=null?fmtNum(z.aktuell):'–')+'<span style="font-size:14px;font-weight:500;color:#94a3b8;margin-left:4px;">'+esc(z.einheitName||'')+'</span></div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">'
+        +'<div style="font-size:10px;color:#94a3b8;">Letzter Stand</div>'
+        +'<div style="font-size:13px;font-weight:600;color:#475569;">'+(z.letzterStand!=null?fmtNum(z.letzterStand):'–')+'</div>'
+        +'<div style="font-size:10px;color:#cbd5e1;">'+fmtDate(z.datum)+'</div></div>'
+        +'<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">'
+        +'<div style="font-size:10px;color:#94a3b8;">Verbrauch</div>'
+        +'<div style="font-size:13px;font-weight:600;color:'+vCol+';">'+(verbrauch!==null?fmtNum(verbrauch)+' '+esc(z.einheitName||''):'–')+'</div></div></div>'
+        +'<div style="font-size:12px;color:#64748b;margin-bottom:14px;">📍 '+esc(z.objekt||'–')+' · '+esc(z.einheit||'–')+'</div>'
+        +'<div style="display:flex;gap:8px;">'
+        +'<button onclick="openRead(\''+z.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📖 Ablesen</button>'
+        +'<button onclick="openEdit(\''+z.id+'\')" style="width:36px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;">✏️</button>'
+        +'<button onclick="deleteZ(\''+z.id+'\')" style="width:36px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;">🗑️</button>'
+        +'</div></div>';
+    });
+    cardsHtml += '</div>';
+  }
+
+  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Zähler hinzufügen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+cardsHtml+'</div>';
+  var modals = buildAddModal()+buildReadModal();
+  document.body.innerHTML = renderLayout('zaehler','Zählerstände',actionBtn,main,modals);
+}
+
+function kpi(ico,label,val,sub) {
+  return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
+    +'<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">'+label+'</div>'
+    +'<div style="font-size:26px;font-weight:800;color:#0f172a;">'+val+'</div>'
+    +(sub?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+sub+'</div>':'')
+    +'</div>';
+}
+
+function buildAddModal() {
+  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:500px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="modal-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Zähler hinzufügen</h3>'
+    +fg('Name','z-name','text','z.B. Strom EG')
+    +fg('Zählernummer','z-nummer','text','1234567')
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Typ</label><select id="z-typ" style="'+inputStyle+'">'+Object.keys(ICONS).map(function(t){ return '<option>'+t+'</option>'; }).join('')+'</select></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Objekt','z-objekt','text','Musterstr. 1')
+    +fg('Einheit/Wohnung','z-einheit','text','EG links')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Messeinheit</label><select id="z-einheitname" style="'+inputStyle+'"><option>kWh</option><option>m³</option><option>l</option><option>MWh</option></select></div>'
+    +fg('Aktueller Stand','z-aktuell','number','0')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +fg('Letzter Stand','z-letzter','number','0')
+    +fg('Datum Ablesung','z-datum','date','')
+    +'</div>'
+    +'<div id="z-err" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px;border-radius:8px;font-size:13px;margin-top:8px;"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveZ()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function buildReadModal() {
+  return '<div id="read-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:420px;width:100%;margin:20px;">'
+    +'<h3 style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:8px;">📖 Zählerstand ablesen</h3>'
+    +'<p style="font-size:13px;color:#64748b;margin-bottom:20px;">Bitte aktuellen Stand eingeben.</p>'
+    +fg('Datum','r-datum','date','')
+    +fg('Aktueller Zählerstand','r-stand','number','z.B. 12345')
+    +'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;margin-top:4px;font-size:12px;color:#d97706;">📸 Bitte Foto des Zählerstands als Beleg aufnehmen.</div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeRead()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveRead()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px;'; }
+function fg(label,id,type,ph) {
+  return '<div style="margin-bottom:12px;"><label style="'+lbl()+'">'+label+'</label>'
+    +'<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="'+inputStyle+'"></div>';
+}
+
+function openAdd() {
+  editId = null;
+  document.getElementById('modal-title').textContent = 'Zähler hinzufügen';
+  ['z-name','z-nummer','z-objekt','z-einheit','z-aktuell','z-letzter'].forEach(function(i){ document.getElementById(i).value=''; });
+  document.getElementById('z-datum').value = today();
+  document.getElementById('z-err').style.display = 'none';
+  document.getElementById('add-modal').style.display = 'flex';
+}
+function openEdit(id) {
+  var z = (appData.zaehler||[]).find(function(x){ return x.id===id; });
+  if (!z) return;
+  editId = id;
+  document.getElementById('modal-title').textContent = 'Zähler bearbeiten';
+  document.getElementById('z-name').value = z.name||'';
+  document.getElementById('z-nummer').value = z.nummer||'';
+  document.getElementById('z-typ').value = z.typ||'Strom';
+  document.getElementById('z-objekt').value = z.objekt||'';
+  document.getElementById('z-einheit').value = z.einheit||'';
+  document.getElementById('z-einheitname').value = z.einheitName||'kWh';
+  document.getElementById('z-aktuell').value = z.aktuell||'';
+  document.getElementById('z-letzter').value = z.letzterStand||'';
+  document.getElementById('z-datum').value = z.datum||'';
+  document.getElementById('z-err').style.display = 'none';
+  document.getElementById('add-modal').style.display = 'flex';
+}
+function closeAdd() { document.getElementById('add-modal').style.display = 'none'; }
+
+function saveZ() {
+  var name = document.getElementById('z-name').value.trim();
+  if (!name) { var e=document.getElementById('z-err'); e.textContent='⚠️ Bitte Name eingeben.'; e.style.display='block'; return; }
+  var zaehler = appData.zaehler || [];
+  var obj = {
+    id: editId||gid(), name: name,
+    nummer: document.getElementById('z-nummer').value.trim(),
+    typ: document.getElementById('z-typ').value,
+    objekt: document.getElementById('z-objekt').value.trim(),
+    einheit: document.getElementById('z-einheit').value.trim(),
+    einheitName: document.getElementById('z-einheitname').value,
+    aktuell: parseFloat(document.getElementById('z-aktuell').value)||0,
+    letzterStand: parseFloat(document.getElementById('z-letzter').value)||0,
+    datum: document.getElementById('z-datum').value
+  };
+  if (editId) { var idx=zaehler.findIndex(function(x){return x.id===editId;}); if(idx>=0) zaehler[idx]=obj; }
+  else zaehler.unshift(obj);
+  appData.zaehler = zaehler;
+  syncToFirebase(uid); closeAdd(); render();
+}
+function openRead(id) { readId=id; document.getElementById('r-datum').value=today(); document.getElementById('r-stand').value=''; document.getElementById('read-modal').style.display='flex'; }
+function closeRead() { document.getElementById('read-modal').style.display='none'; }
+function saveRead() {
+  var stand = parseFloat(document.getElementById('r-stand').value);
+  if (isNaN(stand)) { alert('Bitte Zählerstand eingeben.'); return; }
+  var z = (appData.zaehler||[]).find(function(x){return x.id===readId;});
+  if (!z) return;
+  z.letzterStand = z.aktuell||0; z.aktuell = stand; z.datum = document.getElementById('r-datum').value;
+  if (!z.verlauf) z.verlauf = [];
+  z.verlauf.unshift({datum:z.datum,stand:stand});
+  syncToFirebase(uid); closeRead(); render();
+}
+function deleteZ(id) {
+  if (!confirm('Zähler wirklich löschen?')) return;
+  appData.zaehler = (appData.zaehler||[]).filter(function(x){return x.id!==id;});
+  syncToFirebase(uid); render();
 }
 
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.zaehler) appData.zaehler=[]; render(); });
 </script>
 </body>
 </html>

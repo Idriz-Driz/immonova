@@ -3,192 +3,120 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Haus-Mitteilungen – ImmoNova</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>ImmoNova – Mitteilungen</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;">
+<body>
 <script>
-if(!checkAuth()) { window.location.href='login.html'; }
-var user = getUser();
-var activeFilter = 'alle';
-
-var DEMO_MITTEILUNGEN = [
-  { id: 1001, ttl: 'Wartungsarbeiten Aufzug', txt: 'Der Aufzug wird am 15. März gewartet. Wir bitten alle Mieter, in diesem Zeitraum die Treppe zu nutzen. Die Arbeiten dauern voraussichtlich von 8:00 bis 16:00 Uhr.', kat: 'Wichtig', ablauf: '2026-04-01', datum: '2026-03-01', mieterCount: 5 },
-  { id: 1002, ttl: 'Neuer Hausmeister', txt: 'Wir begrüßen Herrn Schmidt als neuen Hausmeister. Er ist montags bis freitags von 8 bis 12 Uhr erreichbar. Bei Fragen und Anliegen können Sie sich direkt an ihn wenden.', kat: 'Info', ablauf: '2026-06-01', datum: '2026-03-10', mieterCount: 5 }
-];
-
-function getMitteilungen() {
-  var stored = getData(KEYS.mitteilungen, null);
-  if(!stored || stored.length === 0) {
-    setData(KEYS.mitteilungen, DEMO_MITTEILUNGEN);
-    return DEMO_MITTEILUNGEN;
-  }
-  return stored;
-}
-
-function saveMitteilungen(arr) { setData(KEYS.mitteilungen, arr); syncToFirebase(user.uid); }
-
-function isAbgelaufen(m) {
-  if(!m.ablauf) return false;
-  return m.ablauf < today();
-}
-
-function katColor(kat) {
-  if(kat==='Dringend') return '#dc2626';
-  if(kat==='Wichtig') return '#d97706';
-  return '#2563eb';
-}
-
-function katIcon(kat) {
-  if(kat==='Dringend') return '🚨';
-  if(kat==='Wichtig') return '⚠️';
-  return 'ℹ️';
-}
-
-function katBadge(kat) {
-  var c = kat==='Dringend'?'red':kat==='Wichtig'?'yellow':'blue';
-  return badge(kat, c);
-}
-
-function setFilter(f) {
-  activeFilter = f;
-  render();
-}
-
-function deleteMitteilung(id) {
-  if(!confirm('Mitteilung wirklich löschen?')) return;
-  var arr = getMitteilungen().filter(function(m){ return m.id !== id; });
-  saveMitteilungen(arr);
-  render();
-}
-
-function sendeMitteilung() {
-  var ttl = document.getElementById('m-ttl').value.trim();
-  var txt = document.getElementById('m-txt').value.trim();
-  var kat = document.getElementById('m-kat').value;
-  var ablauf = document.getElementById('m-ablauf').value;
-  if(!ttl || !txt) { alert('Bitte Titel und Text ausfüllen.'); return; }
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
-  var count = mieter.length;
-  var arr = getMitteilungen();
-  arr.unshift({ id: Date.now(), ttl: ttl, txt: txt, kat: kat, ablauf: ablauf, datum: today(), mieterCount: count });
-  saveMitteilungen(arr);
-  addNotif('📢', 'Mitteilung "' + ttl.substring(0,30) + '" an ' + count + ' Mieter gesendet');
-  hideModal('mit-modal');
-  var msg = document.getElementById('mit-success');
-  if(msg) { msg.textContent = 'Mitteilung an ' + count + ' Mieter gesendet'; msg.style.display='block'; setTimeout(function(){ msg.style.display='none'; }, 3000); }
-  render();
-}
+checkAuth(); checkTrial();
+var user = getUser(); var uid = user.uid;
+var appData = {}; var editId = null;
+var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;outline:none;box-sizing:border-box;';
+var TYPEN = {Info:'ℹ️',Wichtig:'⚠️',Dringend:'🔴',Veranstaltung:'🎉',Wartung:'🔧'};
+var TYP_COLS = {Info:'#2563eb',Wichtig:'#d97706',Dringend:'#dc2626',Veranstaltung:'#7c3aed',Wartung:'#64748b'};
+function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lbl() { return 'display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;'; }
+function fmtDate(d) { if(!d) return '–'; var x=new Date(d); return isNaN(x)?d:x.toLocaleDateString('de-DE'); }
 
 function render() {
-  var alle = getMitteilungen();
-  var t = today();
-
-  var filterFns = {
-    'alle': function(){ return true; },
-    'aktive': function(m){ return !isAbgelaufen(m); },
-    'abgelaufen': function(m){ return isAbgelaufen(m); },
-    'Info': function(m){ return m.kat==='Info'; },
-    'Wichtig': function(m){ return m.kat==='Wichtig'; },
-    'Dringend': function(m){ return m.kat==='Dringend'; }
-  };
-
-  var filtered = alle.filter(filterFns[activeFilter] || function(){ return true; });
-
-  // Stats
-  var aktiveAnz = alle.filter(function(m){ return !isAbgelaufen(m); }).length;
-  var abgelAnz = alle.filter(function(m){ return isAbgelaufen(m); }).length;
-
-  var statsHTML = '<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<span style="font-size:22px;">📢</span><div><div style="font-size:22px;font-weight:700;color:#0f172a;line-height:1;">' + alle.length + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Gesamt</div></div></div>'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<span style="font-size:22px;">✅</span><div><div style="font-size:22px;font-weight:700;color:#16a34a;line-height:1;">' + aktiveAnz + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Aktive</div></div></div>'
-    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-    + '<span style="font-size:22px;">📁</span><div><div style="font-size:22px;font-weight:700;color:#94a3b8;line-height:1;">' + abgelAnz + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Abgelaufen</div></div></div>'
-    + '</div>';
-
-  // Filter bar
-  var filters = ['alle','aktive','abgelaufen','Info','Wichtig','Dringend'];
-  var filterLabels = { alle:'Alle', aktive:'Aktive', abgelaufen:'Abgelaufen', Info:'ℹ️ Info', Wichtig:'⚠️ Wichtig', Dringend:'🚨 Dringend' };
-  var filterHTML = '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">';
-  filters.forEach(function(f) {
-    var active = activeFilter === f;
-    filterHTML += '<button onclick="setFilter(\'' + f + '\')" style="padding:7px 16px;border:1.5px solid ' + (active?'#2563eb':'#e2e8f0') + ';border-radius:9px;background:' + (active?'#2563eb':'white') + ';color:' + (active?'white':'#64748b') + ';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">' + filterLabels[f] + '</button>';
+  var mitt = appData.mitteilungen || [];
+  var qQ = ((document.getElementById('f-q')||{}).value||'').toLowerCase();
+  var qTyp = (document.getElementById('f-typ')||{}).value||'';
+  var filtered = mitt.filter(function(m){
+    if (qTyp && m.typ!==qTyp) return false;
+    if (qQ && !(m.titel+m.text+m.empfaenger+'').toLowerCase().includes(qQ)) return false;
+    return true;
   });
-  filterHTML += '</div>';
 
-  // Success message placeholder
-  var successHTML = '<div id="mit-success" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:14px;font-weight:600;"></div>';
+  var kpiHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">'
+    +kpi('📢','Gesamt',mitt.length,'')
+    +kpi('🔴','Dringend',mitt.filter(function(m){return m.typ==='Dringend';}).length,'')
+    +kpi('📅','Diese Woche',mitt.filter(function(m){ var d=new Date(m.datum); var now=new Date(); return d>=new Date(now-7*86400000); }).length,'')
+    +'</div>';
 
-  // Cards
-  var cardsHTML = '';
-  if(filtered.length === 0) {
-    cardsHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:56px 24px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-      + '<div style="font-size:44px;margin-bottom:14px;">📭</div>'
-      + '<div style="font-size:16px;font-weight:600;color:#0f172a;margin-bottom:6px;">Keine Mitteilungen gefunden</div>'
-      + '<div style="font-size:13px;color:#94a3b8;">Erstelle eine neue Mitteilung über den Button oben rechts.</div>'
-      + '</div>';
+  var filterHtml = '<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
+    +'<input id="f-q" oninput="render()" value="'+esc(qQ)+'" placeholder="🔍 Suchen..." style="'+inputStyle+'max-width:220px;">'
+    +'<select id="f-typ" onchange="render()" style="'+inputStyle+'max-width:160px;"><option value="">Alle Typen</option>'+Object.keys(TYPEN).map(function(t){ return '<option value="'+t+'"'+(qTyp===t?' selected':'')+'>'+TYPEN[t]+' '+t+'</option>'; }).join('')+'</select>'
+    +'</div>';
+
+  var listHtml = '';
+  if (!filtered.length) {
+    listHtml = emptyState('📢','Keine Mitteilungen','Erstelle deine erste Mitteilung an die Mieter','+ Mitteilung erstellen','openAdd()');
   } else {
-    cardsHTML = '<div style="display:flex;flex-direction:column;gap:12px;">';
     filtered.forEach(function(m) {
-      var abg = isAbgelaufen(m);
-      var col = abg ? '#94a3b8' : katColor(m.kat);
-      var opacity = abg ? '0.65' : '1';
-      cardsHTML += '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid ' + col + ';border-radius:12px;padding:20px 20px 16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);opacity:' + opacity + ';transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.08)\'" onmouseout="this.style.boxShadow=\'0 1px 3px rgba(0,0,0,0.05)\'">'
-        + '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">'
-        + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;">'
-        + '<span style="font-size:20px;">' + katIcon(m.kat) + '</span>'
-        + katBadge(m.kat)
-        + (abg ? '<span style="background:#f1f5f9;color:#94a3b8;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Abgelaufen</span>' : '')
-        + '</div>'
-        + '<button onclick="deleteMitteilung(' + m.id + ')" style="width:30px;height:30px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;cursor:pointer;font-size:13px;flex-shrink:0;display:flex;align-items:center;justify-content:center;" title="Löschen">🗑</button>'
-        + '</div>'
-        + '<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;">' + m.ttl + '</div>'
-        + '<div style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:12px;">' + m.txt + '</div>'
-        + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#94a3b8;padding-top:10px;border-top:1px solid #f1f5f9;">'
-        + '<span>📅 Erstellt: ' + fmtDate(m.datum) + '</span>'
-        + '<span>👥 Gesendet an ' + (m.mieterCount||0) + ' Mieter</span>'
-        + (m.ablauf ? '<span>⏰ Ablauf: ' + fmtDate(m.ablauf) + '</span>' : '')
-        + '</div></div>';
+      var col = TYP_COLS[m.typ]||'#64748b';
+      var ico = TYPEN[m.typ]||'📢';
+      listHtml += '<div style="background:white;border-radius:16px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:12px;border-left:4px solid '+col+';">'
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:22px;">'+ico+'</span>'
+        +'<div>'
+        +'<div style="font-size:16px;font-weight:700;color:#0f172a;">'+esc(m.titel)+'</div>'
+        +'<div style="font-size:12px;color:#94a3b8;">'+fmtDate(m.datum)+' · An: '+esc(m.empfaenger||'Alle Mieter')+'</div>'
+        +'</div></div>'
+        +'<div style="display:flex;align-items:center;gap:8px;">'
+        +'<span style="background:'+col+'20;color:'+col+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">'+esc(m.typ||'Info')+'</span>'
+        +(m.gesendet?'<span style="background:#f0fdf4;color:#16a34a;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">✓ Gesendet</span>':'')
+        +'</div></div>'
+        +'<p style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:14px;">'+esc(m.text)+'</p>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+        +'<button onclick="markSent(\''+m.id+'\')" style="padding:7px 14px;border-radius:8px;border:none;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:700;cursor:pointer;">'+(m.gesendet?'✓ Gesendet':'📤 Als gesendet markieren')+'</button>'
+        +'<button onclick="openEdit(\''+m.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#eff6ff;color:#2563eb;cursor:pointer;font-size:13px;">✏️</button>'
+        +'<button onclick="deleteMitt(\''+m.id+'\')" style="width:32px;height:32px;border-radius:8px;border:none;background:#fef2f2;color:#dc2626;cursor:pointer;font-size:13px;">🗑️</button>'
+        +'</div></div>';
     });
-    cardsHTML += '</div>';
   }
 
-  var mainHTML = statsHTML + filterHTML + successHTML + cardsHTML;
-
-  // Modal
-  var modalsHTML = '<div id="mit-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
-    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
-    + '<div style="font-size:16px;font-weight:700;">📢 Neue Mitteilung</div>'
-    + '<button onclick="hideModal(\'mit-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;">✕</button>'
-    + '</div>'
-    + formGroup('Titel', '<input id="m-ttl" type="text" placeholder="Betreff der Mitteilung..." ' + inputStyle + '>')
-    + formGroup('Text', '<textarea id="m-txt" rows="4" placeholder="Inhalt der Mitteilung..." ' + inputStyle + ' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>')
-    + formGroup('Kategorie',
-      '<select id="m-kat" ' + inputStyle + '>'
-      + '<option value="Info">ℹ️ Info</option>'
-      + '<option value="Wichtig">⚠️ Wichtig</option>'
-      + '<option value="Dringend">🚨 Dringend</option>'
-      + '</select>')
-    + formGroup('Ablaufdatum (optional)', '<input id="m-ablauf" type="date" ' + inputStyle + '>')
-    + '<div style="margin-top:20px;display:flex;gap:10px;">'
-    + '<button onclick="sendeMitteilung()" style="flex:1;background:#16a34a;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">📢 An alle Mieter senden</button>'
-    + '<button onclick="hideModal(\'mit-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div></div></div>';
-
-  var actionBtn = '<button onclick="showModal(\'mit-modal\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Neue Mitteilung</button>';
-
-  renderLayout('mitteilungen', 'Haus-Mitteilungen', actionBtn, mainHTML, modalsHTML);
+  var actionBtn = '<button onclick="openAdd()" style="padding:9px 18px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Mitteilung erstellen</button>';
+  var main = '<div style="padding:24px;">'+getTrialBanner()+kpiHtml+filterHtml+listHtml+'</div>';
+  document.body.innerHTML = renderLayout('mitteilungen','Mitteilungen',actionBtn,main,buildModal());
 }
 
+function kpi(ico,l,v,s) { return '<div style="background:white;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">'+l+'</div><div style="font-size:24px;font-weight:800;color:#0f172a;">'+v+'</div>'+(s?'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+s+'</div>':'')+'</div>'; }
+
+function buildModal() {
+  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
+    +'<div style="background:white;border-radius:20px;padding:28px;max-width:500px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
+    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Mitteilung erstellen</h3>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Typ</label><select id="m-typ" style="'+inputStyle+'">'+Object.keys(TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('')+'</select></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Titel</label><input id="m-titel" style="'+inputStyle+'" placeholder="z.B. Wasserabsperrung am 15. März"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Datum</label><input id="m-datum" type="date" style="'+inputStyle+'"></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Empfänger</label><input id="m-empf" style="'+inputStyle+'" placeholder="Alle Mieter / Objekt..."></div>'
+    +'</div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Inhalt</label><textarea id="m-text" style="'+inputStyle+'height:120px;resize:vertical;" placeholder="Text der Mitteilung..."></textarea></div>'
+    +'<div style="margin-bottom:12px;"><label style="'+lbl()+'">Gültig bis (optional)</label><input id="m-bis" type="date" style="'+inputStyle+'"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px;">'
+    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'<button onclick="saveMitt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'</div></div></div>';
+}
+
+function openAdd() { editId=null; document.getElementById('m-title').textContent='Mitteilung erstellen'; document.getElementById('m-titel').value=''; document.getElementById('m-text').value=''; document.getElementById('m-empf').value='Alle Mieter'; document.getElementById('m-datum').value=new Date().toISOString().slice(0,10); document.getElementById('m-bis').value=''; document.getElementById('add-modal').style.display='flex'; }
+function openEdit(id) {
+  var m=(appData.mitteilungen||[]).find(function(x){return x.id===id;}); if(!m) return; editId=id;
+  document.getElementById('m-title').textContent='Mitteilung bearbeiten';
+  document.getElementById('m-typ').value=m.typ||'Info'; document.getElementById('m-titel').value=m.titel||''; document.getElementById('m-datum').value=m.datum||''; document.getElementById('m-empf').value=m.empfaenger||''; document.getElementById('m-text').value=m.text||''; document.getElementById('m-bis').value=m.bis||'';
+  document.getElementById('add-modal').style.display='flex';
+}
+function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function saveMitt() {
+  var titel=document.getElementById('m-titel').value.trim(); if(!titel){alert('Bitte Titel eingeben.');return;}
+  var mitt=appData.mitteilungen||[];
+  var obj={id:editId||gid(),typ:document.getElementById('m-typ').value,titel:titel,datum:document.getElementById('m-datum').value,empfaenger:document.getElementById('m-empf').value.trim()||'Alle Mieter',text:document.getElementById('m-text').value.trim(),bis:document.getElementById('m-bis').value,gesendet:false};
+  if(editId){var idx=mitt.findIndex(function(x){return x.id===editId;}); if(idx>=0){obj.gesendet=mitt[idx].gesendet; mitt[idx]=obj;}}else mitt.unshift(obj);
+  appData.mitteilungen=mitt; syncToFirebase(uid); closeAdd(); render();
+}
+function markSent(id) { var m=(appData.mitteilungen||[]).find(function(x){return x.id===id;}); if(!m) return; m.gesendet=!m.gesendet; syncToFirebase(uid); render(); }
+function deleteMitt(id) { if(!confirm('Mitteilung löschen?')) return; appData.mitteilungen=(appData.mitteilungen||[]).filter(function(x){return x.id!==id;}); syncToFirebase(uid); render(); }
+
 initFirebase();
-loadFromFirebase(user.uid, render);
+loadFromFirebase(uid, function(d) { if(d) appData=d; if(!appData.mitteilungen) appData.mitteilungen=[]; render(); });
 </script>
 </body>
 </html>
