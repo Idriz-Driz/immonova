@@ -1,30 +1,269 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 📇 Kontakte</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kontakte – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('kontakte','📇 Kontakte','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">📇</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">📇 Kontakte</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+
+var _kSearchQ  = '';
+var _kFilter   = 'alle';
+var _kEditId   = null;
+
+var DEFAULT_KONTAKTE = [
+  {id:'kon_1',vn:'Hans',   nn:'Becker',   kat:'eigentuemer', firma:'Becker Immobilien', tel:'0151 123456', email:'hans@becker.de',   adr:'Musterstraße 1, Dortmund', not:'Haupteigentümer'},
+  {id:'kon_2',vn:'',       nn:'Stadtwerke Dortmund', kat:'behoerde',   firma:'Stadtwerke', tel:'0231 999000', email:'info@stadtwerke.de',adr:'Stadtwerke-Str. 1, Dortmund', not:''},
+  {id:'kon_3',vn:'',       nn:'Sparkasse Dortmund',  kat:'bank',       firma:'Sparkasse', tel:'0231 7000',   email:'info@sparkasse.de', adr:'Königswall 18, Dortmund', not:''}
+];
+
+var KAT_CFG = {
+  eigentuemer: { label:'Eigentümer',    color:'#2563eb', bg:'#dbeafe', icon:'🏠' },
+  dienstleister:{ label:'Dienstleister', color:'#16a34a', bg:'#dcfce7', icon:'🔧' },
+  behoerde:    { label:'Behörde',        color:'#d97706', bg:'#fef9c3', icon:'🏛️' },
+  bank:        { label:'Bank',           color:'#7c3aed', bg:'#ede9fe', icon:'🏦' },
+  sonstiges:   { label:'Sonstiges',      color:'#64748b', bg:'#f1f5f9', icon:'📋' }
+};
+
+var AVATAR_COLORS = ['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#be185d','#0f766e'];
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s){ return (s||'').replace(/'/g,'\\x27').replace(/"/g,'&quot;'); }
+
+function avatarColor(id){
+  var sum=0; for(var i=0;i<(id||'').length;i++) sum+=(id||'').charCodeAt(i);
+  return AVATAR_COLORS[sum%AVATAR_COLORS.length];
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function initKontakte(){
+  var existing = getData(KEYS.kontakte, null);
+  if(!existing || !existing.length){
+    setData(KEYS.kontakte, DEFAULT_KONTAKTE);
+  }
+}
+
+function render(){
+  initKontakte();
+
+  var actionBtn = '<button onclick="openAddKontakt()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Kontakt hinzufügen</button>';
+
+  var filterCfg = [
+    {key:'alle',      label:'Alle'},
+    {key:'eigentuemer', label:'Eigentümer'},
+    {key:'dienstleister',label:'Dienstleister'},
+    {key:'behoerde',  label:'Behörde'},
+    {key:'bank',      label:'Bank'},
+    {key:'sonstiges', label:'Sonstiges'}
+  ];
+
+  var filterHTML = filterCfg.map(function(f){
+    var isActive = _kFilter===f.key;
+    return '<button id="kf-'+f.key+'" onclick="setKFilter(\''+f.key+'\')" style="background:'+(isActive?'#2563eb':'white')+';color:'+(isActive?'white':'#64748b')+';border:1px solid '+(isActive?'#2563eb':'#e2e8f0')+';border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;">'+f.label+'</button>';
+  }).join('');
+
+  var mainHTML =
+    // Top bar
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">'
+    +  '<div style="flex:1;min-width:200px;max-width:340px;position:relative;">'
+    +    '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none;">🔍</span>'
+    +    '<input id="k-search" type="text" placeholder="Name, Firma oder Telefon suchen..." oninput="searchKontakte(this.value)" style="width:100%;padding:9px 12px 9px 36px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    +  '</div>'
+    +  '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+    +    filterHTML
+    +  '</div>'
+    +'</div>'
+    // Grid
+    +'<div id="k-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"></div>'
+    // Empty state
+    +'<div id="k-empty" style="display:none;text-align:center;padding:60px 20px;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
+    +  '<div style="font-size:48px;margin-bottom:16px;">📇</div>'
+    +  '<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;">Keine Kontakte gefunden</div>'
+    +  '<div style="font-size:13px;color:#64748b;margin-bottom:20px;">Passe die Suche oder den Filter an.</div>'
+    +'</div>';
+
+  var katOpts = Object.keys(KAT_CFG).map(function(k){
+    return '<option value="'+k+'">'+KAT_CFG[k].icon+' '+KAT_CFG[k].label+'</option>';
+  }).join('');
+
+  var modalContent =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Vorname','<input id="kf-vn" type="text" placeholder="Vorname..." '+inputStyle+'>')
+    +formGroup('Nachname','<input id="kf-nn" type="text" placeholder="Nachname / Firmenname..." '+inputStyle+'>')
+    +'</div>'
+    +formGroup('Kategorie','<select id="kf-kat" '+inputStyle+'>'+katOpts+'</select>')
+    +formGroup('Firma','<input id="kf-firma" type="text" placeholder="Firmenname..." '+inputStyle+'>')
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +formGroup('Telefon','<input id="kf-tel" type="tel" placeholder="0151 123456..." '+inputStyle+'>')
+    +formGroup('E-Mail','<input id="kf-email" type="email" placeholder="name@firma.de..." '+inputStyle+'>')
+    +'</div>'
+    +formGroup('Adresse','<input id="kf-adr" type="text" placeholder="Straße, Stadt..." '+inputStyle+'>')
+    +formGroup('Notiz','<textarea id="kf-not" rows="2" placeholder="Optionale Notizen..." style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>')
+    +'<div id="kf-del-wrap" style="display:none;margin-bottom:12px;">'
+    +'<button onclick="deleteKontakt()" style="width:100%;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Kontakt löschen</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;">'
+    +'<button onclick="saveKontakt()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
+    +'<button onclick="hideModal(\'kon-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    +'</div>';
+
+  renderLayout('kontakte','Kontakte',actionBtn,mainHTML,modalHTML('kon-modal','📇 Kontakt',modalContent));
+  filterKontakte();
+}
+
+function searchKontakte(q){
+  _kSearchQ = q;
+  filterKontakte();
+}
+
+function setKFilter(f){
+  _kFilter = f;
+  // Update button styles
+  var all = document.querySelectorAll('[id^="kf-"]');
+  all.forEach(function(btn){
+    var key = btn.id.replace('kf-','');
+    var isActive = key===f;
+    btn.style.background   = isActive?'#2563eb':'white';
+    btn.style.color        = isActive?'white':'#64748b';
+    btn.style.borderColor  = isActive?'#2563eb':'#e2e8f0';
+  });
+  filterKontakte();
+}
+
+function filterKontakte(){
+  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE);
+  var q = _kSearchQ.toLowerCase();
+  var filtered = kontakte.filter(function(k){
+    if(_kFilter!=='alle' && k.kat!==_kFilter) return false;
+    if(!q) return true;
+    return (k.vn+' '+k.nn+' '+k.firma+' '+k.tel+' '+k.email).toLowerCase().includes(q);
+  });
+
+  var gridEl  = document.getElementById('k-grid');
+  var emptyEl = document.getElementById('k-empty');
+  if(!gridEl) return;
+
+  if(!filtered.length){
+    gridEl.innerHTML = '';
+    if(emptyEl) emptyEl.style.display='block';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display='none';
+
+  gridEl.innerHTML = filtered.map(function(k){
+    var kc      = KAT_CFG[k.kat]||KAT_CFG.sonstiges;
+    var fullName= ((k.vn||'')+' '+(k.nn||'')).trim();
+    var initials = fullName.split(' ').filter(Boolean).slice(0,2).map(function(p){return p[0].toUpperCase();}).join('') || '?';
+    var ac      = avatarColor(k.id||fullName);
+    var waLink  = k.tel ? 'https://wa.me/'+k.tel.replace(/\D/g,'') : '#';
+
+    return '<div style="background:white;border:1.5px solid #e2e8f0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.15s;cursor:pointer;" onclick="openEditKontakt(\''+escAttr(k.id)+'\')" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(37,99,235,0.12)\';this.style.borderColor=\'#2563eb\'" onmouseout="this.style.boxShadow=\'0 1px 3px rgba(0,0,0,0.05)\';this.style.borderColor=\'#e2e8f0\'">'
+      // Avatar + name
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+      +  '<div style="width:48px;height:48px;background:'+ac+';border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:white;flex-shrink:0;">'+initials+'</div>'
+      +  '<div style="flex:1;min-width:0;">'
+      +    '<div style="font-size:14px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(fullName)+'</div>'
+      +    '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:'+kc.bg+';color:'+kc.color+';">'+kc.icon+' '+kc.label+'</span>'
+      +  '</div>'
+      +'</div>'
+      // Details
+      +(k.firma?'<div style="font-size:12px;color:#64748b;margin-bottom:6px;display:flex;align-items:center;gap:5px;"><span>🏢</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(k.firma)+'</span></div>':'')
+      +(k.tel?'<div style="font-size:12px;color:#0f172a;margin-bottom:4px;display:flex;align-items:center;gap:5px;"><span>📞</span><a href="tel:'+esc(k.tel)+'" onclick="event.stopPropagation()" style="color:#2563eb;text-decoration:none;font-weight:500;">'+esc(k.tel)+'</a></div>':'')
+      +(k.email?'<div style="font-size:12px;color:#0f172a;margin-bottom:4px;display:flex;align-items:center;gap:5px;"><span>✉️</span><a href="mailto:'+esc(k.email)+'" onclick="event.stopPropagation()" style="color:#2563eb;text-decoration:none;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;display:inline-block;">'+esc(k.email)+'</a></div>':'')
+      // Action buttons
+      +'<div style="display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;">'
+      +  (k.tel?'<a href="tel:'+esc(k.tel)+'" onclick="event.stopPropagation()" style="flex:1;background:#f0fdf4;color:#16a34a;text-decoration:none;border-radius:8px;padding:7px;font-size:12px;font-weight:600;text-align:center;transition:background 0.15s;" onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fdf4\'">📞 Anrufen</a>':'<div style="flex:1;"></div>')
+      +  (k.tel?'<a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" style="flex:1;background:#f0fff4;color:#16a34a;text-decoration:none;border-radius:8px;padding:7px;font-size:12px;font-weight:600;text-align:center;border:1px solid #bbf7d0;transition:background 0.15s;" onmouseover="this.style.background=\'#dcfce7\'" onmouseout="this.style.background=\'#f0fff4\'">💬 WhatsApp</a>':'')
+      +  '<button onclick="event.stopPropagation();openEditKontakt(\''+escAttr(k.id)+'\')" style="width:34px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;transition:background 0.15s;" title="Bearbeiten" onmouseover="this.style.background=\'#eff6ff\'" onmouseout="this.style.background=\'#f8fafc\'">✏️</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function openAddKontakt(){
+  _kEditId = null;
+  document.getElementById('kf-vn').value='';
+  document.getElementById('kf-nn').value='';
+  document.getElementById('kf-kat').value='sonstiges';
+  document.getElementById('kf-firma').value='';
+  document.getElementById('kf-tel').value='';
+  document.getElementById('kf-email').value='';
+  document.getElementById('kf-adr').value='';
+  document.getElementById('kf-not').value='';
+  document.getElementById('kf-del-wrap').style.display='none';
+  var hdr = document.querySelector('#kon-modal [style*="font-size:16px"]');
+  if(hdr) hdr.textContent='📇 Kontakt hinzufügen';
+  showModal('kon-modal');
+}
+
+function openEditKontakt(id){
+  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE);
+  var k = kontakte.find(function(x){return x.id===id;});
+  if(!k) return;
+  _kEditId = id;
+  document.getElementById('kf-vn').value    = k.vn||'';
+  document.getElementById('kf-nn').value    = k.nn||'';
+  document.getElementById('kf-kat').value   = k.kat||'sonstiges';
+  document.getElementById('kf-firma').value = k.firma||'';
+  document.getElementById('kf-tel').value   = k.tel||'';
+  document.getElementById('kf-email').value = k.email||'';
+  document.getElementById('kf-adr').value   = k.adr||'';
+  document.getElementById('kf-not').value   = k.not||'';
+  document.getElementById('kf-del-wrap').style.display='block';
+  var hdr = document.querySelector('#kon-modal [style*="font-size:16px"]');
+  if(hdr) hdr.textContent='📇 Kontakt bearbeiten';
+  showModal('kon-modal');
+}
+
+function saveKontakt(){
+  var vn    = (document.getElementById('kf-vn').value||'').trim();
+  var nn    = (document.getElementById('kf-nn').value||'').trim();
+  var kat   = document.getElementById('kf-kat').value;
+  var firma = (document.getElementById('kf-firma').value||'').trim();
+  var tel   = (document.getElementById('kf-tel').value||'').trim();
+  var email = (document.getElementById('kf-email').value||'').trim();
+  var adr   = (document.getElementById('kf-adr').value||'').trim();
+  var not   = (document.getElementById('kf-not').value||'').trim();
+
+  if(!nn&&!vn){ alert('Bitte mindestens einen Namen eingeben.'); return; }
+
+  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE);
+  if(_kEditId){
+    kontakte = kontakte.map(function(k){
+      if(k.id===_kEditId){ k.vn=vn;k.nn=nn;k.kat=kat;k.firma=firma;k.tel=tel;k.email=email;k.adr=adr;k.not=not; }
+      return k;
+    });
+  } else {
+    var newK = {id:'kon_'+Date.now(),vn:vn,nn:nn,kat:kat,firma:firma,tel:tel,email:email,adr:adr,not:not};
+    kontakte.push(newK);
+    addNotif('📇','Kontakt hinzugefügt: '+(vn+' '+nn).trim());
+  }
+  setData(KEYS.kontakte, kontakte);
+  syncToFirebase(user.uid);
+  hideModal('kon-modal');
+  filterKontakte();
+  _kEditId = null;
+}
+
+function deleteKontakt(){
+  if(!_kEditId||!confirm('Kontakt wirklich löschen?')) return;
+  var kontakte = getData(KEYS.kontakte, DEFAULT_KONTAKTE).filter(function(k){return k.id!==_kEditId;});
+  setData(KEYS.kontakte, kontakte);
+  syncToFirebase(user.uid);
+  hideModal('kon-modal');
+  filterKontakte();
+  _kEditId = null;
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

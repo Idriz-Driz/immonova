@@ -1,30 +1,296 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 🏢 Objekte & Gebäude</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Objekte – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('objekte','🏢 Objekte & Gebäude','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">🏢</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">🏢 Objekte & Gebäude</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var editObjId = null;
+
+var DEMO_OBJ = [
+  {id:'obj1', name:'Hauptstraße 15', str:'Hauptstraße 15', plz:'44135', stadt:'Dortmund', typ:'Mehrfamilienhaus', einh:5, bj:1985, zielmiete:4600, not:'Solide Bausubstanz, letztes Dach 2019 erneuert.'},
+  {id:'obj2', name:'Gartenweg 3', str:'Gartenweg 3', plz:'44787', stadt:'Bochum', typ:'Mehrfamilienhaus', einh:3, bj:2001, zielmiete:2730, not:'Neubauqualität, KfW-gefördert.'}
+];
+
+function getObj() {
+  var stored = getData(KEYS.objekte, null);
+  if(!stored || stored.length===0){
+    setData(KEYS.objekte, DEMO_OBJ);
+    return JSON.parse(JSON.stringify(DEMO_OBJ));
+  }
+  return stored;
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function getMieter() {
+  return getData(KEYS.mieter, DEFAULT_MIETER);
+}
+
+function getObjMieter(obj) {
+  var mieter = getMieter();
+  // Try to match by object name or address in wn field (simplified)
+  return mieter.filter(function(m){
+    return m.wn && m.wn.length > 0;
+  }).slice(0, obj.einh);
+}
+
+function getBelegtCount(obj) {
+  var mieter = getMieter();
+  // Simplified: count mieter up to einh
+  return Math.min(mieter.length, obj.einh - 1);
+}
+
+function avatarColorObj(name) {
+  var colors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
+  return colors[(name.charCodeAt(0)||65) % colors.length];
+}
+
+function typBadgeColor(typ) {
+  if(typ==='Mehrfamilienhaus') return 'blue';
+  if(typ==='Einfamilienhaus') return 'green';
+  if(typ==='Gewerbe') return 'yellow';
+  return 'gray';
+}
+
+function buildKPIs(objs) {
+  var totalEinh = 0;
+  var totalMiete = 0;
+  var totalBelegt = 0;
+  for(var i=0;i<objs.length;i++){
+    totalEinh += objs[i].einh||0;
+    totalMiete += objs[i].zielmiete||0;
+    totalBelegt += getBelegtCount(objs[i]);
+  }
+  var leerstandPct = totalEinh > 0 ? Math.round(((totalEinh-totalBelegt)/totalEinh)*100) : 0;
+
+  var kpiData = [
+    {ico:'🏢', label:'Objekte gesamt', val:objs.length, color:'#2563eb', bg:'#eff6ff'},
+    {ico:'🏠', label:'Einheiten gesamt', val:totalEinh, color:'#7c3aed', bg:'#f5f3ff'},
+    {ico:'💶', label:'Monatliche Einnahmen', val:fmt(totalMiete)+' €', color:'#16a34a', bg:'#f0fdf4'},
+    {ico:'📊', label:'Leerstand', val:leerstandPct+'%', color: leerstandPct>20?'#dc2626':'#d97706', bg:leerstandPct>20?'#fef2f2':'#fffbeb'}
+  ];
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px;">';
+  for(var k=0;k<kpiData.length;k++){
+    var kpi = kpiData[k];
+    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+    html += '<div style="width:40px;height:40px;border-radius:10px;background:'+kpi.bg+';display:flex;align-items:center;justify-content:center;font-size:20px;">'+kpi.ico+'</div>';
+    html += '</div>';
+    html += '<div style="font-size:24px;font-weight:800;color:'+kpi.color+';margin-bottom:4px;">'+kpi.val+'</div>';
+    html += '<div style="font-size:12px;color:#64748b;font-weight:500;">'+kpi.label+'</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function buildGrid(objs) {
+  if(objs.length===0){
+    return '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">'
+      +'<div style="font-size:48px;margin-bottom:12px;">🏢</div>'
+      +'<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Noch keine Objekte erfasst</div>'
+      +'<div style="font-size:13px;">Klicke auf "+ Objekt hinzufügen" um dein erstes Objekt anzulegen.</div>'
+      +'</div>';
+  }
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;">';
+  for(var i=0;i<objs.length;i++){
+    var obj = objs[i];
+    var belegt = getBelegtCount(obj);
+    var leer = Math.max(0, obj.einh - belegt);
+    var auslastung = obj.einh > 0 ? Math.round((belegt/obj.einh)*100) : 0;
+    var mapsUrl = 'https://maps.google.com/?q='+encodeURIComponent(obj.str+' '+obj.plz+' '+obj.stadt);
+    var mieterList = getMieter().slice(0, Math.min(belegt, 5));
+    var barColor = auslastung >= 80 ? '#16a34a' : auslastung >= 50 ? '#d97706' : '#dc2626';
+
+    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">';
+    // Top strip
+    html += '<div style="height:6px;background:linear-gradient(90deg,#2563eb,#7c3aed);"></div>';
+    // Header
+    html += '<div style="padding:20px 20px 16px;">';
+    html += '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">';
+    html += '<div style="font-size:32px;">🏢</div>';
+    html += '<div style="flex:1;min-width:0;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+obj.name+'</div>';
+    html += '<a href="'+mapsUrl+'" target="_blank" style="font-size:12px;color:#2563eb;text-decoration:none;">📍 '+obj.str+', '+obj.plz+' '+obj.stadt+' ↗</a>';
+    html += '</div>';
+    html += badge(obj.typ, typBadgeColor(obj.typ));
+    html += '</div>';
+    // Divider
+    html += '<div style="height:1px;background:#f1f5f9;margin-bottom:14px;"></div>';
+    // Stats grid
+    html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">';
+    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
+    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Einheiten</div>';
+    html += '<div style="font-size:18px;font-weight:700;color:#0f172a;">'+obj.einh+'</div>';
+    html += '</div>';
+    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
+    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Belegt</div>';
+    html += '<div style="font-size:18px;font-weight:700;color:#16a34a;">'+belegt+'</div>';
+    html += '</div>';
+    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
+    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Leerstand</div>';
+    html += '<div style="font-size:18px;font-weight:700;color:'+(leer>0?'#dc2626':'#16a34a')+';">'+leer+'</div>';
+    html += '</div>';
+    html += '<div style="background:#f8fafc;border-radius:9px;padding:10px;">';
+    html += '<div style="font-size:11px;color:#64748b;font-weight:500;margin-bottom:4px;">Monatl. Miete</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:#2563eb;">'+fmt(obj.zielmiete)+' €</div>';
+    html += '</div>';
+    html += '</div>';
+    // Auslastung Bar
+    html += '<div style="margin-bottom:12px;">';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:5px;">';
+    html += '<span style="font-size:11px;font-weight:600;color:#64748b;">AUSLASTUNG</span>';
+    html += '<span style="font-size:12px;font-weight:700;color:'+barColor+';">'+auslastung+'%</span>';
+    html += '</div>';
+    html += '<div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;">';
+    html += '<div style="height:100%;width:'+auslastung+'%;background:'+barColor+';border-radius:99px;transition:width 0.6s;"></div>';
+    html += '</div>';
+    html += '</div>';
+    // Baujahr + Mieter
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+    html += '<span style="font-size:12px;color:#64748b;">🏗️ Baujahr: <strong style="color:#0f172a;">'+obj.bj+'</strong></span>';
+    // Mini mieter avatars
+    html += '<div style="display:flex;gap:-4px;">';
+    for(var m=0;m<mieterList.length;m++){
+      var mn = mieterList[m].name||'?';
+      var mc = avatarColorObj(mn);
+      html += '<div title="'+mn+'" style="width:26px;height:26px;border-radius:50%;background:'+mc+';border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;margin-left:-6px;z-index:'+(10-m)+';position:relative;">'+mn.charAt(0).toUpperCase()+'</div>';
+    }
+    if(belegt>5){ html += '<div style="width:26px;height:26px;border-radius:50%;background:#e2e8f0;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#64748b;margin-left:-6px;">+'+(belegt-5)+'</div>'; }
+    html += '</div>';
+    html += '</div>';
+    // Actions
+    html += '<div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9;">';
+    html += '<button onclick="openEditObjModal(\''+obj.id+'\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">✏️ Bearbeiten</button>';
+    html += '<button onclick="deleteObj(\''+obj.id+'\')" style="padding:9px 14px;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fff5f5\'">🗑️</button>';
+    html += '</div>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function deleteObj(id) {
+  if(!confirm('Objekt wirklich löschen?')) return;
+  var objs = getObj().filter(function(o){return o.id!==id;});
+  setData(KEYS.objekte, objs);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function openEditObjModal(id) {
+  editObjId = id;
+  var objs = getObj();
+  var obj = null;
+  for(var i=0;i<objs.length;i++){ if(objs[i].id===id){ obj=objs[i]; break; } }
+  if(!obj) return;
+  document.getElementById('obj-modal-title').textContent = 'Objekt bearbeiten';
+  document.getElementById('obj-name').value = obj.name||'';
+  document.getElementById('obj-str').value = obj.str||'';
+  document.getElementById('obj-plz').value = obj.plz||'';
+  document.getElementById('obj-stadt').value = obj.stadt||'';
+  document.getElementById('obj-typ').value = obj.typ||'Mehrfamilienhaus';
+  document.getElementById('obj-einh').value = obj.einh||1;
+  document.getElementById('obj-bj').value = obj.bj||2000;
+  document.getElementById('obj-zielmiete').value = obj.zielmiete||0;
+  document.getElementById('obj-not').value = obj.not||'';
+  showModal('obj-modal');
+}
+
+function openNewObjModal() {
+  editObjId = null;
+  document.getElementById('obj-modal-title').textContent = 'Objekt hinzufügen';
+  document.getElementById('obj-name').value = '';
+  document.getElementById('obj-str').value = '';
+  document.getElementById('obj-plz').value = '';
+  document.getElementById('obj-stadt').value = '';
+  document.getElementById('obj-typ').value = 'Mehrfamilienhaus';
+  document.getElementById('obj-einh').value = 1;
+  document.getElementById('obj-bj').value = 2000;
+  document.getElementById('obj-zielmiete').value = '';
+  document.getElementById('obj-not').value = '';
+  showModal('obj-modal');
+}
+
+function saveObj() {
+  var name = document.getElementById('obj-name').value.trim();
+  var str = document.getElementById('obj-str').value.trim();
+  var stadt = document.getElementById('obj-stadt').value.trim();
+  if(!name || !str || !stadt){ alert('Name, Straße und Stadt sind Pflichtfelder.'); return; }
+  var objs = getObj();
+  var obj = {
+    id: editObjId || ('obj_'+Date.now()),
+    name: name,
+    str: str,
+    plz: document.getElementById('obj-plz').value.trim(),
+    stadt: stadt,
+    typ: document.getElementById('obj-typ').value,
+    einh: parseInt(document.getElementById('obj-einh').value)||1,
+    bj: parseInt(document.getElementById('obj-bj').value)||2000,
+    zielmiete: parseFloat(document.getElementById('obj-zielmiete').value)||0,
+    not: document.getElementById('obj-not').value.trim()
+  };
+  if(editObjId){
+    for(var i=0;i<objs.length;i++){ if(objs[i].id===editObjId){ objs[i]=obj; break; } }
+  } else {
+    objs.push(obj);
+    addNotif('🏢', 'Neues Objekt hinzugefügt: '+name+', '+stadt);
+  }
+  setData(KEYS.objekte, objs);
+  syncToFirebase(user.uid);
+  hideModal('obj-modal');
+  render();
+}
+
+function render() {
+  var objs = getObj();
+
+  var typOpts = ['Mehrfamilienhaus','Einfamilienhaus','Gewerbe','Wohnanlage','Sonstiges'];
+  var typOptsHtml = '';
+  for(var t=0;t<typOpts.length;t++){
+    typOptsHtml += '<option value="'+typOpts[t]+'">'+typOpts[t]+'</option>';
+  }
+
+  var modalBody =
+    formGroup('Name / Bezeichnung *', '<input id="obj-name" '+inputStyle+' placeholder="z.B. Hauptstraße 15">')
+    + formGroup('Straße + Hausnummer *', '<input id="obj-str" '+inputStyle+' placeholder="Musterstraße 12">')
+    + '<div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;">'
+    + formGroup('PLZ', '<input id="obj-plz" '+inputStyle+' placeholder="44135">')
+    + formGroup('Stadt *', '<input id="obj-stadt" '+inputStyle+' placeholder="Dortmund">')
+    + '</div>'
+    + formGroup('Objekttyp', '<select id="obj-typ" '+inputStyle+'>' + typOptsHtml + '</select>')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Anzahl Einheiten', '<input id="obj-einh" type="number" min="1" '+inputStyle+' placeholder="z.B. 5">')
+    + formGroup('Baujahr', '<input id="obj-bj" type="number" min="1800" max="2030" '+inputStyle+' placeholder="z.B. 1985">')
+    + '</div>'
+    + formGroup('Monatliche Zielmiete (€)', '<input id="obj-zielmiete" type="number" min="0" '+inputStyle+' placeholder="z.B. 4500">')
+    + formGroup('Notizen', '<textarea id="obj-not" '+inputStyle+' rows="3" placeholder="Besonderheiten, Zustand, Renovierungen..."></textarea>')
+    + '<div style="display:flex;gap:10px;margin-top:8px;">'
+    + '<button onclick="saveObj()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
+    + '<button onclick="hideModal(\'obj-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>';
+
+  var modalsHTML = modalHTML('obj-modal', '<span id="obj-modal-title">Objekt hinzufügen</span>', modalBody);
+
+  var actionBtn = '<button onclick="openNewObjModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Objekt hinzufügen</button>';
+
+  var mainHTML = buildKPIs(objs) + buildGrid(objs);
+
+  renderLayout('objekte', '🏢 Objekte & Gebäude', actionBtn, mainHTML, modalsHTML);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

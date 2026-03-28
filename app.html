@@ -1,127 +1,297 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
-<body style="margin:0;padding:0;">
+<body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
-
 var user = getUser();
 
-function render() {
-  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
-  var tickets = getData(KEYS.tickets, []);
-  var aufgaben = getData(KEYS.aufgaben, []);
-  var followups = getData(KEYS.followups, []);
-  var termine = getData(KEYS.termine, []);
-
-  var bez = mieter.filter(function(m){return m.status==='bezahlt';});
-  var off = mieter.filter(function(m){return m.status==='offen';});
-  var ein = bez.reduce(function(s,m){return s+(m.miete||0);},0);
-  var offTix = tickets.filter(function(t){return t.status==='Offen';});
+function getGreeting() {
   var h = new Date().getHours();
-  var greet = h<12?'Guten Morgen':h<18?'Guten Tag':'Guten Abend';
-  var heute = today();
-  var ges = mieter.reduce(function(s,m){return s+(m.miete||0);},0);
+  if(h < 12) return 'Guten Morgen';
+  if(h < 18) return 'Guten Tag';
+  return 'Guten Abend';
+}
 
-  function statCard(label, value, sub, ico) {
-    return '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
-      +'<div style="display:flex;justify-content:space-between;margin-bottom:8px;">'
-      +'<div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">'+label+'</div>'
-      +'<div style="font-size:22px;">'+ico+'</div></div>'
-      +'<div style="font-size:28px;font-weight:700;line-height:1;margin-bottom:4px;">'+value+'</div>'
-      +'<div style="font-size:12px;color:#64748b;">'+sub+'</div></div>';
+function getVorname() {
+  if(!user) return '';
+  var name = user.displayName || user.email || '';
+  return name.split(' ')[0].split('@')[0];
+}
+
+function getDatumDe() {
+  return new Date().toLocaleDateString('de-DE', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+}
+
+function getInitials(name) {
+  if(!name) return '?';
+  var parts = name.trim().split(' ');
+  if(parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+  return name[0].toUpperCase();
+}
+
+function termIcon(kat) {
+  if(kat === 'wartung') return '🔧';
+  if(kat === 'uebergabe') return '🔑';
+  if(kat === 'zahlung') return '💳';
+  if(kat === 'besichtigung') return '👀';
+  return '📅';
+}
+
+function qaBtn(icon, label, href) {
+  return '<a href="' + href + '" style="display:inline-flex;flex-direction:column;align-items:center;gap:5px;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;min-width:72px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.04);">' +
+    '<span style="font-size:20px;">' + icon + '</span>' +
+    '<span style="font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">' + label + '</span>' +
+    '</a>';
+}
+
+function kpiCard(label, value, sub, trend, borderColor, icon) {
+  return '<div style="background:white;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;border-left:4px solid ' + borderColor + ';position:relative;overflow:hidden;">' +
+    '<div style="position:absolute;top:14px;right:14px;font-size:24px;opacity:0.18;">' + icon + '</div>' +
+    '<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">' + label + '</div>' +
+    '<div style="font-size:28px;font-weight:700;color:#1e293b;line-height:1;margin-bottom:5px;">' + value + '</div>' +
+    '<div style="font-size:12px;color:#94a3b8;">' + sub +
+      (trend ? ' &nbsp;<span style="color:' + borderColor + ';font-weight:700;">' + trend + '</span>' : '') +
+    '</div>' +
+    '</div>';
+}
+
+function sectionCard(title, content) {
+  return '<div style="background:white;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;height:100%;box-sizing:border-box;">' +
+    '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:14px;">' + title + '</div>' +
+    content +
+    '</div>';
+}
+
+function render() {
+  var mieter    = getData(KEYS.mieter, DEFAULT_MIETER);
+  var tickets   = getData(KEYS.tickets, []);
+  var followups = getData(KEYS.followups, []);
+  var termine   = getData(KEYS.termine, []);
+  var notifs    = getData(KEYS.notifs, []);
+  var aufgaben  = getData(KEYS.aufgaben, []);
+  var todayStr  = today();
+
+  /* ── KPI ─────────────────────────────────────── */
+  var bezahlt       = mieter.filter(function(m){ return m.status === 'bezahlt'; });
+  var offeneMieten  = mieter.filter(function(m){ return m.status !== 'bezahlt'; });
+  var einnahmen     = bezahlt.reduce(function(s,m){ return s+(m.miete||0); }, 0);
+  var auslastung    = mieter.length > 0 ? Math.round(bezahlt.length/mieter.length*100) : 0;
+  var offeneTickets = tickets.filter(function(t){ return t.status !== 'Erledigt'; });
+
+  /* ── Follow-Ups & Termine ────────────────────── */
+  var heuteFU = followups.filter(function(f){ return !f.done && f.dat === todayStr; });
+  var zukTermine = termine
+    .filter(function(t){ return (t.datum||'') >= todayStr; })
+    .sort(function(a,b){ return (a.datum||'').localeCompare(b.datum||''); })
+    .slice(0,5);
+
+  /* ── Banner ──────────────────────────────────── */
+  var bannerHTML = '';
+  if(offeneMieten.length > 0) {
+    bannerHTML += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+      '<span style="font-size:14px;color:#92400e;font-weight:500;">⚠️ <strong>' + offeneMieten.length + ' Mieter</strong> haben Miete noch nicht bezahlt</span>' +
+      '<a href="zahlungen.html" style="font-size:12px;color:#d97706;font-weight:700;text-decoration:none;white-space:nowrap;">Ansehen →</a></div>';
+  }
+  if(offeneTickets.length > 3) {
+    bannerHTML += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+      '<span style="font-size:14px;color:#991b1b;font-weight:500;">🎫 <strong>' + offeneTickets.length + ' offene Tickets</strong> benötigen Bearbeitung</span>' +
+      '<a href="tickets.html" style="font-size:12px;color:#dc2626;font-weight:700;text-decoration:none;white-space:nowrap;">Ansehen →</a></div>';
+  }
+  if(heuteFU.length > 0) {
+    bannerHTML += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+      '<span style="font-size:14px;color:#1e40af;font-weight:500;">🎯 <strong>' + heuteFU.length + ' Follow-Ups</strong> sind heute fällig</span>' +
+      '<a href="crm.html" style="font-size:12px;color:#2563eb;font-weight:700;text-decoration:none;white-space:nowrap;">Ansehen →</a></div>';
   }
 
-  var mieterHTML = mieter.map(function(m) {
-    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      +'<div style="width:36px;height:36px;border-radius:50%;background:'+(m.status==='bezahlt'?'#f0fdf4':'#fef2f2')+';color:'+(m.status==='bezahlt'?'#16a34a':'#dc2626')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">'+m.name[0]+'</div>'
-      +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;">'+m.name+'</div><div style="font-size:11px;color:#64748b;">'+m.wn+' · €'+fmt(m.miete)+'/Mo</div></div>'
-      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(m.status==='bezahlt'?'#f0fdf4':'#fef2f2')+';color:'+(m.status==='bezahlt'?'#16a34a':'#dc2626')+';">'+(m.status==='bezahlt'?'✅ Bezahlt':'❌ Offen')+'</span>'
-      +'</div>';
-  }).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine Mieter. <a href="mieter.html" style="color:#2563eb;">Hinzufügen →</a></div>';
+  /* ── Quick-Actions ───────────────────────────── */
+  var qaHTML = '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:24px;">' +
+    qaBtn('👥','Mieter','mieter.html') +
+    qaBtn('🎫','Ticket','tickets.html') +
+    qaBtn('📅','Termin','kalender.html') +
+    qaBtn('🏗️','Projekt','projekte.html') +
+    qaBtn('🎯','Follow-Up','crm.html') +
+    qaBtn('💬','Nachricht','nachrichten.html') +
+    '</div>';
 
-  var renditeHTML = mieter.map(function(m) {
-    var pct = ges ? Math.round((m.miete||0)/ges*100) : 0;
-    return '<div style="padding:8px 0;border-bottom:1px solid #f1f5f9;">'
-      +'<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;"><span>'+m.wn+'</span><strong>€'+fmt(m.miete)+'</strong></div>'
-      +'<div style="height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+(m.status==='bezahlt'?'#2563eb':'#dc2626')+';border-radius:3px;"></div></div>'
-      +'</div>';
-  }).join('');
+  /* ── KPI Grid ────────────────────────────────── */
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
+    kpiCard('Monatliche Einnahmen','€'+fmt(einnahmen),'Bezahlte Mieten','↑ +5%','#16a34a','💰') +
+    kpiCard('Auslastung',auslastung+'%',bezahlt.length+' von '+mieter.length+' Einheiten','','#2563eb','📊') +
+    kpiCard('Offene Tickets',offeneTickets.length.toString(),offeneTickets.length+' ausstehend','',offeneTickets.length>0?'#dc2626':'#16a34a','🎫') +
+    kpiCard('Offene Mieten',offeneMieten.length.toString(),offeneMieten.length+' Mieter ausstehend','',offeneMieten.length>0?'#dc2626':'#16a34a','💳') +
+    '</div>';
 
-  var fuHeute = followups.filter(function(f){return !f.done && f.dat===heute;});
-  var fuHTML = fuHeute.length ? fuHeute.map(function(f) {
-    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      +'<div style="font-size:22px;">🔥</div>'
-      +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;">'+f.nm+'</div><div style="font-size:11px;color:#64748b;">'+f.not+'</div></div>'
-      +(f.tel?'<a href="https://wa.me/'+f.tel.replace(/\D/g,'')+'" target="_blank" style="background:#16a34a;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;text-decoration:none;">📲</a>':'')
-      +'</div>';
-  }).join('') : '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine Follow-Ups heute ✅</div>';
+  /* ── Wohnungsübersicht ───────────────────────── */
+  var wohnRows = '';
+  if(mieter.length === 0) {
+    wohnRows = '<div style="text-align:center;padding:32px 0;color:#94a3b8;">' +
+      '<div style="font-size:32px;margin-bottom:8px;">🏠</div>' +
+      '<div style="font-size:14px;margin-bottom:12px;">Noch keine Mieter</div>' +
+      '<a href="mieter.html" style="font-size:13px;color:#2563eb;text-decoration:none;font-weight:600;">+ Mieter hinzufügen</a></div>';
+  } else {
+    mieter.forEach(function(m) {
+      var sc = m.status === 'bezahlt' ? '#16a34a' : '#dc2626';
+      var sb = m.status === 'bezahlt' ? '#f0fdf4' : '#fef2f2';
+      wohnRows += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f8fafc;">' +
+        '<div style="width:36px;height:36px;border-radius:50%;background:'+sc+';color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">'+getInitials(m.name)+'</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+( m.name||'')+'</div>' +
+          '<div style="font-size:11px;color:#94a3b8;">'+(m.wn||'')+'</div>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;">€'+fmt(m.miete||0)+'</div>' +
+        '<span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;background:'+sb+';color:'+sc+';white-space:nowrap;">'+(m.status==='bezahlt'?'✅ Bezahlt':'❌ Offen')+'</span>' +
+        '</div>';
+    });
+  }
 
-  var komTermine = termine.filter(function(t){return new Date(t.dat)>=new Date();}).sort(function(a,b){return new Date(a.dat)-new Date(b.dat);}).slice(0,4);
-  var termineHTML = komTermine.length ? komTermine.map(function(t) {
-    var ico = t.kat==='wartung'?'🔧':t.kat==='uebergabe'?'🔑':t.kat==='zahlung'?'💳':'📅';
-    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      +'<div style="font-size:22px;">'+ico+'</div>'
-      +'<div style="flex:1;"><div style="font-size:13px;font-weight:600;">'+t.ttl+'</div><div style="font-size:11px;color:#64748b;">'+fmtDate(t.dat)+(t.zt?' · '+t.zt:'')+'</div></div>'
-      +'</div>';
-  }).join('') : '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine Termine 📅</div>';
+  /* ── Rendite pro Einheit ─────────────────────── */
+  var gesamtMiete = mieter.reduce(function(s,m){ return s+(m.miete||0); }, 0);
+  var renditeRows = '';
+  if(mieter.length === 0) {
+    renditeRows = '<div style="text-align:center;padding:32px 0;color:#94a3b8;font-size:14px;">Keine Daten vorhanden</div>';
+  } else {
+    mieter.forEach(function(m) {
+      var pct = gesamtMiete > 0 ? Math.max(4, Math.round((m.miete||0)/gesamtMiete*100)) : 4;
+      var bc  = m.status === 'bezahlt' ? '#2563eb' : '#dc2626';
+      renditeRows += '<div style="margin-bottom:12px;">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+          '<span style="font-size:13px;font-weight:500;color:#374151;">'+(m.wn||'')+' – '+(m.name||'')+'</span>' +
+          '<span style="font-size:13px;font-weight:600;color:#1e293b;">€'+fmt(m.miete||0)+'</span>' +
+        '</div>' +
+        '<div style="background:#f1f5f9;border-radius:4px;height:8px;">' +
+          '<div style="background:'+bc+';height:8px;border-radius:4px;width:'+pct+'%;"></div>' +
+        '</div></div>';
+    });
+    renditeRows += '<div style="font-size:12px;color:#94a3b8;text-align:right;margin-top:4px;">Gesamt: €'+fmt(gesamtMiete)+'/Monat</div>';
+  }
 
-  var tixHTML = offTix.slice(0,4).map(function(t) {
-    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(t.prio==='Hoch'?'#fef2f2':t.prio==='Mittel'?'#fffbeb':'#f0fdf4')+';color:'+(t.prio==='Hoch'?'#dc2626':t.prio==='Mittel'?'#d97706':'#16a34a')+';">'+t.prio+'</span>'
-      +'<div style="flex:1;font-size:13px;">'+((t.pb||'').substring(0,45))+'</div>'
-      +'</div>';
-  }).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8;">Keine offenen Tickets 🎉</div>';
+  /* ── Follow-Ups heute ───────────────────────── */
+  var fuRows = '';
+  if(heuteFU.length === 0) {
+    fuRows = '<div style="text-align:center;padding:24px 0;color:#94a3b8;font-size:14px;">✅ Keine Follow-Ups heute</div>';
+  } else {
+    heuteFU.forEach(function(f) {
+      var notiz = (f.notiz||'').length > 50 ? (f.notiz||'').substring(0,50)+'...' : (f.notiz||'');
+      var waBtn = f.tel
+        ? '<a href="https://wa.me/'+(f.tel||'').replace(/\D/g,'')+'" target="_blank" style="font-size:11px;background:#25d366;color:white;padding:3px 8px;border-radius:4px;text-decoration:none;font-weight:600;flex-shrink:0;">WhatsApp</a>'
+        : '';
+      fuRows += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f8fafc;">' +
+        '<span style="font-size:18px;">🔥</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+(f.name||'')+'</div>' +
+          '<div style="font-size:11px;color:#94a3b8;">'+notiz+'</div>' +
+        '</div>'+waBtn+'</div>';
+    });
+  }
 
-  var aufHTML = aufgaben.filter(function(a){return !a.done;}).slice(0,4).map(function(a) {
-    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
-      +'<div style="width:20px;height:20px;border-radius:50%;border:2px solid #e2e8f0;flex-shrink:0;"></div>'
-      +'<div style="flex:1;font-size:13px;">'+a.txt+'</div>'
-      +'<span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:'+(a.pr==='hoch'?'#fef2f2':a.pr==='mittel'?'#fffbeb':'#f0fdf4')+';color:'+(a.pr==='hoch'?'#dc2626':a.pr==='mittel'?'#d97706':'#16a34a')+';">'+a.pr+'</span>'
-      +'</div>';
-  }).join('') || '<div style="padding:20px;text-align:center;color:#94a3b8;">Alle Aufgaben erledigt ✅</div>';
+  /* ── Nächste Termine ────────────────────────── */
+  var termRows = '';
+  if(zukTermine.length === 0) {
+    termRows = '<div style="text-align:center;padding:24px 0;color:#94a3b8;font-size:14px;">Keine Termine diese Woche</div>';
+  } else {
+    zukTermine.forEach(function(t) {
+      termRows += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f8fafc;">' +
+        '<span style="font-size:18px;">'+termIcon(t.kat)+'</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+(t.titel||t.title||'Termin')+'</div>' +
+          '<div style="font-size:11px;color:#94a3b8;">'+fmtDate(t.datum)+'</div>' +
+        '</div></div>';
+    });
+  }
 
-  var main =
-    '<div style="margin-bottom:20px;">'
-    +'<div style="font-size:22px;font-weight:700;">'+greet+', '+user.name.split(' ')[0]+'! 👋</div>'
-    +'<div style="font-size:13px;color:#64748b;">'+new Date().toLocaleDateString('de-DE',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div>'
-    +'</div>'
-    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
-    +'<a href="mieter.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">👥 Mieter</a>'
-    +'<a href="tickets.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">🎫 Ticket melden</a>'
-    +'<a href="kalender.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">📅 Termin</a>'
-    +'<a href="projekte.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">🏗️ Projekt</a>'
-    +'<a href="crm.html" style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;text-decoration:none;color:#0f172a;font-size:13px;font-weight:600;">🎯 Follow-Up</a>'
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;">'
-    +statCard('Monatliche Einnahmen','€ '+fmt(ein),bez.length+' von '+mieter.length+' bezahlt','💰')
-    +statCard('Auslastung',mieter.length>0?Math.round(bez.length/mieter.length*100)+'%':'0%',mieter.length+' Einheiten belegt','🏠')
-    +statCard('Offene Tickets',offTix.length,'Bearbeitung nötig','🎫')
-    +statCard('Offene Mieten',off.length,'Erinnerung empfohlen','⚠️')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">'
-    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">🏠 Wohnungsübersicht</div>'+mieterHTML)
-    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">📊 Rendite-Übersicht</div>'+renditeHTML)
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">'
-    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">🎯 Follow-Up fällig heute</div>'+fuHTML)
-    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">📅 Nächste Termine</div>'+termineHTML)
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
-    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">🎫 Neueste Tickets</div>'+tixHTML)
-    +card('<div style="font-size:14px;font-weight:700;margin-bottom:14px;">✅ Offene Aufgaben</div>'+aufHTML)
-    +'</div>';
+  /* ── Aktivitäts-Feed ────────────────────────── */
+  var feedRows = '';
+  var recentNotifs = notifs.slice(0,8);
+  if(recentNotifs.length === 0) {
+    feedRows = '<div style="text-align:center;padding:24px 0;color:#94a3b8;font-size:14px;">Noch keine Aktivitäten</div>';
+  } else {
+    recentNotifs.forEach(function(n) {
+      feedRows += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f8fafc;">' +
+        '<span style="font-size:16px;">'+(n.icon||'🔔')+'</span>' +
+        '<div style="flex:1;font-size:13px;color:#374151;">'+(n.text||'')+'</div>' +
+        '<div style="font-size:11px;color:#94a3b8;white-space:nowrap;">'+(n.zeit||n.time||'')+'</div>' +
+        '</div>';
+    });
+  }
 
-  renderLayout('dashboard', 'Dashboard', '', main);
+  /* ── Neueste Tickets (mini) ─────────────────── */
+  var letzteTickets = tickets.filter(function(t){ return t.status!=='Erledigt'; }).slice(0,3);
+  var ticketRows = '';
+  if(letzteTickets.length === 0) {
+    ticketRows = '<div style="font-size:13px;color:#94a3b8;padding:8px 0;">Keine offenen Tickets</div>';
+  } else {
+    letzteTickets.forEach(function(t) {
+      var pc = t.prio==='Hoch'?'#dc2626':t.prio==='Mittel'?'#d97706':'#16a34a';
+      var pb = t.prio==='Hoch'?'#fef2f2':t.prio==='Mittel'?'#fffbeb':'#f0fdf4';
+      var desc = (t.pb||'').length>45?(t.pb||'').substring(0,45)+'...':(t.pb||'');
+      ticketRows += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f8fafc;">' +
+        '<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;background:'+pb+';color:'+pc+';white-space:nowrap;">'+(t.prio||'')+'</span>' +
+        '<div style="flex:1;font-size:13px;color:#374151;">'+desc+'</div>' +
+        '<span style="font-size:11px;color:#94a3b8;white-space:nowrap;">'+(t.status||'')+'</span>' +
+        '</div>';
+    });
+  }
+
+  /* ── Offene Aufgaben (mini) ─────────────────── */
+  var offeneAufg = aufgaben.filter(function(a){ return !a.done; }).slice(0,3);
+  var aufgRows = '';
+  if(offeneAufg.length === 0) {
+    aufgRows = '<div style="font-size:13px;color:#94a3b8;padding:8px 0;">Keine offenen Aufgaben</div>';
+  } else {
+    offeneAufg.forEach(function(a) {
+      var pc = a.prio==='Hoch'?'#dc2626':a.prio==='Mittel'?'#d97706':'#16a34a';
+      aufgRows += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f8fafc;">' +
+        '<div style="width:16px;height:16px;border:2px solid #cbd5e1;border-radius:50%;flex-shrink:0;"></div>' +
+        '<div style="flex:1;font-size:13px;color:#374151;">'+(a.text||a.titel||'')+'</div>' +
+        '<span style="font-size:11px;font-weight:600;color:'+pc+';">'+(a.prio||'')+'</span>' +
+        '</div>';
+    });
+  }
+
+  /* ── Zusammenbau ─────────────────────────────── */
+  var mainHTML =
+    '<div style="max-width:1400px;margin:0 auto;">' +
+      '<div style="margin-bottom:20px;">' +
+        '<h1 style="margin:0 0 4px;font-size:22px;font-weight:700;color:#1e293b;">'+getGreeting()+', '+getVorname()+'! 👋</h1>' +
+        '<div style="font-size:13px;color:#94a3b8;">'+getDatumDe()+'</div>' +
+      '</div>' +
+      bannerHTML +
+      qaHTML +
+      kpiHTML +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
+        sectionCard('🏠 Wohnungsübersicht', wohnRows) +
+        sectionCard('📊 Rendite pro Einheit', renditeRows) +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
+        sectionCard('🎯 Follow-Ups heute', fuRows) +
+        sectionCard('📅 Nächste Termine', termRows) +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
+        sectionCard('🔔 Aktivitäts-Feed', feedRows) +
+        '<div>' +
+          '<div style="background:white;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;margin-bottom:16px;">' +
+            '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">🎫 Neueste Tickets</div>' +
+            ticketRows +
+          '</div>' +
+          '<div style="background:white;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border:1px solid #f1f5f9;">' +
+            '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">✅ Offene Aufgaben</div>' +
+            aufgRows +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  renderLayout('dashboard', 'Dashboard', '', mainHTML, '');
 }
 
 initFirebase();

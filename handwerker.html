@@ -1,30 +1,380 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 🔧 Handwerker</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Handwerker – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('handwerker','🔧 Handwerker','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">🔧</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">🔧 Handwerker</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var activeTab = 'alle';
+var editId = null;
+
+var DEMO_HW = [
+  {id:'hw1', vn:'Klaus', nn:'Müller', firma:'Sanitär-Müller', spez:'Sanitär/Heizung', tel:'0151 555001', email:'mueller@sanitaer.de', prov:10, rahmen:true, bew:5, pin:''},
+  {id:'hw2', vn:'Elektro', nn:'Meyer', firma:'Meyer GmbH', spez:'Elektro', tel:'0151 555002', email:'meyer@elektro.de', prov:8, rahmen:false, bew:4, pin:''},
+  {id:'hw3', vn:'Thomas', nn:'Koch', firma:'Koch Malerei', spez:'Maler/Renovierung', tel:'0151 555003', email:'koch@malerei.de', prov:12, rahmen:true, bew:3, pin:''}
+];
+
+function getHW() {
+  var stored = getData(KEYS.handwerker, null);
+  if(!stored || stored.length === 0) {
+    setData(KEYS.handwerker, DEMO_HW);
+    return JSON.parse(JSON.stringify(DEMO_HW));
+  }
+  return stored;
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function avatarColor(name) {
+  var colors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#be185d'];
+  var idx = (name.charCodeAt(0)||0) % colors.length;
+  return colors[idx];
+}
+
+function starsHTML(bew, hwId, interactive) {
+  var html = '<div style="display:flex;gap:2px;">';
+  for(var i=1;i<=5;i++) {
+    var filled = i <= bew;
+    if(interactive) {
+      html += '<span onclick="setRating(\''+hwId+'\','+i+')" data-idx="'+i+'" style="font-size:20px;cursor:pointer;color:'+(filled?'#f59e0b':'#d1d5db')+';transition:color 0.1s;">&#9733;</span>';
+    } else {
+      html += '<span style="font-size:15px;color:'+(filled?'#f59e0b':'#d1d5db')+';">&#9733;</span>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function setRating(hwId, n) {
+  var hws = getHW();
+  for(var i=0;i<hws.length;i++){
+    if(hws[i].id===hwId){ hws[i].bew=n; break; }
+  }
+  setData(KEYS.handwerker, hws);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function renderTab(tab) {
+  activeTab = tab;
+  render();
+}
+
+function deleteHW(id) {
+  if(!confirm('Handwerker wirklich löschen?')) return;
+  var hws = getHW().filter(function(h){return h.id!==id;});
+  setData(KEYS.handwerker, hws);
+  syncToFirebase(user.uid);
+  render();
+}
+
+function openEditModal(id) {
+  editId = id;
+  var hws = getHW();
+  var hw = null;
+  for(var i=0;i<hws.length;i++){ if(hws[i].id===id){ hw=hws[i]; break; } }
+  if(!hw) return;
+  document.getElementById('hw-modal-title').textContent = 'Handwerker bearbeiten';
+  document.getElementById('hw-vn').value = hw.vn||'';
+  document.getElementById('hw-nn').value = hw.nn||'';
+  document.getElementById('hw-firma').value = hw.firma||'';
+  document.getElementById('hw-spez').value = hw.spez||'Sanitär/Heizung';
+  document.getElementById('hw-tel').value = hw.tel||'';
+  document.getElementById('hw-email').value = hw.email||'';
+  document.getElementById('hw-prov').value = hw.prov||0;
+  document.getElementById('hw-rahmen').checked = hw.rahmen||false;
+  document.getElementById('hw-bew').value = hw.bew||3;
+  document.getElementById('hw-pin').value = hw.pin||'';
+  updateModalStars(hw.bew||3);
+  showModal('hw-modal');
+}
+
+function openNewModal() {
+  editId = null;
+  document.getElementById('hw-modal-title').textContent = 'Handwerker hinzufügen';
+  document.getElementById('hw-vn').value = '';
+  document.getElementById('hw-nn').value = '';
+  document.getElementById('hw-firma').value = '';
+  document.getElementById('hw-spez').value = 'Sanitär/Heizung';
+  document.getElementById('hw-tel').value = '';
+  document.getElementById('hw-email').value = '';
+  document.getElementById('hw-prov').value = 0;
+  document.getElementById('hw-rahmen').checked = false;
+  document.getElementById('hw-bew').value = 3;
+  document.getElementById('hw-pin').value = '';
+  updateModalStars(3);
+  showModal('hw-modal');
+}
+
+function updateModalStars(n) {
+  document.getElementById('hw-bew').value = n;
+  var container = document.getElementById('modal-stars');
+  if(!container) return;
+  var stars = container.querySelectorAll('span');
+  for(var i=0;i<stars.length;i++){
+    stars[i].style.color = (i<n) ? '#f59e0b' : '#d1d5db';
+  }
+}
+
+function hoverModalStar(n) {
+  var container = document.getElementById('modal-stars');
+  if(!container) return;
+  var stars = container.querySelectorAll('span');
+  for(var i=0;i<stars.length;i++){
+    stars[i].style.color = (i<n) ? '#f59e0b' : '#d1d5db';
+  }
+}
+
+function unhoverModalStar() {
+  var bew = parseInt(document.getElementById('hw-bew').value)||3;
+  updateModalStars(bew);
+}
+
+function saveHW() {
+  var vn = document.getElementById('hw-vn').value.trim();
+  var nn = document.getElementById('hw-nn').value.trim();
+  if(!vn || !nn) { alert('Vor- und Nachname sind Pflichtfelder.'); return; }
+  var hws = getHW();
+  var obj = {
+    id: editId || ('hw_'+Date.now()),
+    vn: vn,
+    nn: nn,
+    firma: document.getElementById('hw-firma').value.trim(),
+    spez: document.getElementById('hw-spez').value,
+    tel: document.getElementById('hw-tel').value.trim(),
+    email: document.getElementById('hw-email').value.trim(),
+    prov: parseFloat(document.getElementById('hw-prov').value)||0,
+    rahmen: document.getElementById('hw-rahmen').checked,
+    bew: parseInt(document.getElementById('hw-bew').value)||3,
+    pin: document.getElementById('hw-pin').value.trim()
+  };
+  if(editId) {
+    for(var i=0;i<hws.length;i++){ if(hws[i].id===editId){ hws[i]=obj; break; } }
+  } else {
+    hws.push(obj);
+    addNotif('🔧', 'Neuer Handwerker hinzugefügt: '+vn+' '+nn+' ('+obj.spez+')');
+  }
+  setData(KEYS.handwerker, hws);
+  syncToFirebase(user.uid);
+  hideModal('hw-modal');
+  render();
+}
+
+function getTicketsDone(name) {
+  var tickets = getData(KEYS.tickets, []);
+  var count = 0;
+  for(var i=0;i<tickets.length;i++){
+    if(tickets[i].status==='Erledigt' && tickets[i].hw && tickets[i].hw.toLowerCase().indexOf(name.toLowerCase())>=0){
+      count++;
+    }
+  }
+  return count;
+}
+
+function buildAlleTab(hws) {
+  if(hws.length === 0) {
+    return '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">'
+      +'<div style="font-size:48px;margin-bottom:12px;">🔧</div>'
+      +'<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Noch keine Handwerker erfasst</div>'
+      +'<div style="font-size:13px;">Klicke auf "+ Handwerker hinzufügen" um zu starten.</div>'
+      +'</div>';
+  }
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;">';
+  for(var x=0;x<hws.length;x++){
+    var hw = hws[x];
+    var initials = ((hw.vn||'').charAt(0) + (hw.nn||'').charAt(0)).toUpperCase();
+    var color = avatarColor(hw.vn+hw.nn);
+    var name = hw.vn+' '+hw.nn;
+    var waNum = (hw.tel||'').replace(/\D/g,'');
+    if(waNum.charAt(0)==='0') waNum = '49'+waNum.slice(1);
+    html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">';
+    // Card header strip
+    html += '<div style="height:5px;background:'+color+';"></div>';
+    // Header body
+    html += '<div style="padding:18px 18px 14px;display:flex;align-items:center;gap:14px;">';
+    html += '<div style="width:52px;height:52px;border-radius:14px;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:white;flex-shrink:0;">'+initials+'</div>';
+    html += '<div style="flex:1;min-width:0;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+name+'</div>';
+    html += '<div style="font-size:12px;color:#64748b;margin-top:1px;">'+hw.firma+'</div>';
+    html += '</div>';
+    html += badge(hw.rahmen ? 'Rahmenvertrag' : 'Kein Rahmenvertrag', hw.rahmen ? 'green' : 'gray');
+    html += '</div>';
+    html += '<div style="height:1px;background:#f1f5f9;"></div>';
+    // Stars + spez
+    html += '<div style="padding:14px 18px 0;">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+    html += '<div>'+starsHTML(hw.bew, hw.id, true)+'</div>';
+    html += badge(hw.spez, 'blue');
+    html += '</div>';
+    // Contact row
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+    html += '<span style="font-size:13px;color:#475569;">📞 '+hw.tel+'</span>';
+    html += '<a href="https://wa.me/'+waNum+'" target="_blank" style="background:#25D366;color:white;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;">WhatsApp</a>';
+    html += '</div>';
+    // Provision
+    html += '<div style="background:#f8fafc;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">';
+    html += '<span style="font-size:12px;color:#64748b;font-weight:500;">💰 Provision</span>';
+    html += '<span style="font-size:16px;font-weight:700;color:#2563eb;">'+hw.prov+'%</span>';
+    html += '</div>';
+    // Actions
+    html += '<div style="display:flex;gap:8px;margin-bottom:16px;">';
+    html += '<button onclick="openEditModal(\''+hw.id+'\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">✏️ Bearbeiten</button>';
+    html += '<button onclick="deleteHW(\''+hw.id+'\')" style="padding:9px 14px;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fff5f5\'">🗑️</button>';
+    html += '</div>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function buildRahmenTab(hws) {
+  var rahmen = [];
+  for(var i=0;i<hws.length;i++){ if(hws[i].rahmen) rahmen.push(hws[i]); }
+  if(rahmen.length === 0) {
+    return '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">'
+      +'<div style="font-size:48px;margin-bottom:12px;">📋</div>'
+      +'<div style="font-size:16px;font-weight:600;">Keine Rahmenverträge vorhanden</div>'
+      +'<div style="font-size:13px;margin-top:6px;">Aktiviere "Rahmenvertrag" bei einem Handwerker.</div>'
+      +'</div>';
+  }
+  var html = '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+  html += '<table style="width:100%;border-collapse:collapse;">';
+  html += '<thead><tr style="background:#f8fafc;">';
+  var heads = ['Handwerker','Firma','Spezialgebiet','Provision %','Bewertung','Status'];
+  for(var h=0;h<heads.length;h++){
+    html += '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e2e8f0;">'+heads[h]+'</th>';
+  }
+  html += '</tr></thead><tbody>';
+  for(var i=0;i<rahmen.length;i++){
+    var hw = rahmen[i];
+    var isLast = i===rahmen.length-1;
+    html += '<tr style="border-bottom:'+(isLast?'none':'1px solid #f1f5f9')+';">';
+    html += '<td style="padding:14px 16px;"><div style="font-weight:600;font-size:14px;">'+hw.vn+' '+hw.nn+'</div></td>';
+    html += '<td style="padding:14px 16px;color:#64748b;font-size:13px;">'+hw.firma+'</td>';
+    html += '<td style="padding:14px 16px;">'+badge(hw.spez,'blue')+'</td>';
+    html += '<td style="padding:14px 16px;font-weight:700;color:#2563eb;font-size:15px;">'+hw.prov+'%</td>';
+    html += '<td style="padding:14px 16px;">'+starsHTML(hw.bew, hw.id, false)+'</td>';
+    html += '<td style="padding:14px 16px;">'+badge('Aktiv','green')+'</td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function buildProvisionTab(hws) {
+  if(hws.length === 0) {
+    return '<div style="text-align:center;padding:60px 20px;color:#94a3b8;">'
+      +'<div style="font-size:48px;margin-bottom:12px;">💰</div>'
+      +'<div style="font-size:16px;font-weight:600;">Keine Handwerker vorhanden</div>'
+      +'</div>';
+  }
+  var html = '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+  html += '<table style="width:100%;border-collapse:collapse;">';
+  html += '<thead><tr style="background:#f8fafc;">';
+  var pHeads = ['Handwerker','Spezialgebiet','Erledigte Tickets','Provision %','Gesamtprovision (€)'];
+  for(var h=0;h<pHeads.length;h++){
+    html += '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e2e8f0;">'+pHeads[h]+'</th>';
+  }
+  html += '</tr></thead><tbody>';
+  var total = 0;
+  for(var i=0;i<hws.length;i++){
+    var hw = hws[i];
+    var done = getTicketsDone(hw.vn+' '+hw.nn);
+    var prov = Math.round(done * 50 * (hw.prov/100) * 100) / 100;
+    total += prov;
+    var isLast = i===hws.length-1;
+    html += '<tr style="border-bottom:'+(isLast?'none':'1px solid #f1f5f9')+';">';
+    html += '<td style="padding:14px 16px;">';
+    html += '<div style="font-weight:600;font-size:14px;">'+hw.vn+' '+hw.nn+'</div>';
+    html += '<div style="font-size:12px;color:#94a3b8;margin-top:2px;">'+hw.firma+'</div>';
+    html += '</td>';
+    html += '<td style="padding:14px 16px;">'+badge(hw.spez,'blue')+'</td>';
+    html += '<td style="padding:14px 16px;"><span style="font-weight:700;font-size:16px;color:#0f172a;">'+done+'</span></td>';
+    html += '<td style="padding:14px 16px;font-weight:600;color:#2563eb;font-size:14px;">'+hw.prov+'%</td>';
+    html += '<td style="padding:14px 16px;">';
+    html += '<span style="font-weight:700;font-size:15px;color:#16a34a;">'+fmt(prov)+' €</span>';
+    html += '</td>';
+    html += '</tr>';
+  }
+  html += '<tr style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-top:2px solid #bbf7d0;">';
+  html += '<td colspan="4" style="padding:14px 16px;font-weight:700;font-size:14px;color:#16a34a;">Gesamt aller Provisionen</td>';
+  html += '<td style="padding:14px 16px;font-weight:800;font-size:16px;color:#16a34a;">'+fmt(total)+' €</td>';
+  html += '</tr>';
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function render() {
+  var hws = getHW();
+
+  var tabBar = '<div style="display:flex;gap:4px;margin-bottom:22px;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:4px;width:fit-content;">';
+  var tabs = [['alle','🔧 Alle Handwerker ('+hws.length+')'],['rahmen','📋 Rahmenverträge'],['provisionen','💰 Provisionen']];
+  for(var t=0;t<tabs.length;t++){
+    var isActive = activeTab===tabs[t][0];
+    tabBar += '<button onclick="renderTab(\''+tabs[t][0]+'\')" style="padding:8px 18px;border-radius:7px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:'+(isActive?'#2563eb':'transparent')+';color:'+(isActive?'white':'#64748b')+';transition:all 0.15s;">'+tabs[t][1]+'</button>';
+  }
+  tabBar += '</div>';
+
+  var tabContent = '';
+  if(activeTab==='alle') tabContent = buildAlleTab(hws);
+  else if(activeTab==='rahmen') tabContent = buildRahmenTab(hws);
+  else tabContent = buildProvisionTab(hws);
+
+  var mainHTML = tabBar + tabContent;
+
+  var spezOpts = ['Sanitär/Heizung','Elektro','Maler/Renovierung','Zimmermann','Schlosser','Gärtner','Reinigung','Sonstiges'];
+  var spezOptsHtml = '';
+  for(var s=0;s<spezOpts.length;s++){
+    spezOptsHtml += '<option value="'+spezOpts[s]+'">'+spezOpts[s]+'</option>';
+  }
+
+  var modalBody =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Vorname *', '<input id="hw-vn" '+inputStyle+' placeholder="Klaus">')
+    + formGroup('Nachname *', '<input id="hw-nn" '+inputStyle+' placeholder="Müller">')
+    + '</div>'
+    + formGroup('Firma', '<input id="hw-firma" '+inputStyle+' placeholder="Müller Sanitär GmbH">')
+    + formGroup('Spezialgebiet', '<select id="hw-spez" '+inputStyle+'>' + spezOptsHtml + '</select>')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    + formGroup('Telefon', '<input id="hw-tel" '+inputStyle+' placeholder="0151 555000">')
+    + formGroup('E-Mail', '<input id="hw-email" type="email" '+inputStyle+' placeholder="name@firma.de">')
+    + '</div>'
+    + formGroup('Provision %', '<input id="hw-prov" type="number" min="0" max="100" step="0.5" '+inputStyle+' placeholder="z.B. 10">')
+    + formGroup('Bewertung',
+        '<div id="modal-stars" style="display:flex;gap:4px;padding:4px 0;">'
+        + '<span onclick="updateModalStars(1)" onmouseover="hoverModalStar(1)" onmouseout="unhoverModalStar()" style="font-size:30px;cursor:pointer;color:#d1d5db;transition:color 0.1s;">&#9733;</span>'
+        + '<span onclick="updateModalStars(2)" onmouseover="hoverModalStar(2)" onmouseout="unhoverModalStar()" style="font-size:30px;cursor:pointer;color:#d1d5db;transition:color 0.1s;">&#9733;</span>'
+        + '<span onclick="updateModalStars(3)" onmouseover="hoverModalStar(3)" onmouseout="unhoverModalStar()" style="font-size:30px;cursor:pointer;color:#f59e0b;transition:color 0.1s;">&#9733;</span>'
+        + '<span onclick="updateModalStars(4)" onmouseover="hoverModalStar(4)" onmouseout="unhoverModalStar()" style="font-size:30px;cursor:pointer;color:#d1d5db;transition:color 0.1s;">&#9733;</span>'
+        + '<span onclick="updateModalStars(5)" onmouseover="hoverModalStar(5)" onmouseout="unhoverModalStar()" style="font-size:30px;cursor:pointer;color:#d1d5db;transition:color 0.1s;">&#9733;</span>'
+        + '</div><input type="hidden" id="hw-bew" value="3">'
+      )
+    + '<div style="display:flex;align-items:center;gap:10px;padding:12px;background:#f8fafc;border-radius:9px;margin-bottom:14px;">'
+    + '<input type="checkbox" id="hw-rahmen" style="width:18px;height:18px;cursor:pointer;accent-color:#2563eb;flex-shrink:0;">'
+    + '<label for="hw-rahmen" style="font-size:14px;font-weight:500;cursor:pointer;color:#0f172a;">Rahmenvertrag vorhanden</label>'
+    + '</div>'
+    + formGroup('PIN (optional)', '<input id="hw-pin" type="password" '+inputStyle+' placeholder="Optionaler Zugangscode">')
+    + '<div style="display:flex;gap:10px;margin-top:8px;">'
+    + '<button onclick="saveHW()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
+    + '<button onclick="hideModal(\'hw-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>';
+
+  var modalsHTML = modalHTML('hw-modal', '<span id="hw-modal-title">Handwerker hinzufügen</span>', modalBody);
+
+  var actionBtn = '<button onclick="openNewModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Handwerker hinzufügen</button>';
+
+  renderLayout('handwerker', '🔧 Handwerker', actionBtn, mainHTML, modalsHTML);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

@@ -1,30 +1,163 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 💳 Zahlungen & Bank</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zahlungen – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('zahlungen','💳 Zahlungen & Bank','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">💳</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">💳 Zahlungen & Bank</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+
+// Month navigation state (display only)
+var navDate = new Date();
+var navYear = navDate.getFullYear();
+var navMonth = navDate.getMonth(); // 0-based
+
+var MONATE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function prevMonth() {
+  navMonth--;
+  if(navMonth < 0) { navMonth = 11; navYear--; }
+  render();
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function nextMonth() {
+  navMonth++;
+  if(navMonth > 11) { navMonth = 0; navYear++; }
+  render();
+}
+
+function getMieter() { return getData(KEYS.mieter, DEFAULT_MIETER); }
+function saveMieter(arr) { setData(KEYS.mieter, arr); syncToFirebase(user.uid); }
+
+function markBezahlt(idx) {
+  var arr = getMieter();
+  if(!arr[idx]) return;
+  var m = arr[idx];
+  m.status = 'bezahlt';
+  addNotif('💰', 'Zahlung von ' + m.name + ' eingetragen');
+  saveMieter(arr);
+  render();
+}
+
+function markOffen(idx) {
+  var arr = getMieter();
+  if(!arr[idx]) return;
+  arr[idx].status = 'offen';
+  saveMieter(arr);
+  render();
+}
+
+function whatsappMahnung(tel, name, miete) {
+  var text = encodeURIComponent('Guten Tag ' + name + ',\n\nIhre Miete von €' + fmt(miete) + ' ist noch ausstehend. Bitte überweisen Sie den Betrag schnellstmöglich.\n\nMit freundlichen Grüßen\nIhr Vermieter');
+  window.open('https://wa.me/' + tel + '?text=' + text, '_blank');
+}
+
+function getFaelligTag() {
+  return String(navYear) + '-' + String(navMonth+1).padStart(2,'0') + '-01';
+}
+
+function render() {
+  var mieter = getMieter();
+  var gesamt = mieter.reduce(function(s,m){ return s + (m.miete||0); }, 0);
+  var eingegangen = mieter.filter(function(m){ return m.status==='bezahlt'; }).reduce(function(s,m){ return s + (m.miete||0); }, 0);
+  var ausstehend = gesamt - eingegangen;
+  var bezahltAnz = mieter.filter(function(m){ return m.status==='bezahlt'; }).length;
+  var quote = gesamt > 0 ? Math.round((eingegangen/gesamt)*100) : 0;
+
+  var faelligStr = '01.' + String(navMonth+1).padStart(2,'0') + '.' + navYear;
+
+  // Month header
+  var headerHTML = '<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">'
+    + '<button onclick="prevMonth()" style="width:36px;height:36px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">‹</button>'
+    + '<div style="font-size:20px;font-weight:700;color:#0f172a;min-width:220px;text-align:center;">Zahlungsübersicht – ' + MONATE[navMonth] + ' ' + navYear + '</div>'
+    + '<button onclick="nextMonth()" style="width:36px;height:36px;border-radius:9px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">›</button>'
+    + '</div>';
+
+  // KPI cards
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">'
+    // Gesamt
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Gesamt Einnahmen</div>'
+    + '<div style="font-size:26px;font-weight:700;color:#16a34a;">€ ' + fmt(gesamt) + '</div>'
+    + '<div style="font-size:12px;color:#94a3b8;margin-top:4px;">' + mieter.length + ' Mieteinheiten</div>'
+    + '</div>'
+    // Eingegangen
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Eingegangen</div>'
+    + '<div style="font-size:26px;font-weight:700;color:#2563eb;">€ ' + fmt(eingegangen) + '</div>'
+    + '<div style="font-size:12px;color:#94a3b8;margin-top:4px;">' + bezahltAnz + ' von ' + mieter.length + ' Mietern</div>'
+    + '</div>'
+    // Ausstehend
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Ausstehend</div>'
+    + '<div style="font-size:26px;font-weight:700;color:#dc2626;">€ ' + fmt(ausstehend) + '</div>'
+    + '<div style="margin-top:10px;background:#f1f5f9;border-radius:99px;height:6px;overflow:hidden;">'
+    + '<div style="height:100%;background:' + (quote>=80?'#16a34a':quote>=50?'#d97706':'#dc2626') + ';width:' + quote + '%;border-radius:99px;transition:width 0.4s;"></div>'
+    + '</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-top:4px;">Zahlungsquote: ' + quote + '%</div>'
+    + '</div>'
+    + '</div>';
+
+  // Table
+  var tableHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">'
+    + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Mieter</th>'
+    + '<th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Wohnung</th>'
+    + '<th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Betrag</th>'
+    + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Fällig am</th>'
+    + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Status</th>'
+    + '<th style="padding:12px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Aktionen</th>'
+    + '</tr></thead><tbody>';
+
+  mieter.forEach(function(m, idx) {
+    var isBezahlt = m.status === 'bezahlt';
+    var rowBg = idx % 2 === 0 ? 'white' : '#fafbfc';
+    tableHTML += '<tr style="border-bottom:1px solid #f1f5f9;background:' + rowBg + ';" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'' + rowBg + '\'">'
+      + '<td style="padding:14px 16px;">'
+      + '<div style="display:flex;align-items:center;gap:10px;">'
+      + '<div style="width:34px;height:34px;background:#eff6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#2563eb;flex-shrink:0;">' + m.name.charAt(0) + '</div>'
+      + '<div><div style="font-size:14px;font-weight:600;color:#0f172a;">' + m.name + '</div>'
+      + (m.em ? '<div style="font-size:12px;color:#94a3b8;">' + m.em + '</div>' : '')
+      + '</div></div></td>'
+      + '<td style="padding:14px 16px;"><span style="background:#f1f5f9;color:#475569;font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;">' + m.wn + '</span></td>'
+      + '<td style="padding:14px 16px;text-align:right;font-size:15px;font-weight:700;color:#0f172a;">€ ' + fmt(m.miete) + '</td>'
+      + '<td style="padding:14px 16px;text-align:center;font-size:13px;color:#64748b;">' + faelligStr + '</td>'
+      + '<td style="padding:14px 16px;text-align:center;">'
+      + (isBezahlt
+        ? '<button onclick="markOffen(' + idx + ')" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #bbf7d0;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Bezahlt</button>'
+        : '<button onclick="markBezahlt(' + idx + ')" style="background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✗ Offen</button>'
+      )
+      + '</td>'
+      + '<td style="padding:14px 16px;text-align:center;">'
+      + '<div style="display:flex;gap:6px;justify-content:center;">'
+      + (!isBezahlt ? '<button onclick="whatsappMahnung(\'' + m.tel + '\',\'' + m.name + '\',' + m.miete + ')" title="WhatsApp Mahnung senden" style="width:34px;height:34px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">💬</button>' : '')
+      + (isBezahlt ? '' : '<button onclick="markBezahlt(' + idx + ')" title="Als bezahlt markieren" style="width:34px;height:34px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">📩</button>')
+      + '</div></td></tr>';
+  });
+
+  tableHTML += '</tbody></table>'
+    + '<div style="padding:14px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;display:flex;align-items:center;gap:6px;">'
+    + '<span style="font-weight:600;color:#0f172a;">Zahlungsquote:</span>'
+    + '<span>' + bezahltAnz + ' von ' + mieter.length + ' Mietern haben bezahlt</span>'
+    + '<span style="margin-left:auto;font-weight:700;color:' + (quote>=80?'#16a34a':quote>=50?'#d97706':'#dc2626') + ';">' + quote + '%</span>'
+    + '</div></div>';
+
+  var mainHTML = headerHTML + kpiHTML + tableHTML;
+
+  renderLayout('zahlungen', 'Zahlungen & Bank', '', mainHTML, '');
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

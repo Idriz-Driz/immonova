@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – ⚙️ Einstellungen</title>
+<title>ImmoNova – Einstellungen</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
@@ -14,17 +14,318 @@
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('einstellungen','⚙️ Einstellungen','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">⚙️</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">⚙️ Einstellungen</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var activeTab = 'profil';
+
+// ---- Plan-Konfiguration ----
+var PLAN_CONFIG = {
+  starter: {
+    label: 'Starter',
+    farbe: '#2563eb',
+    bg: '#eff6ff',
+    features: ['5 Einheiten', 'Dashboard', 'Mieter-Verwaltung', 'Ticket-System', 'Basis-Berichte']
+  },
+  pro: {
+    label: 'Pro',
+    farbe: '#7c3aed',
+    bg: '#f5f3ff',
+    features: ['50 Einheiten', 'Alles aus Starter', 'CRM & Interessenten', 'Erweiterte Berichte', 'Handwerker-Portal']
+  },
+  business: {
+    label: 'Business',
+    farbe: '#d97706',
+    bg: '#fffbeb',
+    features: ['200 Einheiten', 'Alles aus Pro', 'API-Zugang', 'Prioritätssupport', 'Team-Funktionen']
+  },
+  enterprise: {
+    label: 'Enterprise',
+    farbe: '#0f172a',
+    bg: '#f1f5f9',
+    features: ['Unbegrenzte Einheiten', 'Alles aus Business', 'Dedizierter Betreuer', 'SLA-Garantie', 'Custom Integrationen']
+  }
+};
+
+function setTab(t) {
+  activeTab = t;
+  render();
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function saveProfile() {
+  var vn = document.getElementById('p-vn') ? document.getElementById('p-vn').value.trim() : '';
+  var nn = document.getElementById('p-nn') ? document.getElementById('p-nn').value.trim() : '';
+  var tel = document.getElementById('p-tel') ? document.getElementById('p-tel').value.trim() : '';
+  var firma = document.getElementById('p-firma') ? document.getElementById('p-firma').value.trim() : '';
+  if(!vn) { alert('Bitte Vornamen eingeben.'); return; }
+  var fullName = (vn + ' ' + nn).trim();
+  localStorage.setItem('in_user_name', fullName);
+  localStorage.setItem('in_user_tel', tel);
+  localStorage.setItem('in_user_firma', firma);
+  addNotif('✅', 'Profil aktualisiert: ' + fullName);
+  syncToFirebase(user.uid);
+  var msg = document.getElementById('profil-msg');
+  if(msg) { msg.style.display='block'; setTimeout(function(){ msg.style.display='none'; }, 3500); }
+}
+
+function changePassword() {
+  var pw1 = document.getElementById('pw-neu') ? document.getElementById('pw-neu').value : '';
+  var pw2 = document.getElementById('pw-best') ? document.getElementById('pw-best').value : '';
+  if(!pw1 || pw1.length < 6) { alert('Neues Passwort muss mindestens 6 Zeichen haben.'); return; }
+  if(pw1 !== pw2) { alert('Passwörter stimmen nicht überein.'); return; }
+  if(typeof firebase !== 'undefined' && firebase.auth().currentUser) {
+    firebase.auth().currentUser.updatePassword(pw1).then(function(){
+      addNotif('🔒', 'Passwort erfolgreich geändert');
+      var msg = document.getElementById('pw-msg');
+      if(msg) { msg.style.display='block'; msg.textContent='Passwort erfolgreich geändert ✅'; setTimeout(function(){ msg.style.display='none'; }, 3500); }
+    }).catch(function(e){
+      var msg = document.getElementById('pw-msg');
+      if(msg) { msg.style.display='block'; msg.style.color='#dc2626'; msg.textContent='Fehler: ' + e.message; setTimeout(function(){ msg.style.display='none'; }, 4000); }
+    });
+  } else {
+    var msg = document.getElementById('pw-msg');
+    if(msg) { msg.style.display='block'; msg.textContent='Passwort geändert (Demo-Modus) ✅'; setTimeout(function(){ msg.style.display='none'; }, 3000); }
+  }
+}
+
+function deleteAccount() {
+  if(confirm('Bist du sicher? Dein Konto und alle Daten werden unwiderruflich gelöscht!')) {
+    if(confirm('Letzte Warnung: Alle Daten gehen verloren. Wirklich fortfahren?')) {
+      if(typeof firebase !== 'undefined' && firebase.auth().currentUser) {
+        firebase.auth().currentUser.delete().then(function(){
+          localStorage.clear();
+          window.location.href='login.html';
+        }).catch(function(e){ alert('Fehler beim Löschen: ' + e.message); });
+      } else {
+        localStorage.clear();
+        window.location.href='login.html';
+      }
+    }
+  }
+}
+
+function render() {
+  var u = getUser();
+  var planKey = (u.plan||'starter').toLowerCase();
+  var plan = PLAN_CONFIG[planKey] || PLAN_CONFIG.starter;
+
+  var nameParts = u.name.split(' ');
+  var vn = nameParts[0] || '';
+  var nn = nameParts.slice(1).join(' ') || '';
+  var tel = localStorage.getItem('in_user_tel') || '';
+  var firma = localStorage.getItem('in_user_firma') || '';
+  var initial = (u.name||'A')[0].toUpperCase();
+
+  // ---- Tab-Button Helper ----
+  function tabBtn(id, label) {
+    var active = activeTab === id;
+    return '<button onclick="setTab(\'' + id + '\')" style="padding:12px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;font-family:inherit;color:' + (active?'#2563eb':'#64748b') + ';border-bottom:2px solid ' + (active?'#2563eb':'transparent') + ';transition:all 0.15s;white-space:nowrap;">' + label + '</button>';
+  }
+
+  // ===== TAB: PROFIL =====
+  var profilHTML =
+    '<div style="max-width:560px;margin:0 auto;">'
+
+    // Avatar
+    + '<div style="text-align:center;margin-bottom:28px;">'
+      + '<div style="width:80px;height:80px;background:#2563eb;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:white;margin-bottom:12px;box-shadow:0 4px 14px rgba(37,99,235,0.35);">' + initial + '</div>'
+      + '<div style="font-size:16px;font-weight:700;color:#0f172a;">' + u.name + '</div>'
+      + '<div style="font-size:12px;color:#64748b;">' + u.email + '</div>'
+    + '</div>'
+
+    // Erfolgs-Meldung
+    + '<div id="profil-msg" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:16px;text-align:center;">Profil aktualisiert ✅</div>'
+
+    // Formular
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
+      + formGroup('Vorname', '<input id="p-vn" ' + inputStyle + ' value="' + vn + '" placeholder="Max">')
+      + formGroup('Nachname', '<input id="p-nn" ' + inputStyle + ' value="' + nn + '" placeholder="Mustermann">')
+    + '</div>'
+    + formGroup('E-Mail', '<input ' + inputStyle + ' value="' + u.email + '" readonly style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#94a3b8;background:#f8fafc;outline:none;box-sizing:border-box;">')
+    + formGroup('Telefon', '<input id="p-tel" ' + inputStyle + ' value="' + tel + '" placeholder="+49 151 ...">')
+    + formGroup('Firma / Organisation', '<input id="p-firma" ' + inputStyle + ' value="' + firma + '" placeholder="Muster Immobilien GmbH">')
+    + formGroup('Aktueller Plan', '<div style="padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;"><span style="font-size:14px;color:#94a3b8;">' + plan.label + '</span><span style="background:' + plan.bg + ';color:' + plan.farbe + ';font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">' + plan.label + '</span></div>')
+
+    + '<div style="margin-top:20px;">'
+      + '<button onclick="saveProfile()" style="background:#2563eb;color:white;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.3);">Profil speichern</button>'
+    + '</div>'
+    + '</div>';
+
+  // ===== TAB: PLAN =====
+  var planHTML =
+    // Aktuelle Plan-Karte
+    '<div style="background:' + plan.bg + ';border:2px solid ' + plan.farbe + ';border-radius:16px;padding:24px;margin-bottom:24px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+        + '<div>'
+          + '<div style="font-size:12px;font-weight:600;color:' + plan.farbe + ';text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Dein aktueller Plan</div>'
+          + '<div style="font-size:24px;font-weight:700;color:#0f172a;">' + plan.label + '</div>'
+        + '</div>'
+        + '<div style="font-size:40px;">⭐</div>'
+      + '</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+        + plan.features.map(function(f){ return '<span style="background:white;color:#0f172a;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;border:1px solid ' + plan.farbe + '22;">✓ ' + f + '</span>'; }).join('')
+      + '</div>'
+    + '</div>'
+
+    // Upgrade-Button
+    + (planKey !== 'enterprise' ?
+      '<div style="margin-bottom:24px;">'
+        + '<button onclick="alert(\'Plan-Upgrade wird demnächst freigeschaltet. Kontaktiere uns unter: info@immonova.de\')" style="background:#2563eb;color:white;border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.3);">Plan upgraden →</button>'
+        + '<span style="font-size:12px;color:#64748b;margin-left:14px;">Jederzeit kündbar</span>'
+      + '</div>'
+    : '')
+
+    // Alle Pläne Vergleich
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);margin-bottom:24px;">'
+      + '<div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:700;">📋 Plan-Vergleich</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;">'
+        + Object.keys(PLAN_CONFIG).map(function(pk) {
+            var pc = PLAN_CONFIG[pk];
+            var isActive = pk === planKey;
+            return '<div style="padding:16px;border-right:1px solid #f1f5f9;' + (isActive?'background:'+pc.bg+';':'' ) + '">'
+              + '<div style="font-size:14px;font-weight:700;color:' + pc.farbe + ';margin-bottom:10px;">' + pc.label + (isActive?' ✓':'') + '</div>'
+              + pc.features.map(function(f){ return '<div style="font-size:11px;color:#64748b;margin-bottom:5px;">• ' + f + '</div>'; }).join('')
+              + '</div>';
+          }).join('')
+      + '</div>'
+    + '</div>'
+
+    // Rechnungen
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+      + '<div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:700;">🧾 Rechnungen & Abonnement</div>'
+      + '<div style="padding:16px 20px;">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;">'
+          + '<div>'
+            + '<div style="font-size:13px;font-weight:600;color:#0f172a;">Testphase – kostenlos</div>'
+            + '<div style="font-size:12px;color:#16a34a;">Kostenlos bis 30.04.2026</div>'
+          + '</div>'
+          + '<span style="background:#16a34a;color:white;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;">Aktiv</span>'
+        + '</div>'
+        + '<div style="margin-top:12px;font-size:12px;color:#64748b;padding:0 4px;">Danach: 29€/Monat für ' + plan.label + '. Keine versteckten Kosten.</div>'
+      + '</div>'
+    + '</div>';
+
+  // ===== TAB: SICHERHEIT =====
+  var isAdmin = (u.uid === 'admin');
+  var sicherheitHTML =
+    // Passwort-Ändern
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:24px;">'
+
+      + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+        + '<div style="font-size:15px;font-weight:700;margin-bottom:18px;">🔒 Passwort ändern</div>'
+
+        + (isAdmin ?
+          '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;font-size:13px;color:#d97706;font-weight:500;">⚠️ Demo-Konto – Passwort nicht änderbar</div>'
+        :
+          '<div>'
+            + '<div id="pw-msg" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:14px;"></div>'
+            + formGroup('Neues Passwort', '<input id="pw-neu" type="password" ' + inputStyle + ' placeholder="Mindestens 6 Zeichen">')
+            + formGroup('Passwort bestätigen', '<input id="pw-best" type="password" ' + inputStyle + ' placeholder="Passwort wiederholen">')
+            + '<button onclick="changePassword()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:11px 22px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;">Passwort speichern</button>'
+          + '</div>'
+        )
+        + '</div>'
+
+      // Anmelde-Protokoll
+      + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+        + '<div style="font-size:15px;font-weight:700;margin-bottom:16px;">📋 Anmelde-Protokoll</div>'
+        + '<table style="width:100%;border-collapse:collapse;">'
+          + '<thead><tr>'
+            + '<th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Zeit</th>'
+            + '<th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Browser</th>'
+            + '<th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">System</th>'
+            + '<th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Status</th>'
+          + '</tr></thead>'
+          + '<tbody>'
+            + [
+                {zeit:'Heute 09:12', br:'Chrome', sys:'Windows', ok:true},
+                {zeit:'Gestern 18:44', br:'Chrome', sys:'Windows', ok:true},
+                {zeit:'26.03.2026 11:05', br:'Firefox', sys:'Windows', ok:true},
+                {zeit:'25.03.2026 08:30', br:'Safari', sys:'macOS', ok:false}
+              ].map(function(log){
+                return '<tr onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
+                  + '<td style="padding:9px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;">' + log.zeit + '</td>'
+                  + '<td style="padding:9px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;">' + log.br + '</td>'
+                  + '<td style="padding:9px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b;">' + log.sys + '</td>'
+                  + '<td style="padding:9px 10px;border-bottom:1px solid #f1f5f9;">'
+                    + '<span style="font-size:11px;font-weight:600;background:' + (log.ok?'#f0fdf4':'#fef2f2') + ';color:' + (log.ok?'#16a34a':'#dc2626') + ';padding:2px 8px;border-radius:20px;">'
+                    + (log.ok?'✅ Erfolgreich':'❌ Fehlgeschlagen') + '</span>'
+                  + '</td>'
+                  + '</tr>';
+              }).join('')
+          + '</tbody>'
+        + '</table>'
+      + '</div>'
+    + '</div>'
+
+    // Admin-Bereich
+    + (isAdmin ?
+      '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.06);margin-bottom:24px;">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+          + '<div style="font-size:15px;font-weight:700;">🛡️ Admin-Bereich</div>'
+          + '<span style="background:#fef2f2;color:#dc2626;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">Nur Admin</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#64748b;margin-bottom:16px;">Im echten System würde hier eine Live-Liste aller Firebase-Nutzer erscheinen.</div>'
+        + '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">'
+          + '<table style="width:100%;border-collapse:collapse;">'
+            + '<thead><tr>'
+              + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;background:#f8fafc;">Name</th>'
+              + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;background:#f8fafc;">E-Mail</th>'
+              + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;background:#f8fafc;">Plan</th>'
+              + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;background:#f8fafc;">Status</th>'
+            + '</tr></thead>'
+            + '<tbody>'
+              + '<tr><td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:13px;">Max Mustermann</td><td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">max@mustermann.de</td><td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;"><span style="background:#eff6ff;color:#2563eb;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;">Starter</span></td><td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;"><span style="background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;">✅ Aktiv</span></td></tr>'
+              + '<tr><td style="padding:10px 14px;font-size:13px;">Anna Schmidt</td><td style="padding:10px 14px;font-size:13px;color:#64748b;">anna@schmidt.de</td><td style="padding:10px 14px;"><span style="background:#f5f3ff;color:#7c3aed;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;">Pro</span></td><td style="padding:10px 14px;"><span style="background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;">✅ Aktiv</span></td></tr>'
+            + '</tbody>'
+          + '</table>'
+        + '</div>'
+      + '</div>'
+    : '')
+
+    // Konto löschen
+    + '<div style="background:white;border:1px solid #fecaca;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+      + '<div style="font-size:15px;font-weight:700;color:#dc2626;margin-bottom:8px;">⚠️ Gefahrenzone</div>'
+      + '<div style="font-size:13px;color:#64748b;margin-bottom:16px;">Das Löschen deines Kontos ist unwiderruflich. Alle Daten, Mieter und Dokumente werden permanent entfernt.</div>'
+      + '<button onclick="deleteAccount()" style="background:white;color:#dc2626;border:2px solid #dc2626;border-radius:9px;padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Konto unwiderruflich löschen</button>'
+    + '</div>';
+
+  // ===== ABMELDEN-BEREICH =====
+  var abmeldenHTML =
+    '<div style="margin-top:20px;padding-top:20px;border-top:1px solid #e2e8f0;">'
+      + '<button onclick="doLogout()" style="background:white;color:#64748b;border:1px solid #e2e8f0;border-radius:9px;padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;">🚪 Abmelden</button>'
+    + '</div>';
+
+  // ===== ZUSAMMENBAUEN =====
+  var tabContent = activeTab === 'profil' ? profilHTML : activeTab === 'plan' ? planHTML : sicherheitHTML;
+
+  var main =
+    '<div style="max-width:900px;">'
+
+      // Seiten-Überschrift
+      + '<div style="margin-bottom:20px;">'
+        + '<div style="font-size:20px;font-weight:700;color:#0f172a;">⚙️ Einstellungen</div>'
+        + '<div style="font-size:13px;color:#64748b;margin-top:3px;">Profil, Plan und Sicherheits-Einstellungen</div>'
+      + '</div>'
+
+      // Tab-Leiste
+      + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">'
+        + '<div style="display:flex;border-bottom:2px solid #e2e8f0;padding:0 4px;overflow-x:auto;">'
+          + tabBtn('profil', '👤 Profil')
+          + tabBtn('plan', '💎 Plan & Abonnement')
+          + tabBtn('sicherheit', '🔒 Sicherheit')
+        + '</div>'
+        + '<div style="padding:28px;">'
+          + tabContent
+        + '</div>'
+      + '</div>'
+
+      + abmeldenHTML
+
+    + '</div>';
+
+  renderLayout('einstellungen', 'Einstellungen', '', main, '');
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

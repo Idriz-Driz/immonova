@@ -1,30 +1,239 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 🔢 Zählerstände</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zählerstände – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('zaehler','🔢 Zählerstände','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">🔢</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">🔢 Zählerstände</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var erfassenId = null;
+
+var DEMO_ZAEHLER = [
+  { id: 3001, wn: 'EG',    mieter: 'Idriz Osmanaj',  strom_vor: 12450, strom_akt: 12680, wasser_k_vor: 245, wasser_k_akt: 252, wasser_w_vor: 48,  wasser_w_akt: 51,  datum: '2026-03-01' },
+  { id: 3002, wn: '1 OG',  mieter: 'Max Mustermann', strom_vor: 8920,  strom_akt: 9105,  wasser_k_vor: 189, wasser_k_akt: 195, wasser_w_vor: 34,  wasser_w_akt: 37,  datum: '2026-03-01' },
+  { id: 3003, wn: '2 OG',  mieter: 'Anna Schmidt',   strom_vor: 11200, strom_akt: 11380, wasser_k_vor: 212, wasser_k_akt: 218, wasser_w_vor: 42,  wasser_w_akt: 44,  datum: '2026-03-01' }
+];
+
+// Average strom diff per unit for highlighting
+var AVG_STROM_DIFF = 200;
+
+function getZaehler() {
+  var stored = getData(KEYS.zaehler, null);
+  if(!stored || stored.length === 0) {
+    setData(KEYS.zaehler, DEMO_ZAEHLER);
+    return DEMO_ZAEHLER;
+  }
+  return stored;
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function saveZaehler(arr) { setData(KEYS.zaehler, arr); syncToFirebase(user.uid); }
+
+function openErfassen(id) {
+  erfassenId = id;
+  var arr = getZaehler();
+  var z = arr.find(function(x){ return x.id === id; });
+  if(!z) return;
+  document.getElementById('z-wn').value = z.wn + ' – ' + z.mieter;
+  document.getElementById('z-strom').value = '';
+  document.getElementById('z-wasser-k').value = '';
+  document.getElementById('z-wasser-w').value = '';
+  document.getElementById('z-datum').value = today();
+  // Show hints (previous values)
+  document.getElementById('z-hint-strom').textContent = 'Letzter Stand: ' + fmt(z.strom_akt) + ' kWh';
+  document.getElementById('z-hint-wk').textContent = 'Letzter Stand: ' + fmt(z.wasser_k_akt) + ' m³';
+  document.getElementById('z-hint-ww').textContent = 'Letzter Stand: ' + fmt(z.wasser_w_akt) + ' m³';
+  showModal('zae-modal');
+}
+
+function saveErfassung() {
+  var stromNeu = parseFloat(document.getElementById('z-strom').value);
+  var wasserKNeu = parseFloat(document.getElementById('z-wasser-k').value);
+  var wasserWNeu = parseFloat(document.getElementById('z-wasser-w').value);
+  var datum = document.getElementById('z-datum').value;
+
+  if(isNaN(stromNeu) || isNaN(wasserKNeu) || isNaN(wasserWNeu)) {
+    alert('Bitte alle Zählerwerte eingeben.');
+    return;
+  }
+
+  var arr = getZaehler();
+  var z = arr.find(function(x){ return x.id === erfassenId; });
+  if(!z) return;
+
+  z.strom_vor = z.strom_akt;
+  z.strom_akt = stromNeu;
+  z.wasser_k_vor = z.wasser_k_akt;
+  z.wasser_k_akt = wasserKNeu;
+  z.wasser_w_vor = z.wasser_w_akt;
+  z.wasser_w_akt = wasserWNeu;
+  z.datum = datum;
+
+  saveZaehler(arr);
+  addNotif('🔢', 'Zählerstand für ' + z.wn + ' (' + z.mieter + ') erfasst');
+  hideModal('zae-modal');
+  render();
+}
+
+function diffColor(diff, avg) {
+  if(avg && diff > avg * 1.5) return '#dc2626';
+  return '#16a34a';
+}
+
+function renderZaehlerRow(label, vor, akt, einheit, avg) {
+  var diff = akt - vor;
+  var col = diffColor(diff, avg);
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+    + '<div style="font-size:13px;color:#64748b;font-weight:500;">' + label + '</div>'
+    + '<div style="display:flex;align-items:center;gap:16px;">'
+    + '<div style="text-align:right;">'
+    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:1px;">Vorher</div>'
+    + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + fmt(vor) + ' ' + einheit + '</div>'
+    + '</div>'
+    + '<div style="font-size:18px;color:#cbd5e1;">→</div>'
+    + '<div style="text-align:right;">'
+    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:1px;">Aktuell</div>'
+    + '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + fmt(akt) + ' ' + einheit + '</div>'
+    + '</div>'
+    + '<div style="min-width:72px;text-align:right;">'
+    + '<div style="font-size:11px;color:#94a3b8;margin-bottom:1px;">Differenz</div>'
+    + '<div style="font-size:13px;font-weight:700;color:' + col + ';">+' + fmt(diff) + ' ' + einheit + '</div>'
+    + '</div>'
+    + '</div></div>';
+}
+
+function render() {
+  var alle = getZaehler();
+  var gesamtStrom = alle.reduce(function(s,z){ return s + (z.strom_akt - z.strom_vor); }, 0);
+  var letzteErfassung = alle.reduce(function(best, z){ return !best || z.datum > best ? z.datum : best; }, null);
+  var erfassteAnz = alle.length;
+
+  // KPI
+  var kpiHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;">'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Erfasste Einheiten</div>'
+    + '<div style="font-size:26px;font-weight:700;color:#2563eb;">' + erfassteAnz + '</div>'
+    + '</div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #16a34a;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Letzte Erfassung</div>'
+    + '<div style="font-size:18px;font-weight:700;color:#16a34a;">' + (letzteErfassung ? fmtDate(letzteErfassung) : '–') + '</div>'
+    + '</div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<div style="font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Gesamtverbrauch Strom</div>'
+    + '<div style="font-size:26px;font-weight:700;color:#d97706;">+ ' + fmt(gesamtStrom) + ' kWh</div>'
+    + '</div>'
+    + '</div>';
+
+  // Cards grid
+  var cardsHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;">';
+  alle.forEach(function(z) {
+    var stromDiff = z.strom_akt - z.strom_vor;
+    var stromHoch = stromDiff > AVG_STROM_DIFF * 1.5;
+
+    cardsHTML += '<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 6px 20px rgba(0,0,0,0.1)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,0.06)\'">'
+      // Card header
+      + '<div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">'
+      + '<div>'
+      + '<div style="font-size:16px;font-weight:700;color:white;">' + z.wn + '</div>'
+      + '<div style="font-size:12px;color:#94a3b8;margin-top:2px;">👤 ' + z.mieter + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;">'
+      + '<div style="font-size:11px;color:#64748b;margin-bottom:2px;">Erfasst am</div>'
+      + '<div style="font-size:12px;color:#94a3b8;font-weight:600;">' + fmtDate(z.datum) + '</div>'
+      + '</div>'
+      + '</div>'
+      // Card body
+      + '<div style="padding:16px 20px;">'
+      // Strom row
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
+      + '<span style="font-size:18px;">⚡</span>'
+      + '<div><div style="font-size:13px;font-weight:600;color:#0f172a;">Strom</div><div style="font-size:11px;color:#94a3b8;">kWh</div></div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:14px;">'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Vorher</div><div style="font-size:12px;font-weight:600;color:#64748b;">' + fmt(z.strom_vor) + '</div></div>'
+      + '<div style="color:#cbd5e1;font-size:16px;">→</div>'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Aktuell</div><div style="font-size:12px;font-weight:700;color:#0f172a;">' + fmt(z.strom_akt) + '</div></div>'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Diff.</div><div style="font-size:13px;font-weight:700;color:' + (stromHoch?'#dc2626':'#16a34a') + ';">+' + fmt(stromDiff) + '</div></div>'
+      + (stromHoch ? '<span style="background:#fef2f2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Hoch</span>' : '')
+      + '</div></div>'
+      // Wasser kalt
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;">'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
+      + '<span style="font-size:18px;">💧</span>'
+      + '<div><div style="font-size:13px;font-weight:600;color:#0f172a;">Wasser kalt</div><div style="font-size:11px;color:#94a3b8;">m³</div></div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:14px;">'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Vorher</div><div style="font-size:12px;font-weight:600;color:#64748b;">' + fmt(z.wasser_k_vor) + '</div></div>'
+      + '<div style="color:#cbd5e1;font-size:16px;">→</div>'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Aktuell</div><div style="font-size:12px;font-weight:700;color:#0f172a;">' + fmt(z.wasser_k_akt) + '</div></div>'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Diff.</div><div style="font-size:13px;font-weight:700;color:#16a34a;">+' + fmt(z.wasser_k_akt - z.wasser_k_vor) + '</div></div>'
+      + '</div></div>'
+      // Wasser warm
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;">'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
+      + '<span style="font-size:18px;">🔥</span>'
+      + '<div><div style="font-size:13px;font-weight:600;color:#0f172a;">Wasser warm</div><div style="font-size:11px;color:#94a3b8;">m³</div></div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:14px;">'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Vorher</div><div style="font-size:12px;font-weight:600;color:#64748b;">' + fmt(z.wasser_w_vor) + '</div></div>'
+      + '<div style="color:#cbd5e1;font-size:16px;">→</div>'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Aktuell</div><div style="font-size:12px;font-weight:700;color:#0f172a;">' + fmt(z.wasser_w_akt) + '</div></div>'
+      + '<div style="text-align:right;min-width:70px;"><div style="font-size:10px;color:#94a3b8;">Diff.</div><div style="font-size:13px;font-weight:700;color:#16a34a;">+' + fmt(z.wasser_w_akt - z.wasser_w_vor) + '</div></div>'
+      + '</div></div>'
+      + '</div>'
+      // Card footer
+      + '<div style="padding:12px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;">'
+      + '<button onclick="openErfassen(' + z.id + ')" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;">'
+      + '✏️ Erfassen'
+      + '</button></div>'
+      + '</div>';
+  });
+  cardsHTML += '</div>';
+
+  var mainHTML = kpiHTML + cardsHTML;
+
+  // Modal
+  var modalsHTML = '<div id="zae-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
+    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
+    + '<div style="font-size:16px;font-weight:700;">🔢 Zählerstand erfassen</div>'
+    + '<button onclick="hideModal(\'zae-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;">✕</button>'
+    + '</div>'
+    + formGroup('Wohneinheit', '<input id="z-wn" type="text" readonly ' + inputStyle + ' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#64748b;background:#f8fafc;outline:none;box-sizing:border-box;">')
+    + '<div style="margin-bottom:14px;">'
+    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">⚡ Strom (kWh)</label>'
+    + '<input id="z-strom" type="number" step="0.1" placeholder="Aktueller Zählerstand..." ' + inputStyle + '>'
+    + '<div id="z-hint-strom" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>'
+    + '</div>'
+    + '<div style="margin-bottom:14px;">'
+    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">💧 Wasser kalt (m³)</label>'
+    + '<input id="z-wasser-k" type="number" step="0.001" placeholder="Aktueller Zählerstand..." ' + inputStyle + '>'
+    + '<div id="z-hint-wk" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>'
+    + '</div>'
+    + '<div style="margin-bottom:14px;">'
+    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">🔥 Wasser warm (m³)</label>'
+    + '<input id="z-wasser-w" type="number" step="0.001" placeholder="Aktueller Zählerstand..." ' + inputStyle + '>'
+    + '<div id="z-hint-ww" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>'
+    + '</div>'
+    + formGroup('Datum der Erfassung', '<input id="z-datum" type="date" ' + inputStyle + '>')
+    + '<div style="display:flex;gap:10px;margin-top:20px;">'
+    + '<button onclick="saveErfassung()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
+    + '<button onclick="hideModal(\'zae-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div></div></div>';
+
+  renderLayout('zaehler', 'Zählerstände', '', mainHTML, modalsHTML);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

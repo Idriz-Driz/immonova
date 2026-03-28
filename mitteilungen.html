@@ -1,30 +1,194 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 📢 Haus-Mitteilungen</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Haus-Mitteilungen – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('mitteilungen','📢 Haus-Mitteilungen','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">📢</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">📢 Haus-Mitteilungen</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var activeFilter = 'alle';
+
+var DEMO_MITTEILUNGEN = [
+  { id: 1001, ttl: 'Wartungsarbeiten Aufzug', txt: 'Der Aufzug wird am 15. März gewartet. Wir bitten alle Mieter, in diesem Zeitraum die Treppe zu nutzen. Die Arbeiten dauern voraussichtlich von 8:00 bis 16:00 Uhr.', kat: 'Wichtig', ablauf: '2026-04-01', datum: '2026-03-01', mieterCount: 5 },
+  { id: 1002, ttl: 'Neuer Hausmeister', txt: 'Wir begrüßen Herrn Schmidt als neuen Hausmeister. Er ist montags bis freitags von 8 bis 12 Uhr erreichbar. Bei Fragen und Anliegen können Sie sich direkt an ihn wenden.', kat: 'Info', ablauf: '2026-06-01', datum: '2026-03-10', mieterCount: 5 }
+];
+
+function getMitteilungen() {
+  var stored = getData(KEYS.mitteilungen, null);
+  if(!stored || stored.length === 0) {
+    setData(KEYS.mitteilungen, DEMO_MITTEILUNGEN);
+    return DEMO_MITTEILUNGEN;
+  }
+  return stored;
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function saveMitteilungen(arr) { setData(KEYS.mitteilungen, arr); syncToFirebase(user.uid); }
+
+function isAbgelaufen(m) {
+  if(!m.ablauf) return false;
+  return m.ablauf < today();
+}
+
+function katColor(kat) {
+  if(kat==='Dringend') return '#dc2626';
+  if(kat==='Wichtig') return '#d97706';
+  return '#2563eb';
+}
+
+function katIcon(kat) {
+  if(kat==='Dringend') return '🚨';
+  if(kat==='Wichtig') return '⚠️';
+  return 'ℹ️';
+}
+
+function katBadge(kat) {
+  var c = kat==='Dringend'?'red':kat==='Wichtig'?'yellow':'blue';
+  return badge(kat, c);
+}
+
+function setFilter(f) {
+  activeFilter = f;
+  render();
+}
+
+function deleteMitteilung(id) {
+  if(!confirm('Mitteilung wirklich löschen?')) return;
+  var arr = getMitteilungen().filter(function(m){ return m.id !== id; });
+  saveMitteilungen(arr);
+  render();
+}
+
+function sendeMitteilung() {
+  var ttl = document.getElementById('m-ttl').value.trim();
+  var txt = document.getElementById('m-txt').value.trim();
+  var kat = document.getElementById('m-kat').value;
+  var ablauf = document.getElementById('m-ablauf').value;
+  if(!ttl || !txt) { alert('Bitte Titel und Text ausfüllen.'); return; }
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  var count = mieter.length;
+  var arr = getMitteilungen();
+  arr.unshift({ id: Date.now(), ttl: ttl, txt: txt, kat: kat, ablauf: ablauf, datum: today(), mieterCount: count });
+  saveMitteilungen(arr);
+  addNotif('📢', 'Mitteilung "' + ttl.substring(0,30) + '" an ' + count + ' Mieter gesendet');
+  hideModal('mit-modal');
+  var msg = document.getElementById('mit-success');
+  if(msg) { msg.textContent = 'Mitteilung an ' + count + ' Mieter gesendet'; msg.style.display='block'; setTimeout(function(){ msg.style.display='none'; }, 3000); }
+  render();
+}
+
+function render() {
+  var alle = getMitteilungen();
+  var t = today();
+
+  var filterFns = {
+    'alle': function(){ return true; },
+    'aktive': function(m){ return !isAbgelaufen(m); },
+    'abgelaufen': function(m){ return isAbgelaufen(m); },
+    'Info': function(m){ return m.kat==='Info'; },
+    'Wichtig': function(m){ return m.kat==='Wichtig'; },
+    'Dringend': function(m){ return m.kat==='Dringend'; }
+  };
+
+  var filtered = alle.filter(filterFns[activeFilter] || function(){ return true; });
+
+  // Stats
+  var aktiveAnz = alle.filter(function(m){ return !isAbgelaufen(m); }).length;
+  var abgelAnz = alle.filter(function(m){ return isAbgelaufen(m); }).length;
+
+  var statsHTML = '<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<span style="font-size:22px;">📢</span><div><div style="font-size:22px;font-weight:700;color:#0f172a;line-height:1;">' + alle.length + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Gesamt</div></div></div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<span style="font-size:22px;">✅</span><div><div style="font-size:22px;font-weight:700;color:#16a34a;line-height:1;">' + aktiveAnz + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Aktive</div></div></div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<span style="font-size:22px;">📁</span><div><div style="font-size:22px;font-weight:700;color:#94a3b8;line-height:1;">' + abgelAnz + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Abgelaufen</div></div></div>'
+    + '</div>';
+
+  // Filter bar
+  var filters = ['alle','aktive','abgelaufen','Info','Wichtig','Dringend'];
+  var filterLabels = { alle:'Alle', aktive:'Aktive', abgelaufen:'Abgelaufen', Info:'ℹ️ Info', Wichtig:'⚠️ Wichtig', Dringend:'🚨 Dringend' };
+  var filterHTML = '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">';
+  filters.forEach(function(f) {
+    var active = activeFilter === f;
+    filterHTML += '<button onclick="setFilter(\'' + f + '\')" style="padding:7px 16px;border:1.5px solid ' + (active?'#2563eb':'#e2e8f0') + ';border-radius:9px;background:' + (active?'#2563eb':'white') + ';color:' + (active?'white':'#64748b') + ';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">' + filterLabels[f] + '</button>';
+  });
+  filterHTML += '</div>';
+
+  // Success message placeholder
+  var successHTML = '<div id="mit-success" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:14px;font-weight:600;"></div>';
+
+  // Cards
+  var cardsHTML = '';
+  if(filtered.length === 0) {
+    cardsHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:56px 24px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+      + '<div style="font-size:44px;margin-bottom:14px;">📭</div>'
+      + '<div style="font-size:16px;font-weight:600;color:#0f172a;margin-bottom:6px;">Keine Mitteilungen gefunden</div>'
+      + '<div style="font-size:13px;color:#94a3b8;">Erstelle eine neue Mitteilung über den Button oben rechts.</div>'
+      + '</div>';
+  } else {
+    cardsHTML = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    filtered.forEach(function(m) {
+      var abg = isAbgelaufen(m);
+      var col = abg ? '#94a3b8' : katColor(m.kat);
+      var opacity = abg ? '0.65' : '1';
+      cardsHTML += '<div style="background:white;border:1px solid #e2e8f0;border-left:4px solid ' + col + ';border-radius:12px;padding:20px 20px 16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);opacity:' + opacity + ';transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.08)\'" onmouseout="this.style.boxShadow=\'0 1px 3px rgba(0,0,0,0.05)\'">'
+        + '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">'
+        + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;">'
+        + '<span style="font-size:20px;">' + katIcon(m.kat) + '</span>'
+        + katBadge(m.kat)
+        + (abg ? '<span style="background:#f1f5f9;color:#94a3b8;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Abgelaufen</span>' : '')
+        + '</div>'
+        + '<button onclick="deleteMitteilung(' + m.id + ')" style="width:30px;height:30px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;cursor:pointer;font-size:13px;flex-shrink:0;display:flex;align-items:center;justify-content:center;" title="Löschen">🗑</button>'
+        + '</div>'
+        + '<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;">' + m.ttl + '</div>'
+        + '<div style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:12px;">' + m.txt + '</div>'
+        + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#94a3b8;padding-top:10px;border-top:1px solid #f1f5f9;">'
+        + '<span>📅 Erstellt: ' + fmtDate(m.datum) + '</span>'
+        + '<span>👥 Gesendet an ' + (m.mieterCount||0) + ' Mieter</span>'
+        + (m.ablauf ? '<span>⏰ Ablauf: ' + fmtDate(m.ablauf) + '</span>' : '')
+        + '</div></div>';
+    });
+    cardsHTML += '</div>';
+  }
+
+  var mainHTML = statsHTML + filterHTML + successHTML + cardsHTML;
+
+  // Modal
+  var modalsHTML = '<div id="mit-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
+    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
+    + '<div style="font-size:16px;font-weight:700;">📢 Neue Mitteilung</div>'
+    + '<button onclick="hideModal(\'mit-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;">✕</button>'
+    + '</div>'
+    + formGroup('Titel', '<input id="m-ttl" type="text" placeholder="Betreff der Mitteilung..." ' + inputStyle + '>')
+    + formGroup('Text', '<textarea id="m-txt" rows="4" placeholder="Inhalt der Mitteilung..." ' + inputStyle + ' style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>')
+    + formGroup('Kategorie',
+      '<select id="m-kat" ' + inputStyle + '>'
+      + '<option value="Info">ℹ️ Info</option>'
+      + '<option value="Wichtig">⚠️ Wichtig</option>'
+      + '<option value="Dringend">🚨 Dringend</option>'
+      + '</select>')
+    + formGroup('Ablaufdatum (optional)', '<input id="m-ablauf" type="date" ' + inputStyle + '>')
+    + '<div style="margin-top:20px;display:flex;gap:10px;">'
+    + '<button onclick="sendeMitteilung()" style="flex:1;background:#16a34a;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">📢 An alle Mieter senden</button>'
+    + '<button onclick="hideModal(\'mit-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div></div></div>';
+
+  var actionBtn = '<button onclick="showModal(\'mit-modal\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Neue Mitteilung</button>';
+
+  renderLayout('mitteilungen', 'Haus-Mitteilungen', actionBtn, mainHTML, modalsHTML);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

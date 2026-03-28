@@ -1,30 +1,243 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 📄 Dokumente & Vorlagen</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dokumente & Vorlagen – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
+  <style>
+    @media print {
+      #sidebar-root, #topbar-root, #notif-panel, .no-print { display: none !important; }
+      body { background: white !important; }
+      #print-area { padding: 40px !important; }
+    }
+  </style>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('dokumente','📄 Dokumente & Vorlagen','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">📄</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">📄 Dokumente & Vorlagen</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var currentVorlage = null;
+
+var VORLAGEN = [
+  {
+    id: 'mietvertrag',
+    ico: '📄',
+    name: 'Mietvertrag',
+    beschr: 'Standardmietvertrag für Wohnraum',
+    farbe: '#2563eb',
+    text: 'MIETVERTRAG\n\nZwischen dem Vermieter [VERMIETER] und dem Mieter [MIETER] wird folgender Mietvertrag geschlossen:\n\n§ 1 Mietobjekt\nDas Mietobjekt befindet sich in der Wohnung [WOHNUNG]. Die Wohnfläche beträgt ca. [FLAECHE] m².\n\n§ 2 Mietzeit\nDas Mietverhältnis beginnt am [DATUM] und ist auf unbestimmte Zeit abgeschlossen.\n\n§ 3 Miete\nDie monatliche Kaltmiete beträgt [BETRAG] EUR. Die Nebenkosten werden als Vorauszahlung zusätzlich erhoben.\n\n§ 4 Kaution\nDer Mieter hinterlegt eine Kaution in Höhe von 3 Monatsmieten.\n\n§ 5 Hausordnung\nDer Mieter verpflichtet sich, die beigefügte Hausordnung einzuhalten.\n\n§ 6 Schlussbemerkung\nÄnderungen und Ergänzungen dieses Vertrages bedürfen der Schriftform.\n\nOrt, Datum: [DATUM]\n\nVermieter: ________________________\n\nMieter: ________________________'
+  },
+  {
+    id: 'mietbescheinigung',
+    ico: '📋',
+    name: 'Mietbescheinigung',
+    beschr: 'Bestätigung des Mietverhältnisses',
+    farbe: '#16a34a',
+    text: 'MIETBESCHEINIGUNG\n\nHiermit wird bestätigt, dass\n\n[MIETER]\n\ndie Wohnung [WOHNUNG] seit dem [DATUM] als Hauptwohnsitz bewohnt.\n\nDie monatliche Miete beträgt [BETRAG] EUR (Kaltmiete).\n\nDiese Bescheinigung wird auf ausdrücklichen Wunsch des Mieters für behördliche Zwecke ausgestellt.\n\nSie gilt als Nachweis für:\n- Ummeldung beim Einwohnermeldeamt\n- Vorlage bei Behörden\n- Nachweis gegenüber Arbeitgebern\n\nOrt, Datum: [DATUM]\n\nMit freundlichen Grüßen\n\nVermieter: ________________________'
+  },
+  {
+    id: 'uebergabe',
+    ico: '🔑',
+    name: 'Übergabeprotokoll',
+    beschr: 'Wohnungsübergabe / -übernahme',
+    farbe: '#d97706',
+    text: 'ÜBERGABEPROTOKOLL\n\nObjekt: [WOHNUNG]\nMieter: [MIETER]\nDatum der Übergabe: [DATUM]\n\nZustand der Wohnung bei Übergabe:\n\n[ ] Wände und Decken: einwandfrei / mit Mängeln: _______________\n[ ] Böden: einwandfrei / mit Mängeln: _______________\n[ ] Fenster und Türen: einwandfrei / mit Mängeln: _______________\n[ ] Badezimmer: einwandfrei / mit Mängeln: _______________\n[ ] Küche: einwandfrei / mit Mängeln: _______________\n\nZählerstände:\nStrom: _____________ kWh\nWasser: _____________ m³\nHeizung: _____________ Einheiten\n\nSchlüsselübergabe:\nWohnungsschlüssel: _____ Stück\nBriefkastenschlüssel: _____ Stück\nKellertrennwandschlüssel: _____ Stück\n\nDie Wohnung wird in dem oben beschriebenen Zustand übergeben.\n\nVermieter: ________________________\n\nMieter: ________________________'
+  },
+  {
+    id: 'nebenkostenabrechnung',
+    ico: '💰',
+    name: 'Nebenkostenabrechnung',
+    beschr: 'Jährliche Betriebskostenabrechnung',
+    farbe: '#7c3aed',
+    text: 'NEBENKOSTENABRECHNUNG [DATUM]\n\nMieter: [MIETER]\nWohnung: [WOHNUNG]\nAbrechnungszeitraum: 01.01. – 31.12.\n\nAbrechnung der Betriebskosten:\n\nHeizkosten:                   _________ EUR\nWasserversorgung:             _________ EUR\nAbwasser:                     _________ EUR\nMüllabfuhr:                   _________ EUR\nGebäudereinigung:             _________ EUR\nGartenpflege:                 _________ EUR\nHausversicherungen:           _________ EUR\nHausverwaltung:               _________ EUR\nAllgemeinstrom:               _________ EUR\n-------------------------------------------\nGesamtkosten:                 _________ EUR\nIhr Anteil (Wohnfläche %):    _________ EUR\n\nGeleistete Vorauszahlungen:   [BETRAG] EUR\n\nNachzahlung / Guthaben:       _________ EUR\n\nOrt, Datum: [DATUM]\n\nVermieter: ________________________'
+  },
+  {
+    id: 'mahnung',
+    ico: '⚠️',
+    name: 'Mahnung',
+    beschr: 'Zahlungserinnerung bei Mietrückstand',
+    farbe: '#dc2626',
+    text: 'MAHNUNG – ZAHLUNGSERINNERUNG\n\nAn: [MIETER]\nWohnung: [WOHNUNG]\nDatum: [DATUM]\n\nSehr geehrte/r [MIETER],\n\nhiermit erinnern wir Sie daran, dass die Miete für den laufenden Monat in Höhe von [BETRAG] EUR noch nicht auf unserem Konto eingegangen ist.\n\nFälliger Betrag: [BETRAG] EUR\nFälligkeitsdatum: Zum 3. Werktag des Monats\n\nBitte überweisen Sie den offenen Betrag bis spätestens [DATUM] auf folgendes Konto:\n\nIBAN: DE12 3456 7890 1234 5678 90\nBIC: BELADEBEXXX\nVerwendungszweck: Miete [WOHNUNG] [DATUM]\n\nSollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\nBei weiteren Fragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\n\nVermieter: ________________________'
+  },
+  {
+    id: 'kuendigung',
+    ico: '📮',
+    name: 'Kündigung',
+    beschr: 'Kündigung des Mietverhältnisses',
+    farbe: '#be185d',
+    text: 'KÜNDIGUNG DES MIETVERHÄLTNISSES\n\nAn: [MIETER]\nWohnung: [WOHNUNG]\nDatum: [DATUM]\n\nSehr geehrte/r [MIETER],\n\nhiermit kündigen wir das bestehende Mietverhältnis über die Wohnung [WOHNUNG] fristgerecht zum nächstmöglichen Termin.\n\nKündigungsdatum: [DATUM]\nLetzer Miettag: _______________\n\nGrund der Kündigung (sofern zutreffend):\n[ ] Eigenbedarf\n[ ] Erhebliche Verletzung der Vertragspflichten\n[ ] Wirtschaftliche Verwertung\n\nWir bitten Sie, die Wohnung bis zum Auszugstermin besenrein zu hinterlassen und sämtliche Schlüssel zurückzugeben.\n\nZur Übergabe der Wohnung werden wir uns mit Ihnen noch gesondert in Verbindung setzen.\n\nMit freundlichen Grüßen\n\nVermieter: ________________________'
+  },
+  {
+    id: 'mieterhoehung',
+    ico: '📈',
+    name: 'Mieterhöhung',
+    beschr: 'Ankündigung einer Mieterhöhung',
+    farbe: '#0891b2',
+    text: 'ANKÜNDIGUNG EINER MIETERHÖHUNG\n\nAn: [MIETER]\nWohnung: [WOHNUNG]\nDatum: [DATUM]\n\nSehr geehrte/r [MIETER],\n\nhiermit teile ich Ihnen mit, dass ich gemäß § 558 BGB eine Anpassung der Miete an die ortsübliche Vergleichsmiete beabsichtige.\n\nAktuelle Kaltmiete:     [BETRAG] EUR\nNeue Kaltmiete:        _________ EUR\nErhöhungsbetrag:       _________ EUR\nErhöhung um:           _________ %\n\nDie Mieterhöhung gilt ab dem 1. des übernächsten Monats nach Zugang dieses Schreibens.\n\nDie neue Miete entspricht der ortsüblichen Vergleichsmiete gemäß aktuellem Mietspiegel.\n\nSie haben das Recht, der Mieterhöhung innerhalb von 2 Monaten schriftlich zuzustimmen oder abzulehnen. Bei Ablehnung kann gerichtliche Zustimmung beantragt werden.\n\nMit freundlichen Grüßen\n\nVermieter: ________________________'
+  },
+  {
+    id: 'hausordnung',
+    ico: '📜',
+    name: 'Hausordnung',
+    beschr: 'Hausregeln und Pflichten',
+    farbe: '#475569',
+    text: 'HAUSORDNUNG\n\nGültig für alle Mieter in [WOHNUNG]\nStand: [DATUM]\n\n§ 1 Ruhezeiten\nDie allgemeinen Ruhezeiten sind: täglich 13:00–15:00 Uhr sowie 22:00–07:00 Uhr. An Sonn- und Feiertagen ganztags Ruhe.\n\n§ 2 Reinigung\nJeder Mieter ist verpflichtet, Treppenhaus, Keller- und Hofzugang regelmäßig zu reinigen. Die Reinigung erfolgt nach einem Reinigungsplan.\n\n§ 3 Müllentsorgung\nMüll ist sortenrein in die entsprechenden Behälter zu werfen. Sperrmüll ist nur zu zugelassenen Zeiten zu entsorgen.\n\n§ 4 Gemeinschaftsräume\nKellerräume und Waschküche sind sauber zu hinterlassen. Der Waschplan ist einzuhalten.\n\n§ 5 Haustiere\nDas Halten von Haustieren bedarf der Zustimmung des Vermieters.\n\n§ 6 Verstöße\nBei wiederholten Verstößen gegen die Hausordnung behält sich der Vermieter eine Abmahnung vor.\n\nMieter: [MIETER]\nOrt, Datum: [DATUM]\n\nMieter: ________________________\nVermieter: ________________________'
+  },
+  {
+    id: 'selbstauskunft',
+    ico: '📝',
+    name: 'Selbstauskunft',
+    beschr: 'Mieter-Selbstauskunftsformular',
+    farbe: '#16a34a',
+    text: 'SELBSTAUSKUNFT MIETINTERESSENT\n\nDatum: [DATUM]\n\nPersönliche Angaben:\nName, Vorname:          [MIETER]\nGeburtsdatum:           _______________\nGeburtsort:             _______________\nStaatsangehörigkeit:    _______________\nPersonalausweis-Nr.:    _______________\n\nDerzeitige Adresse:\nStraße, Nr.:            _______________\nPLZ, Ort:              _______________\n\nBeschäftigung:\nArbeitgeber:            _______________\nBeschäftigt seit:       _______________\nMonatliches Nettoeinkommen: _________ EUR\n\nAktuelle Wohnsituation:\n[ ] Mieter   [ ] Eigentümer\nAktueller Vermieter:    _______________\nGrund des Umzugs:       _______________\n\nHaushalt:\nAnzahl der Personen:    _______________\nAnzahl Kinder:          _______________\nHaustiere:              _______________\n\nBonitätsauskunft (bitte beifügen):\n[ ] SCHUFA-Auskunft liegt bei\n\nIch versichere die Richtigkeit der Angaben.\n\nOrt, Datum: [DATUM]\n\nUnterschrift: ________________________'
+  },
+  {
+    id: 'anlageV',
+    ico: '🧾',
+    name: 'Anlage V',
+    beschr: 'Steuerliche Einnahmen-Ausgaben (Vorlage)',
+    farbe: '#0f172a',
+    text: 'ANLAGE V – EINNAHMEN AUS VERMIETUNG UND VERPACHTUNG\nSteuerliche Aufstellung (Vorlage) – [DATUM]\n\nMieter: [MIETER]   |   Wohnung: [WOHNUNG]\n\nA. EINNAHMEN\nMieteinnnahmen (Kaltmiete):        _________ EUR\nNebenkosten-Vorauszahlungen:       _________ EUR\nSonstige Einnahmen:                _________ EUR\n-------------------------------------------\nGesamteinnahmen:                   _________ EUR\n\nB. WERBUNGSKOSTEN (Ausgaben)\nZinsen (Hypothek/Kredit):          _________ EUR\nAbschreibung (AfA 2%):             _________ EUR\nGrundsteuer:                       _________ EUR\nHausverwaltungskosten:             _________ EUR\nVersicherungsbeiträge:             _________ EUR\nReparaturen/Instandhaltung:        _________ EUR\nReinigungskosten:                  _________ EUR\nSonstige Kosten:                   _________ EUR\n-------------------------------------------\nGesamte Werbungskosten:            _________ EUR\n\nC. ERGEBNIS\nEinkünfte aus V+V:  Einnahmen - Werbungskosten = _________ EUR\n\nHinweis: Diese Vorlage dient als Orientierung.\nBitte konsultieren Sie einen Steuerberater.\n\nErstellt am: [DATUM]'
+  }
+];
+
+function getMieter() {
+  return getData(KEYS.mieter, DEFAULT_MIETER);
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function openPreview(id) {
+  var vorlage = null;
+  for(var i=0;i<VORLAGEN.length;i++){ if(VORLAGEN[i].id===id){ vorlage=VORLAGEN[i]; break; } }
+  if(!vorlage) return;
+  currentVorlage = vorlage;
+
+  document.getElementById('prev-title').textContent = vorlage.ico+' '+vorlage.name;
+  document.getElementById('prev-text').textContent = vorlage.text;
+
+  var mieter = getMieter();
+  var sel = document.getElementById('prev-mieter');
+  sel.innerHTML = '<option value="">– Kein Mieter ausgewählt –</option>';
+  for(var m=0;m<mieter.length;m++){
+    sel.innerHTML += '<option value="'+m+'">'+mieter[m].name+' ('+mieter[m].wn+')</option>';
+  }
+  fillPlaceholders();
+  showModal('prev-modal');
+}
+
+function fillPlaceholders() {
+  if(!currentVorlage) return;
+  var mieter = getMieter();
+  var sel = document.getElementById('prev-mieter');
+  var idx = sel.value;
+  var m = idx !== '' ? mieter[parseInt(idx)] : null;
+
+  var text = currentVorlage.text;
+  text = text.replace(/\[MIETER\]/g, m ? m.name : '[MIETER]');
+  text = text.replace(/\[WOHNUNG\]/g, m ? m.wn : '[WOHNUNG]');
+  text = text.replace(/\[BETRAG\]/g, m ? fmt(m.miete) : '[BETRAG]');
+  text = text.replace(/\[DATUM\]/g, fmtDate(today()));
+  text = text.replace(/\[FLAECHE\]/g, '65');
+  text = text.replace(/\[VERMIETER\]/g, getUser().name);
+
+  document.getElementById('prev-text').textContent = text;
+}
+
+function doPrint() {
+  var content = document.getElementById('prev-text').textContent;
+  var printWin = window.open('', '_blank', 'width=800,height=600');
+  printWin.document.write(
+    '<!DOCTYPE html><html lang="de"><head>'
+    + '<meta charset="UTF-8">'
+    + '<title>'+currentVorlage.name+' – ImmoNova</title>'
+    + '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'
+    + '<style>'
+    + 'body{font-family:"DM Sans",sans-serif;padding:40px;color:#0f172a;line-height:1.7;font-size:14px;}'
+    + 'pre{white-space:pre-wrap;font-family:"DM Sans",sans-serif;font-size:14px;line-height:1.7;}'
+    + 'h1{font-size:20px;font-weight:700;margin-bottom:24px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:12px;}'
+    + '.logo{font-size:13px;color:#94a3b8;margin-bottom:20px;}'
+    + '</style>'
+    + '</head><body>'
+    + '<div class="logo">ImmoNova – Immobilienverwaltung</div>'
+    + '<pre>'+content+'</pre>'
+    + '</body></html>'
+  );
+  printWin.document.close();
+  printWin.focus();
+  printWin.print();
+}
+
+function buildGrid() {
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">';
+  for(var i=0;i<VORLAGEN.length;i++){
+    var v = VORLAGEN[i];
+    html += '<div style="background:white;border:2px solid #e2e8f0;border-radius:14px;padding:22px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;" '
+      + 'onmouseover="this.style.borderColor=\''+v.farbe+'\';this.style.boxShadow=\'0 4px 20px rgba(0,0,0,0.1)\';this.style.transform=\'translateY(-2px)\'" '
+      + 'onmouseout="this.style.borderColor=\'#e2e8f0\';this.style.boxShadow=\'none\';this.style.transform=\'none\'" '
+      + 'onclick="openPreview(\''+v.id+'\')">';
+    // Decorative top strip
+    html += '<div style="position:absolute;top:0;left:0;right:0;height:4px;background:'+v.farbe+';"></div>';
+    // Icon
+    html += '<div style="font-size:44px;margin-bottom:12px;margin-top:4px;">'+v.ico+'</div>';
+    // Name
+    html += '<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px;">'+v.name+'</div>';
+    // Description
+    html += '<div style="font-size:12px;color:#64748b;line-height:1.5;margin-bottom:16px;">'+v.beschr+'</div>';
+    // Button
+    html += '<button onclick="event.stopPropagation();openPreview(\''+v.id+'\')" style="width:100%;padding:9px;background:'+v.farbe+';color:white;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Erstellen</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function render() {
+  var mieter = getMieter();
+  var mieterOptsHtml = '<option value="">– Kein Mieter ausgewählt –</option>';
+  for(var m=0;m<mieter.length;m++){
+    mieterOptsHtml += '<option value="'+m+'">'+mieter[m].name+' ('+mieter[m].wn+')</option>';
+  }
+
+  var previewModalContent =
+    '<div style="margin-bottom:16px;">'
+    + formGroup('Mieterdaten einsetzen', '<select id="prev-mieter" onchange="fillPlaceholders()" '+inputStyle+'>'+ mieterOptsHtml +'</select>')
+    + '</div>'
+    + '<div id="print-area" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;max-height:380px;overflow-y:auto;margin-bottom:18px;">'
+    + '<pre id="prev-text" style="white-space:pre-wrap;font-family:\'DM Sans\',sans-serif;font-size:13px;line-height:1.7;color:#0f172a;margin:0;"></pre>'
+    + '</div>'
+    + '<div style="display:flex;gap:10px;">'
+    + '<button onclick="doPrint()" style="flex:1;padding:12px;background:#0f172a;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">🖨️ Drucken</button>'
+    + '<button onclick="hideModal(\'prev-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>';
+
+  // Build preview modal with dynamic title span
+  var previewModal = '<div id="prev-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
+    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:620px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
+    + '<div id="prev-title" style="font-size:16px;font-weight:700;"></div>'
+    + '<button onclick="hideModal(\'prev-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;">✕</button>'
+    + '</div>'
+    + previewModalContent
+    + '</div></div>';
+
+  // Intro header
+  var header = '<div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:16px;padding:28px;margin-bottom:28px;color:white;">'
+    + '<div style="font-size:32px;margin-bottom:8px;">📄</div>'
+    + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">Dokumente & Vorlagen</div>'
+    + '<div style="font-size:14px;color:#94a3b8;">'+VORLAGEN.length+' professionelle Vorlagen für die Immobilienverwaltung – direkt ausfüllen und drucken.</div>'
+    + '</div>';
+
+  var mainHTML = header + buildGrid();
+
+  renderLayout('dokumente', '📄 Dokumente & Vorlagen', '', mainHTML, previewModal);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

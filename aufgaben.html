@@ -1,30 +1,215 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – ✅ Aufgaben</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aufgaben – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  renderLayout('aufgaben','✅ Aufgaben','',
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">✅</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">✅ Aufgaben</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird bald fertiggestellt.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">Zum Dashboard</a>'
-    +'</div>'
-  );
+var activeTab = 'offen';
+var editId = null;
+
+function getAufgaben() { return getData(KEYS.aufgaben, []); }
+function saveAufgaben(arr) { setData(KEYS.aufgaben, arr); syncToFirebase(user.uid); }
+
+function prVal(p) { return p==='hoch'?3:p==='mittel'?2:1; }
+
+function sortAufgaben(arr) {
+  var t = today();
+  return arr.slice().sort(function(a,b){
+    var aOver = !a.done && a.dat && a.dat < t ? 1 : 0;
+    var bOver = !b.done && b.dat && b.dat < t ? 1 : 0;
+    if(aOver !== bOver) return bOver - aOver;
+    if(prVal(a.pr) !== prVal(b.pr)) return prVal(b.pr) - prVal(a.pr);
+    if(a.dat && b.dat) return a.dat < b.dat ? -1 : a.dat > b.dat ? 1 : 0;
+    if(a.dat) return -1;
+    if(b.dat) return 1;
+    return 0;
+  });
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function toggleDone(id) {
+  var arr = getAufgaben();
+  var a = arr.find(function(x){ return x.id === id; });
+  if(!a) return;
+  a.done = !a.done;
+  if(a.done) addNotif('✅', 'Aufgabe erledigt: ' + a.txt.substring(0,30));
+  saveAufgaben(arr);
+  render();
+}
+
+function deleteAufgabe(id) {
+  var arr = getAufgaben().filter(function(x){ return x.id !== id; });
+  saveAufgaben(arr);
+  render();
+}
+
+function addAufgabeQuick() {
+  var txtEl = document.getElementById('q-txt');
+  var txt = txtEl.value.trim();
+  if(!txt) { txtEl.focus(); return; }
+  var pr = document.getElementById('q-pr').value;
+  var dat = document.getElementById('q-dat').value;
+  var arr = getAufgaben();
+  arr.push({ id: Date.now(), txt: txt, pr: pr, dat: dat, done: false });
+  saveAufgaben(arr);
+  txtEl.value = '';
+  document.getElementById('q-dat').value = '';
+  render();
+}
+
+function openEditModal(id) {
+  editId = id;
+  var arr = getAufgaben();
+  var a = arr.find(function(x){ return x.id === id; });
+  if(!a) return;
+  document.getElementById('e-txt').value = a.txt;
+  document.getElementById('e-pr').value = a.pr;
+  document.getElementById('e-dat').value = a.dat || '';
+  document.getElementById('auf-modal-title').textContent = 'Aufgabe bearbeiten';
+  showModal('auf-modal');
+}
+
+function openNewModal() {
+  editId = null;
+  document.getElementById('e-txt').value = '';
+  document.getElementById('e-pr').value = 'mittel';
+  document.getElementById('e-dat').value = '';
+  document.getElementById('auf-modal-title').textContent = 'Neue Aufgabe';
+  showModal('auf-modal');
+}
+
+function saveModal() {
+  var txt = document.getElementById('e-txt').value.trim();
+  if(!txt) return;
+  var pr = document.getElementById('e-pr').value;
+  var dat = document.getElementById('e-dat').value;
+  var arr = getAufgaben();
+  if(editId) {
+    var a = arr.find(function(x){ return x.id === editId; });
+    if(a) { a.txt = txt; a.pr = pr; a.dat = dat; }
+  } else {
+    arr.push({ id: Date.now(), txt: txt, pr: pr, dat: dat, done: false });
+  }
+  saveAufgaben(arr);
+  editId = null;
+  hideModal('auf-modal');
+  render();
+}
+
+function setTab(t) {
+  activeTab = t;
+  render();
+}
+
+function render() {
+  var all = getAufgaben();
+  var t = today();
+  var offen = sortAufgaben(all.filter(function(a){ return !a.done; }));
+  var erledigt = sortAufgaben(all.filter(function(a){ return a.done; }));
+  var ueberfaellig = offen.filter(function(a){ return a.dat && a.dat < t; });
+
+  var prBadge = {
+    hoch: '<span style="background:#fef2f2;color:#dc2626;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Hoch</span>',
+    mittel: '<span style="background:#fffbeb;color:#d97706;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Mittel</span>',
+    niedrig: '<span style="background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;">Niedrig</span>'
+  };
+
+  // Stats bar
+  var statsHTML = '<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<span style="font-size:22px;">📋</span>'
+    + '<div><div style="font-size:22px;font-weight:700;color:#0f172a;line-height:1;">' + offen.length + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Offen</div></div></div>'
+    + '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<span style="font-size:22px;">✅</span>'
+    + '<div><div style="font-size:22px;font-weight:700;color:#16a34a;line-height:1;">' + erledigt.length + '</div><div style="font-size:12px;color:#64748b;margin-top:2px;">Erledigt</div></div></div>'
+    + '<div style="background:white;border:1px solid #fecaca;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<span style="font-size:22px;">⚠️</span>'
+    + '<div><div style="font-size:22px;font-weight:700;color:#dc2626;line-height:1;">' + ueberfaellig.length + '</div><div style="font-size:12px;color:#dc2626;font-weight:600;margin-top:2px;">Überfällig</div></div></div>'
+    + '</div>';
+
+  // Quick add bar
+  var quickHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<input id="q-txt" type="text" placeholder="Neue Aufgabe..." onkeydown="if(event.key===\'Enter\')addAufgabeQuick()" style="flex:1;min-width:180px;padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#0f172a;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    + '<select id="q-pr" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;outline:none;background:white;cursor:pointer;color:#0f172a;">'
+    + '<option value="hoch">🔴 Hoch</option><option value="mittel" selected>🟡 Mittel</option><option value="niedrig">🟢 Niedrig</option>'
+    + '</select>'
+    + '<input id="q-dat" type="date" style="padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;outline:none;color:#0f172a;">'
+    + '<button onclick="addAufgabeQuick()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Hinzufügen</button>'
+    + '</div>';
+
+  // Tabs
+  var tabsHTML = '<div style="display:flex;gap:4px;margin-bottom:18px;background:white;border:1px solid #e2e8f0;border-radius:10px;padding:4px;width:fit-content;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+    + '<button onclick="setTab(\'offen\')" style="padding:7px 20px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:' + (activeTab==='offen'?'#2563eb':'transparent') + ';color:' + (activeTab==='offen'?'white':'#64748b') + ';transition:all 0.15s;">Offene Aufgaben (' + offen.length + ')</button>'
+    + '<button onclick="setTab(\'erledigt\')" style="padding:7px 20px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:' + (activeTab==='erledigt'?'#2563eb':'transparent') + ';color:' + (activeTab==='erledigt'?'white':'#64748b') + ';transition:all 0.15s;">Erledigt (' + erledigt.length + ')</button>'
+    + '</div>';
+
+  // List
+  var listItems = activeTab === 'offen' ? offen : erledigt;
+  var listHTML = '';
+  if(listItems.length === 0) {
+    listHTML = '<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:56px 24px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+      + '<div style="font-size:44px;margin-bottom:14px;">' + (activeTab==='offen'?'🎉':'📭') + '</div>'
+      + '<div style="font-size:16px;font-weight:600;color:#0f172a;margin-bottom:6px;">' + (activeTab==='offen'?'Keine offenen Aufgaben!':'Noch nichts erledigt.') + '</div>'
+      + '<div style="font-size:13px;color:#94a3b8;">' + (activeTab==='offen'?'Füge neue Aufgaben über die Zeile oben hinzu.':'Erledigte Aufgaben erscheinen hier.') + '</div>'
+      + '</div>';
+  } else {
+    listHTML = '<div style="display:flex;flex-direction:column;gap:8px;">';
+    listItems.forEach(function(a) {
+      var isOver = !a.done && a.dat && a.dat < t;
+      var borderLeft = isOver ? '4px solid #dc2626' : (a.done ? '4px solid #16a34a' : '4px solid #e2e8f0');
+      var rowBg = a.done ? '#f8fafc' : 'white';
+      var txtStyle = a.done ? 'text-decoration:line-through;color:#94a3b8;' : 'color:#0f172a;font-weight:500;';
+      listHTML += '<div style="background:' + rowBg + ';border:1px solid #e2e8f0;border-left:' + borderLeft + ';border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;transition:box-shadow 0.15s;" onmouseover="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.08)\'" onmouseout="this.style.boxShadow=\'none\'">'
+        + '<div onclick="toggleDone(' + a.id + ')" style="width:22px;height:22px;border-radius:50%;border:2px solid ' + (a.done?'#16a34a':'#cbd5e1') + ';background:' + (a.done?'#16a34a':'white') + ';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.15s;" title="' + (a.done?'Als offen markieren':'Als erledigt markieren') + '">'
+        + (a.done ? '<span style="color:white;font-size:12px;font-weight:700;">✓</span>' : '')
+        + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="' + txtStyle + 'font-size:14px;margin-bottom:5px;">' + a.txt + '</div>'
+        + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">'
+        + (prBadge[a.pr] || '')
+        + (a.dat ? '<span style="font-size:12px;color:#64748b;">📅 ' + fmtDate(a.dat) + '</span>' : '')
+        + (isOver ? '<span style="background:#fef2f2;color:#dc2626;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;">Überfällig</span>' : '')
+        + '</div></div>'
+        + '<div style="display:flex;gap:6px;flex-shrink:0;">'
+        + (!a.done ? '<button onclick="openEditModal(' + a.id + ')" style="width:32px;height:32px;border-radius:8px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;" title="Bearbeiten">✏️</button>' : '')
+        + '<button onclick="deleteAufgabe(' + a.id + ')" style="width:32px;height:32px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;" title="Löschen">🗑</button>'
+        + '</div></div>';
+    });
+    listHTML += '</div>';
+  }
+
+  var mainHTML = statsHTML + quickHTML + tabsHTML + listHTML;
+
+  var modalsHTML = '<div id="auf-modal" onclick="if(event.target===this)this.style.display=\'none\'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;padding:20px;backdrop-filter:blur(4px);">'
+    + '<div style="background:white;border-radius:16px;padding:28px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">'
+    + '<div id="auf-modal-title" style="font-size:16px;font-weight:700;">Neue Aufgabe</div>'
+    + '<button onclick="hideModal(\'auf-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;">✕</button>'
+    + '</div>'
+    + formGroup('Aufgabentext', '<input id="e-txt" type="text" placeholder="Was ist zu tun?" ' + inputStyle + '>')
+    + formGroup('Priorität', '<select id="e-pr" ' + inputStyle + '><option value="hoch">🔴 Hoch</option><option value="mittel">🟡 Mittel</option><option value="niedrig">🟢 Niedrig</option></select>')
+    + formGroup('Fälligkeitsdatum', '<input id="e-dat" type="date" ' + inputStyle + '>')
+    + '<div style="display:flex;gap:10px;margin-top:20px;">'
+    + '<button onclick="saveModal()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Speichern</button>'
+    + '<button onclick="hideModal(\'auf-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div></div></div>';
+
+  var actionBtn = '<button onclick="openNewModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Aufgabe hinzufügen</button>';
+
+  renderLayout('aufgaben', 'Aufgaben', actionBtn, mainHTML, modalsHTML);
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

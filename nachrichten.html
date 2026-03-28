@@ -1,31 +1,287 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ImmoNova – 💬 Nachrichten</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<script src="shared.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nachrichten – ImmoNova</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="shared.js"></script>
 </head>
 <body style="margin:0;padding:0;">
 <script>
 if(!checkAuth()) { window.location.href='login.html'; }
 var user = getUser();
-function render() {
-  var actionBtn = '<button onclick="window.history.back()" style="background:white;color:#0f172a;border:1px solid #e2e8f0;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">← Zurück</button>';
-  renderLayout('nachrichten','💬 Nachrichten',actionBtn,
-    '<div style="padding:60px;text-align:center;background:white;border:1px solid #e2e8f0;border-radius:12px;">'
-    +'<div style="font-size:56px;margin-bottom:16px;">💬</div>'
-    +'<div style="font-size:20px;font-weight:700;margin-bottom:8px;">💬 Nachrichten</div>'
-    +'<div style="font-size:14px;color:#64748b;margin-bottom:24px;">Diese Seite wird gerade fertiggestellt und ist bald verfügbar.</div>'
-    +'<a href="app.html" style="background:#2563eb;color:white;border-radius:9px;padding:10px 24px;font-size:14px;font-weight:600;text-decoration:none;">🏠 Zum Dashboard</a>'
-    +'</div>'
-  );
+
+var _activeMieter = null;
+var _searchQ = '';
+var AUTO_REPLIES = [
+  'Danke, ich überweise heute.',
+  'Alles klar, vielen Dank!',
+  'OK, ich melde mich.',
+  'Wann können wir das besprechen?',
+  'Verstanden, Danke.'
+];
+var AVATAR_COLORS = ['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#be185d'];
+
+function getChats(){ return getData('in_chats',{}); }
+function setChats(c){ setData('in_chats',c); }
+
+function getInitials(name){
+  var parts = (name||'').trim().split(' ');
+  return parts.length>1 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : (name||'?')[0].toUpperCase();
 }
-initFirebase(); loadFromFirebase(user.uid, render);
+
+function avatarColor(name){
+  var sum = 0; for(var i=0;i<(name||'').length;i++) sum+=name.charCodeAt(i);
+  return AVATAR_COLORS[sum%AVATAR_COLORS.length];
+}
+
+function nowTime(){
+  return new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+}
+
+function render(){
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+
+  // Build the full layout using renderLayout
+  // mainContent fills the area below the topbar
+  var mainHTML =
+    '<div style="display:flex;height:calc(100vh - 56px);margin:-24px;overflow:hidden;">'
+    // Left: mieter list
+    +'<div style="width:300px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid #e2e8f0;background:white;">'
+    +  '<div style="padding:12px;border-bottom:1px solid #e2e8f0;">'
+    +    '<input id="chat-search" type="text" placeholder="🔍 Mieter suchen..." oninput="filterMieter(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;color:#0f172a;background:#f8fafc;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    +  '</div>'
+    +  '<div id="mieter-list" style="flex:1;overflow-y:auto;"></div>'
+    +'</div>'
+    // Right: chat area
+    +'<div id="chat-area" style="flex:1;display:flex;flex-direction:column;background:#f0f4f8;overflow:hidden;">'
+    +  renderEmptyChat()
+    +'</div>'
+    +'</div>';
+
+  renderLayout('nachrichten','Nachrichten','',mainHTML,'');
+  renderMieterList(mieter,'');
+}
+
+function renderEmptyChat(){
+  return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">'
+    +'<div style="width:80px;height:80px;background:#e2e8f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;">💬</div>'
+    +'<div style="text-align:center;">'
+    +'<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:4px;">Kein Chat ausgewählt</div>'
+    +'<div style="font-size:13px;color:#64748b;">Wähle einen Mieter aus der Liste</div>'
+    +'</div>'
+    +'</div>';
+}
+
+function filterMieter(q){
+  _searchQ = q;
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  renderMieterList(mieter, q);
+}
+
+function renderMieterList(mieter, q){
+  var listEl = document.getElementById('mieter-list');
+  if(!listEl) return;
+  var chats = getChats();
+  var filtered = q ? mieter.filter(function(m){return m.name.toLowerCase().includes(q.toLowerCase());}) : mieter;
+
+  if(!filtered.length){
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px;">Keine Mieter gefunden</div>';
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(function(m){
+    var msgs = chats[m.name]||[];
+    var lastMsg = msgs.length ? msgs[msgs.length-1] : null;
+    var unread = msgs.filter(function(x){return x.von==='mieter'&&!x.read;}).length;
+    var isActive = _activeMieter===m.name;
+    var color = avatarColor(m.name);
+    var lastText = lastMsg ? (lastMsg.von==='admin'?'Du: ':'')+lastMsg.text : 'Noch keine Nachrichten';
+    var lastTime = lastMsg ? lastMsg.time : '';
+    if(lastText.length>38) lastText = lastText.substring(0,38)+'...';
+
+    return '<div onclick="selectMieter(\''+escAttr(m.name)+'\')" style="padding:12px 16px;border-bottom:1px solid #f1f5f9;cursor:pointer;background:'+(isActive?'#eff6ff':'white')+';display:flex;align-items:center;gap:10px;transition:background 0.15s;" onmouseover="if(this.style.background!==\'rgb(239, 246, 255)\')this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\''+(isActive?'#eff6ff':'white')+'\'">'
+      +'<div style="width:42px;height:42px;background:'+color+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white;flex-shrink:0;">'+getInitials(m.name)+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">'
+      +    '<span style="font-size:13px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">'+esc(m.name)+'</span>'
+      +    '<span style="font-size:10px;color:#94a3b8;">'+lastTime+'</span>'
+      +  '</div>'
+      +  '<div style="display:flex;align-items:center;justify-content:space-between;">'
+      +    '<span style="font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">'+esc(lastText)+'</span>'
+      +    (unread>0?'<span style="background:#2563eb;color:white;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;">'+unread+'</span>':'')
+      +  '</div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function escAttr(s){ return (s||'').replace(/'/g,'\\x27').replace(/"/g,'&quot;'); }
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function selectMieter(name){
+  _activeMieter = name;
+  // Mark mieter messages as read
+  var chats = getChats();
+  if(chats[name]) chats[name].forEach(function(m){m.read=true;});
+  setChats(chats);
+
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  renderMieterList(mieter, _searchQ);
+  renderChatArea(name);
+}
+
+function renderChatArea(name){
+  var chatArea = document.getElementById('chat-area');
+  if(!chatArea) return;
+  var chats   = getChats();
+  var msgs    = chats[name]||[];
+  var color   = avatarColor(name);
+  var mieter  = getData(KEYS.mieter, DEFAULT_MIETER);
+  var m       = mieter.find(function(x){return x.name===name;});
+  var tel     = m ? m.tel : '';
+  var waLink  = tel ? 'https://wa.me/'+tel.replace(/\D/g,'') : '#';
+
+  var quickBtns = [
+    {icon:'✉️', text:'Mietquittung'},
+    {icon:'✅', text:'Danke für Ihre Zahlung'},
+    {icon:'📅', text:'Termin vereinbaren'},
+    {icon:'🔧', text:'Wartung bestätigt'}
+  ];
+
+  var quickHTML = quickBtns.map(function(b){
+    return '<button onclick="sendQuick(\''+esc(b.text)+' '+b.icon+'\')" style="background:white;border:1px solid #e2e8f0;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;color:#0f172a;white-space:nowrap;transition:all 0.15s;" onmouseover="this.style.background=\'#eff6ff\';this.style.borderColor=\'#2563eb\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'#e2e8f0\'">'+b.icon+' '+b.text+'</button>';
+  }).join('');
+
+  chatArea.innerHTML =
+    // Header
+    '<div style="background:white;border-bottom:1px solid #e2e8f0;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.04);">'
+    +  '<div style="width:40px;height:40px;background:'+color+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;flex-shrink:0;">'+getInitials(name)+'</div>'
+    +  '<div style="flex:1;">'
+    +    '<div style="font-size:14px;font-weight:700;color:#0f172a;">'+esc(name)+'</div>'
+    +    '<div style="font-size:11px;color:#16a34a;">● Online</div>'
+    +  '</div>'
+    +  '<a href="'+waLink+'" target="_blank" style="background:#25d366;color:white;text-decoration:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;">💬 WhatsApp</a>'
+    +'</div>'
+    // Messages
+    +'<div id="chat-msgs" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:8px;">'
+    +renderMessages(msgs)
+    +'</div>'
+    // Quick replies
+    +'<div style="background:white;border-top:1px solid #f1f5f9;padding:8px 16px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;">'
+    +quickHTML
+    +'</div>'
+    // Input
+    +'<div style="background:white;border-top:1px solid #e2e8f0;padding:12px 16px;display:flex;gap:10px;align-items:flex-end;flex-shrink:0;">'
+    +  '<textarea id="chat-input" rows="1" placeholder="Nachricht schreiben..." onkeydown="chatKeydown(event)" oninput="autoResizeTA(this)" style="flex:1;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:22px;font-size:14px;font-family:inherit;color:#0f172a;background:#f8fafc;outline:none;resize:none;max-height:120px;line-height:1.4;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>'
+    +  '<button onclick="sendMsg()" style="width:44px;height:44px;background:#2563eb;color:white;border:none;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">➤</button>'
+    +'</div>';
+
+  scrollToBottom();
+}
+
+function renderMessages(msgs){
+  if(!msgs||!msgs.length){
+    return '<div style="text-align:center;color:#94a3b8;font-size:13px;padding:20px;">Noch keine Nachrichten. Starte ein Gespräch!</div>';
+  }
+  var today = new Date().toLocaleDateString('de-DE');
+  var lastDate='';
+  return msgs.map(function(msg){
+    var isAdmin = msg.von==='admin';
+    var dayStr  = msg.day || '';
+    var sep = '';
+    if(dayStr && dayStr!==lastDate){
+      lastDate = dayStr;
+      var label = dayStr===today ? 'Heute' : dayStr;
+      sep = '<div style="text-align:center;margin:8px 0;"><span style="background:#e2e8f0;color:#64748b;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;">'+label+'</span></div>';
+    }
+    var bubble = '';
+    if(isAdmin){
+      bubble = '<div style="display:flex;justify-content:flex-end;margin-bottom:2px;">'
+        +'<div style="max-width:70%;">'
+        +  '<div style="background:#2563eb;color:white;border-radius:18px 18px 4px 18px;padding:10px 14px;font-size:14px;line-height:1.4;">'+esc(msg.text)+'</div>'
+        +  '<div style="font-size:11px;color:#94a3b8;text-align:right;margin-top:3px;padding-right:4px;">'+msg.time+'</div>'
+        +'</div>'
+        +'</div>';
+    } else {
+      bubble = '<div style="display:flex;justify-content:flex-start;margin-bottom:2px;">'
+        +'<div style="max-width:70%;">'
+        +  '<div style="background:white;color:#0f172a;border-radius:18px 18px 18px 4px;padding:10px 14px;font-size:14px;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,0.06);">'+esc(msg.text)+'</div>'
+        +  '<div style="font-size:11px;color:#94a3b8;text-align:left;margin-top:3px;padding-left:4px;">'+msg.time+'</div>'
+        +'</div>'
+        +'</div>';
+    }
+    return sep+bubble;
+  }).join('');
+}
+
+function sendMsg(){
+  var input = document.getElementById('chat-input');
+  if(!input) return;
+  var txt = (input.value||'').trim();
+  if(!txt || !_activeMieter) return;
+  input.value='';
+  input.style.height='auto';
+  addMessage(_activeMieter, txt, 'admin');
+  // Simulate mieter reply
+  setTimeout(function(){
+    if(_activeMieter){
+      var reply = AUTO_REPLIES[Math.floor(Math.random()*AUTO_REPLIES.length)];
+      addMessage(_activeMieter, reply, 'mieter');
+    }
+  }, 1800+Math.random()*1200);
+}
+
+function sendQuick(text){
+  if(!_activeMieter) return;
+  addMessage(_activeMieter, text, 'admin');
+  setTimeout(function(){
+    if(_activeMieter){
+      var reply = AUTO_REPLIES[Math.floor(Math.random()*AUTO_REPLIES.length)];
+      addMessage(_activeMieter, reply, 'mieter');
+    }
+  }, 1800+Math.random()*1200);
+}
+
+function addMessage(name, text, von){
+  var chats = getChats();
+  if(!chats[name]) chats[name]=[];
+  var dayStr = new Date().toLocaleDateString('de-DE');
+  chats[name].push({text:text, von:von, time:nowTime(), day:dayStr, read:von==='admin'});
+  setChats(chats);
+  syncToFirebase(user.uid);
+  if(_activeMieter===name){
+    var msgsEl = document.getElementById('chat-msgs');
+    if(msgsEl){
+      var msgs = chats[name]||[];
+      msgsEl.innerHTML = renderMessages(msgs);
+      scrollToBottom();
+    }
+  }
+  var mieter = getData(KEYS.mieter, DEFAULT_MIETER);
+  renderMieterList(mieter, _searchQ);
+}
+
+function scrollToBottom(){
+  var el = document.getElementById('chat-msgs');
+  if(el) setTimeout(function(){ el.scrollTop = el.scrollHeight; }, 50);
+}
+
+function chatKeydown(e){
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMsg(); }
+}
+
+function autoResizeTA(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,120)+'px';
+}
+
+initFirebase();
+loadFromFirebase(user.uid, render);
 </script>
 </body>
 </html>

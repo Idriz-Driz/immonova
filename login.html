@@ -4,60 +4,68 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ImmoNova – Login</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f7f8fc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .wrap { width: 100%; max-width: 460px; }
-    .logo { text-align: center; margin-bottom: 24px; }
-    .logo-icon { width: 56px; height: 56px; background: #2563eb; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 10px; box-shadow: 0 8px 24px rgba(37,99,235,0.25); }
-    .logo h1 { font-size: 26px; font-weight: 800; color: #0f172a; }
-    .logo h1 span { color: #2563eb; }
-    .logo p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
-    .banner { background: linear-gradient(135deg, #2563eb, #1d4ed8); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; color: white; text-align: center; }
-    .banner-badge { display: inline-block; background: #fbbf24; color: #000; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; margin-bottom: 8px; }
-    .banner h3 { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
-    .banner p { font-size: 12px; opacity: 0.85; }
-    .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
-    .tabs { display: flex; background: #f7f8fc; border-radius: 10px; padding: 4px; margin-bottom: 22px; gap: 3px; }
-    .tab { flex: 1; padding: 9px 6px; text-align: center; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: #94a3b8; border: none; background: none; font-family: inherit; }
-    .tab.active { background: white; color: #0f172a; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    body { font-family: 'DM Sans', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .wrap { width: 100%; max-width: 480px; }
+    .logo { text-align: center; margin-bottom: 28px; }
+    .logo-icon { width: 64px; height: 64px; background: #2563eb; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 30px; margin-bottom: 12px; box-shadow: 0 12px 32px rgba(37,99,235,0.4); }
+    .logo h1 { font-size: 28px; font-weight: 800; color: white; letter-spacing: -0.5px; }
+    .logo h1 span { color: #60a5fa; }
+    .logo p { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+    .banner { background: linear-gradient(135deg, #2563eb, #1d4ed8); border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; color: white; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+    .banner-badge { display: inline-block; background: #fbbf24; color: #000; font-size: 11px; font-weight: 800; padding: 3px 12px; border-radius: 20px; margin-bottom: 8px; }
+    .banner h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .banner p { font-size: 12px; opacity: 0.8; }
+    .card { background: white; border-radius: 20px; padding: 32px; box-shadow: 0 24px 64px rgba(0,0,0,0.3); }
+    .tabs { display: flex; background: #f1f5f9; border-radius: 12px; padding: 4px; margin-bottom: 24px; gap: 3px; }
+    .tab { flex: 1; padding: 10px 6px; text-align: center; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 600; color: #94a3b8; border: none; background: none; font-family: inherit; transition: all 0.2s; }
+    .tab.active { background: white; color: #0f172a; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
     .sec { display: none; }
     .sec.active { display: block; }
-    .fg { margin-bottom: 14px; }
-    .fl { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
-    .fi, .fs { width: 100%; padding: 10px 13px; border: 1px solid #e2e8f0; border-radius: 9px; font-size: 14px; font-family: inherit; color: #0f172a; background: white; outline: none; }
-    .fi:focus, .fs:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-    .fi::placeholder { color: #94a3b8; }
+    .fg { margin-bottom: 16px; }
+    .fl { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .fi, .fs { width: 100%; padding: 11px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; font-family: inherit; color: #0f172a; background: white; outline: none; transition: all 0.2s; }
+    .fi:focus, .fs:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .fi::placeholder { color: #cbd5e1; }
     .fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .btn { width: 100%; padding: 12px; border-radius: 9px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; margin-top: 8px; transition: all 0.15s; }
-    .btn-blue { background: #2563eb; color: white; }
-    .btn-blue:hover { background: #1d4ed8; }
-    .btn-green { background: #16a34a; color: white; }
-    .btn-green:hover { background: #15803d; }
-    .err { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 10px 13px; border-radius: 8px; font-size: 13px; margin-top: 10px; display: none; }
-    .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; padding: 10px 13px; border-radius: 8px; font-size: 13px; margin-top: 10px; display: none; }
-    .divider { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: #94a3b8; font-size: 12px; }
+    .btn { width: 100%; padding: 13px; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none; margin-top: 8px; transition: all 0.2s; letter-spacing: 0.2px; }
+    .btn-blue { background: #2563eb; color: white; box-shadow: 0 4px 16px rgba(37,99,235,0.3); }
+    .btn-blue:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,0.4); }
+    .btn-green { background: #16a34a; color: white; box-shadow: 0 4px 16px rgba(22,163,74,0.3); }
+    .btn-green:hover { background: #15803d; transform: translateY(-1px); }
+    .err { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 10px 14px; border-radius: 9px; font-size: 13px; margin-top: 12px; display: none; }
+    .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; padding: 10px 14px; border-radius: 9px; font-size: 13px; margin-top: 12px; display: none; }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #cbd5e1; font-size: 12px; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
-    .demo-box { margin-top: 14px; padding: 12px; background: #f7f8fc; border-radius: 8px; font-size: 12px; }
-    .demo-box strong { display: block; margin-bottom: 5px; color: #475569; }
-    .demo-box span { color: #94a3b8; line-height: 1.8; }
-    .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
-    .plan { border: 2px solid #e2e8f0; border-radius: 10px; padding: 11px; cursor: pointer; text-align: center; transition: all 0.15s; }
-    .plan:hover { border-color: #2563eb; }
+    .demo-box { margin-top: 16px; padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 12px; }
+    .demo-box strong { display: block; margin-bottom: 4px; color: #1d4ed8; }
+    .demo-box span { color: #3b82f6; line-height: 1.8; font-weight: 500; }
+    .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .plan { border: 2px solid #e2e8f0; border-radius: 12px; padding: 13px; cursor: pointer; text-align: center; transition: all 0.2s; }
+    .plan:hover { border-color: #93c5fd; background: #f8faff; }
     .plan.sel { border-color: #2563eb; background: #eff6ff; }
-    .plan-ico { font-size: 20px; margin-bottom: 4px; }
-    .plan-nm { font-size: 12px; font-weight: 700; }
+    .plan-ico { font-size: 22px; margin-bottom: 5px; }
+    .plan-nm { font-size: 12px; font-weight: 700; color: #0f172a; }
     .plan-pr { font-size: 10px; color: #94a3b8; }
-    .plan-bdg { background: #2563eb; color: white; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; margin-top: 3px; display: inline-block; }
-    .features { background: #f7f8fc; border-radius: 9px; padding: 13px 15px; margin-top: 14px; }
-    .feat { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #475569; padding: 3px 0; }
-    .feat span { color: #16a34a; }
-    .footer { text-align: center; margin-top: 14px; font-size: 12px; color: #94a3b8; }
-    .footer a { color: #2563eb; text-decoration: none; }
-    .spinner-wrap { display: none; text-align: center; padding: 10px; }
-    .spinner { width: 22px; height: 22px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 6px; }
+    .plan-bdg { background: #2563eb; color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-top: 4px; display: inline-block; }
+    .features { background: #f8fafc; border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
+    .feat { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; padding: 4px 0; }
+    .feat span { color: #16a34a; font-weight: 700; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.4); }
+    .footer a { color: rgba(255,255,255,0.6); text-decoration: none; }
+    .footer a:hover { color: white; }
+    .spinner-wrap { display: none; text-align: center; padding: 12px; color: #64748b; font-size: 13px; }
+    .spinner { width: 24px; height: 24px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .pw-row { position: relative; }
+    .pw-row .fi { padding-right: 42px; }
+    .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; color: #94a3b8; padding: 4px; }
+    .mieter-info { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px; color: #166534; }
   </style>
 </head>
 <body>
@@ -69,9 +77,9 @@
   </div>
 
   <div class="banner">
-    <div class="banner-badge">🚀 TESTPHASE GESTARTET</div>
+    <div class="banner-badge">🚀 TESTPHASE AKTIV</div>
     <h3>Jetzt kostenlos 30 Tage testen!</h3>
-    <p>Keine Kreditkarte nötig · Sofortiger Zugang · Persönliche Betreuung</p>
+    <p>Keine Kreditkarte · Sofortiger Zugang · Persönliche Betreuung</p>
   </div>
 
   <div class="card">
@@ -81,36 +89,55 @@
       <button class="tab" onclick="showTab('mieter')">🏠 Mieter-Portal</button>
     </div>
 
+    <!-- LOGIN -->
     <div class="sec active" id="sec-login">
-      <div class="fg"><label class="fl">Email-Adresse</label><input class="fi" id="l-email" type="email" placeholder="ihre@email.de"></div>
-      <div class="fg"><label class="fl">Passwort</label><input class="fi" id="l-pass" type="password" placeholder="••••••••"></div>
-      <div style="text-align:right;margin-bottom:6px;"><a href="#" style="font-size:12px;color:#2563eb;">Passwort vergessen?</a></div>
+      <div class="fg">
+        <label class="fl">Email-Adresse</label>
+        <input class="fi" id="l-email" type="email" placeholder="ihre@email.de" autocomplete="email">
+      </div>
+      <div class="fg">
+        <label class="fl">Passwort</label>
+        <div class="pw-row">
+          <input class="fi" id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+          <button class="pw-toggle" onclick="togglePw('l-pass',this)" type="button">👁️</button>
+        </div>
+      </div>
+      <div style="text-align:right;margin-bottom:8px;">
+        <a href="#" onclick="resetPw()" style="font-size:12px;color:#2563eb;text-decoration:none;font-weight:500;">Passwort vergessen?</a>
+      </div>
       <button class="btn btn-blue" id="l-btn" onclick="doLogin()">🔐 Einloggen</button>
       <div class="spinner-wrap" id="l-spin"><div class="spinner"></div>Einloggen...</div>
-      <div class="err" id="l-err">Falsche Email oder Passwort.</div>
+      <div class="err" id="l-err"></div>
       <div class="divider">oder</div>
       <div style="font-size:13px;color:#94a3b8;text-align:center;">
         Noch kein Konto? <span style="color:#2563eb;cursor:pointer;font-weight:600;" onclick="showTab('register')">Jetzt registrieren →</span>
       </div>
       <div class="demo-box">
         <strong>🎯 Demo-Zugang:</strong>
-        <span><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fe9f9a939790be979393919091889fd09a9b">[email&#160;protected]</a> / admin123</span>
+        <span>admin@immonova.de &nbsp;/&nbsp; admin123</span>
       </div>
     </div>
 
+    <!-- REGISTER -->
     <div class="sec" id="sec-register">
-      <div style="font-size:13px;font-weight:700;margin-bottom:14px;">👤 Persönliche Daten</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:16px;color:#0f172a;">👤 Persönliche Daten</div>
       <div class="fgrid">
         <div class="fg"><label class="fl">Vorname</label><input class="fi" id="r-vn" placeholder="Max"></div>
         <div class="fg"><label class="fl">Nachname</label><input class="fi" id="r-nn" placeholder="Mustermann"></div>
       </div>
       <div class="fg"><label class="fl">Email</label><input class="fi" id="r-em" type="email" placeholder="ihre@email.de"></div>
-      <div class="fg"><label class="fl">Telefon</label><input class="fi" id="r-tel" placeholder="+49 151 ..."></div>
+      <div class="fg"><label class="fl">Telefon (optional)</label><input class="fi" id="r-tel" placeholder="+49 151 ..."></div>
       <div class="fgrid">
-        <div class="fg"><label class="fl">Passwort</label><input class="fi" id="r-pw" type="password" placeholder="Min. 8 Zeichen"></div>
-        <div class="fg"><label class="fl">Bestätigen</label><input class="fi" id="r-pw2" type="password" placeholder="Wiederholen"></div>
+        <div class="fg">
+          <label class="fl">Passwort</label>
+          <div class="pw-row"><input class="fi" id="r-pw" type="password" placeholder="Min. 8 Zeichen"><button class="pw-toggle" onclick="togglePw('r-pw',this)" type="button">👁️</button></div>
+        </div>
+        <div class="fg">
+          <label class="fl">Bestätigen</label>
+          <div class="pw-row"><input class="fi" id="r-pw2" type="password" placeholder="Wiederholen"><button class="pw-toggle" onclick="togglePw('r-pw2',this)" type="button">👁️</button></div>
+        </div>
       </div>
-      <div style="font-size:13px;font-weight:700;margin:14px 0 10px;">🏢 Plan wählen</div>
+      <div style="font-size:14px;font-weight:700;margin:16px 0 12px;color:#0f172a;">🏢 Plan wählen</div>
       <div class="plan-grid">
         <div class="plan sel" id="p-starter" onclick="selPlan('starter')"><div class="plan-ico">🌱</div><div class="plan-nm">Starter</div><div class="plan-pr">bis 5 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
         <div class="plan" id="p-pro" onclick="selPlan('pro')"><div class="plan-ico">🚀</div><div class="plan-nm">Pro</div><div class="plan-pr">bis 50 Einheiten</div><div class="plan-bdg">30T GRATIS</div></div>
@@ -118,53 +145,53 @@
         <div class="plan" id="p-enterprise" onclick="selPlan('enterprise')"><div class="plan-ico">🌍</div><div class="plan-nm">Enterprise</div><div class="plan-pr">Unbegrenzt</div><div class="plan-bdg">30T GRATIS</div></div>
       </div>
       <div class="fg"><label class="fl">Firma (optional)</label><input class="fi" id="r-firma" placeholder="Immobilien GmbH"></div>
-      <div class="fg"><label class="fl">Anzahl Einheiten</label>
-        <select class="fs" id="r-einh"><option>1-5</option><option>6-20</option><option>21-50</option><option>51-200</option><option>200+</option></select>
+      <div class="fg">
+        <label class="fl">Anzahl Einheiten</label>
+        <select class="fs" id="r-einh">
+          <option>1-5</option><option>6-20</option><option>21-50</option><option>51-200</option><option>200+</option>
+        </select>
       </div>
       <div class="fg">
-        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#475569;cursor:pointer;">
-          <input type="checkbox" id="r-agb" style="margin-top:2px;flex-shrink:0;">
+        <label style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:#475569;cursor:pointer;line-height:1.5;">
+          <input type="checkbox" id="r-agb" style="margin-top:3px;flex-shrink:0;accent-color:#2563eb;">
           Ich stimme den <a href="impressum.html" style="color:#2563eb;">AGB</a> und der <a href="datenschutz.html" style="color:#2563eb;">Datenschutzerklärung</a> zu.
         </label>
       </div>
       <button class="btn btn-green" id="r-btn" onclick="doRegister()">✨ Kostenlos registrieren – 30 Tage testen</button>
       <div class="spinner-wrap" id="r-spin"><div class="spinner"></div>Registrierung läuft...</div>
       <div class="err" id="r-err"></div>
-      <div class="ok" id="r-ok">✅ Erfolgreich! Du wirst weitergeleitet...</div>
+      <div class="ok" id="r-ok">✅ Erfolgreich registriert! Du wirst weitergeleitet...</div>
       <div class="features">
-        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:7px;">✅ Das bekommst du kostenlos:</div>
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">✅ Das bekommst du kostenlos:</div>
         <div class="feat"><span>✓</span> Dashboard, Mieter, Tickets, Handwerker</div>
-        <div class="feat"><span>✓</span> Nachrichten & Chat</div>
+        <div class="feat"><span>✓</span> Nachrichten & Chat mit Mietern</div>
         <div class="feat"><span>✓</span> Terminkalender & Kontakte</div>
         <div class="feat"><span>✓</span> Zählerstände & Objekte</div>
-        <div class="feat"><span>✓</span> 10 Dokumentvorlagen</div>
-        <div class="feat"><span>✓</span> Qualitätsmanagement & QR-Codes</div>
+        <div class="feat"><span>✓</span> 10 Dokumentvorlagen (Mietvertrag etc.)</div>
+        <div class="feat"><span>✓</span> CRM & Follow-Up System</div>
         <div class="feat"><span>✓</span> Persönliche Betreuung</div>
       </div>
     </div>
 
+    <!-- MIETER -->
     <div class="sec" id="sec-mieter">
-      <div style="font-size:13px;color:#94a3b8;margin-bottom:14px;padding:10px 12px;background:#f7f8fc;border-radius:8px;">
-        🏠 Als Mieter kannst du Schäden melden und mit deinem Verwalter kommunizieren.
+      <div class="mieter-info">
+        🏠 Als Mieter kannst du Schäden melden, Dokumente einsehen und mit deinem Verwalter kommunizieren.
       </div>
       <div class="fg"><label class="fl">Dein vollständiger Name</label><input class="fi" id="m-name" placeholder="Max Mustermann"></div>
-      <div class="fg"><label class="fl">Deine Wohnung / Einheit</label><input class="fi" id="m-wohn" placeholder="z.B. 1 OG"></div>
+      <div class="fg"><label class="fl">Deine Wohnung / Einheit</label><input class="fi" id="m-wohn" placeholder="z.B. 1 OG oder EG links"></div>
       <button class="btn btn-green" onclick="doMieter()">🏠 Als Mieter einloggen</button>
-      <div class="err" id="m-err">Zugang nicht erlaubt. Bitte Name und Wohnung prüfen.</div>
+      <div class="err" id="m-err">Zugang nicht erlaubt. Bitte Namen und Wohnungsbezeichnung genau prüfen.</div>
     </div>
   </div>
 
   <div class="footer">
-    <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="#">AGB</a> · <a href="#">Support</a>
+    <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="#">AGB</a> · <a href="mailto:info@immonova.de">Support</a>
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-
-const firebaseConfig = {
+<script>
+var firebaseConfig = {
   apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
   authDomain: "immonova-2e0f2.firebaseapp.com",
   projectId: "immonova-2e0f2",
@@ -173,27 +200,33 @@ const firebaseConfig = {
   appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+var db = firebase.firestore();
 var plan = 'starter';
 
-window.showTab = function(t) {
+function showTab(t) {
   document.querySelectorAll('.tab').forEach(function(el, i) {
     el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1)||(t==='mieter'&&i===2));
   });
   document.querySelectorAll('.sec').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('sec-'+t).classList.add('active');
-};
+}
 
-window.selPlan = function(p) {
+function selPlan(p) {
   plan = p;
   ['starter','pro','business','enterprise'].forEach(function(x) {
     document.getElementById('p-'+x).classList.toggle('sel', x===p);
   });
-};
+}
 
-window.doLogin = async function() {
+function togglePw(id, btn) {
+  var fi = document.getElementById(id);
+  if (fi.type === 'password') { fi.type = 'text'; btn.textContent = '🙈'; }
+  else { fi.type = 'password'; btn.textContent = '👁️'; }
+}
+
+function doLogin() {
   var email = document.getElementById('l-email').value.trim();
   var pass = document.getElementById('l-pass').value;
   var err = document.getElementById('l-err');
@@ -201,9 +234,16 @@ window.doLogin = async function() {
   var spin = document.getElementById('l-spin');
   err.style.display = 'none';
 
+  if (!email || !pass) {
+    err.textContent = '⚠️ Bitte Email und Passwort eingeben.';
+    err.style.display = 'block';
+    return;
+  }
+
+  // Hardcoded Admin
   if (email === 'admin@immonova.de' && pass === 'admin123') {
     localStorage.setItem('in_role', 'admin');
-    localStorage.setItem('in_user_name', 'Admin');
+    localStorage.setItem('in_user_name', 'Idriz Osmanaj');
     localStorage.setItem('in_user_plan', 'pro');
     localStorage.setItem('in_user_email', email);
     localStorage.setItem('in_user_uid', 'admin');
@@ -214,27 +254,40 @@ window.doLogin = async function() {
   btn.style.display = 'none';
   spin.style.display = 'block';
 
-  try {
-    var cred = await signInWithEmailAndPassword(auth, email, pass);
-    var userDoc = await getDoc(doc(db, 'users', cred.user.uid));
-    if (userDoc.exists()) {
-      var data = userDoc.data();
-      localStorage.setItem('in_role', 'admin');
-      localStorage.setItem('in_user_name', (data.vn||'') + ' ' + (data.nn||''));
-      localStorage.setItem('in_user_plan', data.plan || 'starter');
-      localStorage.setItem('in_user_email', email);
-      localStorage.setItem('in_user_uid', cred.user.uid);
-    }
-    window.location.href = 'app.html';
-  } catch(e) {
-    btn.style.display = 'block';
-    spin.style.display = 'none';
-    err.textContent = 'Falsche Email oder Passwort.';
-    err.style.display = 'block';
-  }
-};
+  auth.signInWithEmailAndPassword(email, pass)
+    .then(function(cred) {
+      return db.collection('users').doc(cred.user.uid).get().then(function(snap) {
+        if (snap.exists) {
+          var d = snap.data();
+          localStorage.setItem('in_role', 'admin');
+          localStorage.setItem('in_user_name', (d.vn||'') + ' ' + (d.nn||''));
+          localStorage.setItem('in_user_plan', d.plan || 'starter');
+          localStorage.setItem('in_user_email', email);
+          localStorage.setItem('in_user_uid', cred.user.uid);
+        } else {
+          localStorage.setItem('in_role', 'admin');
+          localStorage.setItem('in_user_name', email.split('@')[0]);
+          localStorage.setItem('in_user_plan', 'starter');
+          localStorage.setItem('in_user_email', email);
+          localStorage.setItem('in_user_uid', cred.user.uid);
+        }
+        window.location.href = 'app.html';
+      });
+    })
+    .catch(function(e) {
+      btn.style.display = 'block';
+      spin.style.display = 'none';
+      var msg = '⚠️ Falsche Email oder Passwort.';
+      if (e.code === 'auth/user-not-found') msg = '⚠️ Kein Konto mit dieser Email gefunden.';
+      if (e.code === 'auth/wrong-password') msg = '⚠️ Falsches Passwort.';
+      if (e.code === 'auth/too-many-requests') msg = '⚠️ Zu viele Versuche. Bitte kurz warten.';
+      if (e.code === 'auth/invalid-email') msg = '⚠️ Ungültige Email-Adresse.';
+      err.textContent = msg;
+      err.style.display = 'block';
+    });
+}
 
-window.doRegister = async function() {
+function doRegister() {
   var vn = document.getElementById('r-vn').value.trim();
   var nn = document.getElementById('r-nn').value.trim();
   var em = document.getElementById('r-em').value.trim();
@@ -249,68 +302,93 @@ window.doRegister = async function() {
   var btn = document.getElementById('r-btn');
   var spin = document.getElementById('r-spin');
 
-  err.style.display = 'none';
-  ok.style.display = 'none';
+  err.style.display = 'none'; ok.style.display = 'none';
 
-  if (!vn||!nn) { err.textContent='⚠️ Bitte Vor- und Nachname eingeben.'; err.style.display='block'; return; }
-  if (!em||em.indexOf('@')<0) { err.textContent='⚠️ Bitte gültige Email eingeben.'; err.style.display='block'; return; }
-  if (pw.length<8) { err.textContent='⚠️ Passwort mindestens 8 Zeichen.'; err.style.display='block'; return; }
-  if (pw!==pw2) { err.textContent='⚠️ Passwörter stimmen nicht überein.'; err.style.display='block'; return; }
-  if (!agb) { err.textContent='⚠️ Bitte AGB akzeptieren.'; err.style.display='block'; return; }
+  if (!vn || !nn) { err.textContent='⚠️ Bitte Vor- und Nachname eingeben.'; err.style.display='block'; return; }
+  if (!em || em.indexOf('@') < 0) { err.textContent='⚠️ Bitte gültige Email eingeben.'; err.style.display='block'; return; }
+  if (pw.length < 8) { err.textContent='⚠️ Passwort muss mindestens 8 Zeichen haben.'; err.style.display='block'; return; }
+  if (pw !== pw2) { err.textContent='⚠️ Passwörter stimmen nicht überein.'; err.style.display='block'; return; }
+  if (!agb) { err.textContent='⚠️ Bitte AGB und Datenschutz akzeptieren.'; err.style.display='block'; return; }
 
   btn.style.display = 'none';
   spin.style.display = 'block';
 
-  try {
-    var cred = await createUserWithEmailAndPassword(auth, em, pw);
-    var datum = new Date().toLocaleDateString('de-DE');
-
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      vn: vn, nn: nn, email: em, tel: tel, firma: firma,
-      einh: einh, plan: plan, datum: datum, rolle: 'admin', aktiv: true
+  auth.createUserWithEmailAndPassword(em, pw)
+    .then(function(cred) {
+      var uid = cred.user.uid;
+      var datum = new Date().toLocaleDateString('de-DE');
+      return db.collection('users').doc(uid).set({
+        vn: vn, nn: nn, email: em, tel: tel, firma: firma,
+        einh: einh, plan: plan, datum: datum, rolle: 'admin', aktiv: true
+      }).then(function() {
+        return db.collection('data').doc(uid).set({
+          mieter: [], tickets: [], handwerker: [], termine: [],
+          kontakte: [], aufgaben: [], zaehler: [], objekte: [],
+          versicherungen: [], notifs: [], projekte: [], followups: [],
+          interessenten: [], mitteilungen: [], reinigungen: []
+        });
+      }).then(function() {
+        localStorage.setItem('in_role', 'admin');
+        localStorage.setItem('in_user_name', vn + ' ' + nn);
+        localStorage.setItem('in_user_plan', plan);
+        localStorage.setItem('in_user_email', em);
+        localStorage.setItem('in_user_uid', uid);
+        ok.style.display = 'block';
+        setTimeout(function() { window.location.href = 'app.html'; }, 1500);
+      });
+    })
+    .catch(function(e) {
+      btn.style.display = 'block';
+      spin.style.display = 'none';
+      var msg = '⚠️ Fehler bei der Registrierung.';
+      if (e.code === 'auth/email-already-in-use') msg = '⚠️ Diese Email ist bereits registriert. Bitte einloggen.';
+      if (e.code === 'auth/invalid-email') msg = '⚠️ Ungültige Email-Adresse.';
+      if (e.code === 'auth/weak-password') msg = '⚠️ Passwort zu schwach. Mindestens 8 Zeichen.';
+      err.textContent = msg;
+      err.style.display = 'block';
     });
+}
 
-    await setDoc(doc(db, 'data', cred.user.uid), {
-      mieter: [], tickets: [], handwerker: [], termine: [],
-      kontakte: [], aufgaben: [], zaehler: [], objekte: [],
-      versicherungen: [], notifs: []
-    });
-
-    localStorage.setItem('in_role', 'admin');
-    localStorage.setItem('in_user_name', vn+' '+nn);
-    localStorage.setItem('in_user_plan', plan);
-    localStorage.setItem('in_user_email', em);
-    localStorage.setItem('in_user_uid', cred.user.uid);
-
-    ok.style.display = 'block';
-    setTimeout(function() { window.location.href = 'app.html'; }, 1500);
-  } catch(e) {
-    btn.style.display = 'block';
-    spin.style.display = 'none';
-    if (e.code === 'auth/email-already-in-use') {
-      err.textContent = '⚠️ Diese Email ist bereits registriert.';
-    } else {
-      err.textContent = '⚠️ Fehler bei der Registrierung. Bitte versuche es erneut.';
-    }
-    err.style.display = 'block';
-  }
-};
-
-window.doMieter = function() {
+function doMieter() {
   var name = document.getElementById('m-name').value.trim();
   var wohn = document.getElementById('m-wohn').value.trim();
   var err = document.getElementById('m-err');
+  if (!name || !wohn) { err.textContent = '⚠️ Bitte Namen und Wohnungsbezeichnung eingeben.'; err.style.display='block'; return; }
   var liste = JSON.parse(localStorage.getItem('in_m') || '[]');
-  var found = liste.some(function(m) { return m.name===name && m.wn===wohn; });
+  var found = liste.some(function(m) { return m.name.toLowerCase()===name.toLowerCase() && m.wn.toLowerCase()===wohn.toLowerCase(); });
   if (found) {
     localStorage.setItem('in_role', 'mieter');
     localStorage.setItem('in_mieter_name', name);
     localStorage.setItem('in_mieter_wohnung', wohn);
     window.location.href = 'mieter.html';
   } else {
+    err.textContent = '⚠️ Zugang nicht erlaubt. Bitte Namen und Wohnungsbezeichnung genau prüfen.';
     err.style.display = 'block';
   }
-};
+}
+
+function resetPw() {
+  var email = document.getElementById('l-email').value.trim();
+  var err = document.getElementById('l-err');
+  if (!email || email.indexOf('@') < 0) {
+    err.textContent = '⚠️ Bitte zuerst deine Email-Adresse eingeben.';
+    err.style.display = 'block';
+    return;
+  }
+  auth.sendPasswordResetEmail(email).then(function() {
+    err.style.background = '#f0fdf4';
+    err.style.borderColor = '#bbf7d0';
+    err.style.color = '#16a34a';
+    err.textContent = '✅ Passwort-Reset Email wurde gesendet. Bitte Postfach prüfen.';
+    err.style.display = 'block';
+  }).catch(function() {
+    err.style.background = '#fef2f2';
+    err.style.borderColor = '#fecaca';
+    err.style.color = '#dc2626';
+    err.textContent = '⚠️ Fehler. Bitte Email-Adresse prüfen.';
+    err.style.display = 'block';
+  });
+}
 
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Enter') return;
