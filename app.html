@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
+<link rel="manifest" href="manifest.json">
 </head>
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f1f5f9;">
 <script>
@@ -261,6 +262,74 @@ function render() {
     }).join('');
   }
 
+  // ── 6-Monats-Einnahmen-Trend ──────────────────────────────
+  var zahlungen = getData(KEYS.zahlungen, []);
+  var trendMonths = [];
+  for (var ti = 5; ti >= 0; ti--) {
+    var td = new Date(); td.setDate(1); td.setMonth(td.getMonth() - ti);
+    var mKey = td.getFullYear() + '-' + String(td.getMonth()+1).padStart(2,'0');
+    var mLabel = td.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
+    // Sum zahlungen for this month
+    var monthSum = zahlungen.filter(function(z) {
+      return z.datum && z.datum.startsWith(mKey);
+    }).reduce(function(s, z) { return s + (parseFloat(z.betrag)||0); }, 0);
+    // If no Zahlungen data, use current monthly income
+    if (monthSum === 0 && monthlyIncome > 0) monthSum = monthlyIncome;
+    trendMonths.push({ label: mLabel, value: monthSum });
+  }
+  var trendMax = Math.max.apply(null, trendMonths.map(function(m){ return m.value; })) || 1;
+  var trendBarsHTML = trendMonths.map(function(m, idx) {
+    var pct = Math.max(4, Math.round(m.value / trendMax * 100));
+    var isLast = idx === trendMonths.length - 1;
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;" '
+      + 'onmouseenter="var tt=this.querySelector(\'.tt\');if(tt)tt.style.display=\'block\';" '
+      + 'onmouseleave="var tt=this.querySelector(\'.tt\');if(tt)tt.style.display=\'none\';">'
+      + '<div class="tt" style="display:none;position:absolute;bottom:calc('+pct+'% + 34px);left:50%;transform:translateX(-50%);background:#0f172a;color:white;font-size:11px;font-weight:600;padding:4px 9px;border-radius:7px;white-space:nowrap;z-index:10;">'
+      +   m.value.toLocaleString('de-DE') + ' €'
+      + '</div>'
+      + '<div style="width:100%;flex:1;display:flex;align-items:flex-end;justify-content:center;">'
+      +   '<div style="width:72%;background:' + (isLast?'#2563eb':'#bfdbfe') + ';border-radius:6px 6px 0 0;height:'+pct+'%;min-height:6px;transition:background 0.15s;" '
+      +   'onmouseenter="this.style.background=\'#2563eb\';" onmouseleave="this.style.background=\'' + (isLast?'#2563eb':'#bfdbfe') + '\';">'
+      +   '</div>'
+      + '</div>'
+      + '<div style="font-size:10px;font-weight:600;color:#94a3b8;margin-top:2px;">' + m.label + '</div>'
+      + '</div>';
+  }).join('');
+
+  var trendChartHTML =
+    '<div style="display:flex;align-items:flex-end;gap:6px;height:110px;padding:0 4px;">'
+    + trendBarsHTML
+    + '</div>';
+
+  // ── Belegungsquote Donut ───────────────────────────────────
+  var totalUnits = Math.max(objekte.reduce(function(s, o) {
+    return s + (parseInt(o.einheiten||o.wohnungen||1)||1);
+  }, 0), mieter.length, 1);
+  var belegtPct = Math.min(100, Math.round(mieter.length / totalUnits * 100));
+  var freePct = 100 - belegtPct;
+  var donutStyle = 'background:conic-gradient(#2563eb 0% ' + belegtPct + '%, #e2e8f0 ' + belegtPct + '% 100%);'
+    + 'width:110px;height:110px;border-radius:50%;position:relative;flex-shrink:0;';
+  var belegungHTML =
+    '<div style="display:flex;align-items:center;gap:20px;">'
+    + '<div style="' + donutStyle + '">'
+    +   '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:white;width:68px;height:68px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">'
+    +     '<div style="font-size:18px;font-weight:700;color:#0f172a;">' + belegtPct + '%</div>'
+    +     '<div style="font-size:9px;color:#94a3b8;font-weight:600;">belegt</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;">'
+    +   '<div style="display:flex;align-items:center;gap:8px;">'
+    +     '<div style="width:10px;height:10px;border-radius:50%;background:#2563eb;flex-shrink:0;"></div>'
+    +     '<span style="font-size:12px;color:#374151;"><strong>' + mieter.length + '</strong> belegt</span>'
+    +   '</div>'
+    +   '<div style="display:flex;align-items:center;gap:8px;">'
+    +     '<div style="width:10px;height:10px;border-radius:50%;background:#e2e8f0;flex-shrink:0;"></div>'
+    +     '<span style="font-size:12px;color:#374151;"><strong>' + Math.max(0, totalUnits - mieter.length) + '</strong> frei</span>'
+    +   '</div>'
+    +   '<div style="font-size:11px;color:#94a3b8;">' + totalUnits + ' Einheiten gesamt</div>'
+    + '</div>'
+    + '</div>';
+
   // ── Assemble Main Content ─────────────────────────────────
   var mainContent =
     '<div style="max-width:1400px;margin:0 auto;">'
@@ -302,6 +371,15 @@ function render() {
     + '</div>'
     + '</div>'
 
+    // Einnahmen Trend (full width)
+    + '<div style="background:white;border-radius:16px;padding:22px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1px solid #e8edf3;margin-bottom:16px;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+    +   sectionTitle('\ud83d\udcc8', '6-Monats-Einnahmen-Trend')
+    +   '<span style="font-size:12px;color:#94a3b8;font-weight:500;">Ø ' + formatCurrency(Math.round(trendMonths.reduce(function(s,m){return s+m.value;},0)/6)) + '/Monat</span>'
+    + '</div>'
+    + trendChartHTML
+    + '</div>'
+
     // Bottom Grid: Activity + Charts
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
 
@@ -313,6 +391,12 @@ function render() {
 
     // Mini Charts column
     + '<div style="display:flex;flex-direction:column;gap:16px;">'
+
+    // Belegungsquote Donut
+    + '<div style="background:white;border-radius:16px;padding:22px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1px solid #e8edf3;">'
+    + sectionTitle('\ud83c\udfe2', 'Belegungsquote')
+    + belegungHTML
+    + '</div>'
 
     // Ticket Status Chart
     + '<div style="background:white;border-radius:16px;padding:22px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1px solid #e8edf3;">'

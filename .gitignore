@@ -1,0 +1,16 @@
+# Sensitive Konfigurationsdateien
+admin-config.js
+.env
+.env.local
+secrets.js
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -92,6 +92,7 @@
       #right-panel.conv-open { display: flex !important; width: 100% !important; }
     }
   </style>
+<link rel="manifest" href="manifest.json">
 </head>
 <body style="margin:0;padding:0;">
 <script>
@@ -159,10 +160,10 @@ function dayLabel(dayStr) {
 
 // ─── DATA ACCESSORS ───────────────────────────────────────────────────────────
 function getMessages() {
-  return getData('in_messages', []);
+  return getData(KEYS.messages, []);
 }
 function setMessages(msgs) {
-  setData('in_messages', msgs);
+  setData(KEYS.messages, msgs);
 }
 
 // Build conversation list from messages
@@ -681,11 +682,32 @@ function startConversation() {
   render();
 }
 
+// ─── SOFT UPDATE (preserves chat input on real-time updates) ──────────────────
+var _initialRenderDone = false;
+function softUpdate() {
+  if (!_initialRenderDone) { render(); _initialRenderDone = true; return; }
+  // Only update dynamic parts – keep the layout/input intact
+  renderConvList();
+  if (_activeKonvId) {
+    var chatMsgs = document.getElementById('chat-msgs');
+    if (chatMsgs) {
+      var convs = getConversations();
+      var conv = null;
+      convs.forEach(function(c) { if (c.konvId === _activeKonvId) conv = c; });
+      if (conv) {
+        chatMsgs.innerHTML = renderMessages(conv.messages);
+        scrollToBottom();
+      }
+    }
+  }
+  renderNotifList();
+}
+
 // ─── BOOTSTRAP ────────────────────────────────────────────────────────────────
 initFirebase();
 loadFromFirebase(user.uid, function() {
   startPageListener(user.uid, function() {
-    render();
+    softUpdate();
   });
 });
 </script>

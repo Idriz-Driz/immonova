@@ -67,6 +67,7 @@
     .footer a:hover { color: white; }
     .section-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
   </style>
+<link rel="manifest" href="manifest.json">
 </head>
 <body>
 <div class="wrap">
@@ -246,18 +247,8 @@ function doLogin() {
     return;
   }
 
-  // Superadmin Backdoor (lokaler Login, feste UID damit Firebase-Sync funktioniert)
-  if (email === 'admin@immonova.de' && pass === 'admin123') {
-    localStorage.setItem('in_role', 'superadmin');
-    localStorage.setItem('in_user_name', 'Idriz Osmanaj');
-    localStorage.setItem('in_user_plan', 'enterprise');
-    localStorage.setItem('in_user_email', email);
-    localStorage.setItem('in_user_uid', 'superadmin_idriz_osmanaj');
-    localStorage.setItem('in_user_firma', 'ImmoNova Admin');
-    localStorage.setItem('in_onboarding_done', 'true');
-    window.location.href = 'app.html';
-    return;
-  }
+  // Superadmin-Login: Credentials werden gegen Firebase Auth geprüft.
+  // Kein Passwort im Code gespeichert – Login läuft über Firebase Auth unten.
 
   btn.style.display = 'none';
   spin.style.display = 'block';

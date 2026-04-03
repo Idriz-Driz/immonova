@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="shared.js"></script>
+<link rel="manifest" href="manifest.json">
 </head>
 <body style="margin:0;padding:0;">
 <script>
@@ -30,10 +31,10 @@ function generateId() {
 
 // ── Data helpers ─────────────────────────────────────────────
 function getZahlungen() {
-  return getData('in_zahlungen', []);
+  return getData(KEYS.zahlungen, []);
 }
 function saveZahlungen(arr) {
-  setData('in_zahlungen', arr);
+  setData(KEYS.zahlungen, arr);
   syncToFirebase(user.uid);
 }
 

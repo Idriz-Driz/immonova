@@ -118,6 +118,8 @@ var KEYS = {
   interessenten: 'in_int',
   mitteilungen:  'in_mit',
   reinigungen:   'in_rei',
+  zahlungen:     'in_zahlungen',
+  messages:      'in_messages',
   notifs:        'in_notifs'
 };
 
@@ -164,7 +166,11 @@ function syncToFirebase(uid) {
   if (typeof firebase === 'undefined') return;
   var db = firebase.firestore();
   var data = {};
-  Object.keys(KEYS).forEach(function (k) { data[k] = getData(KEYS[k], []); });
+  // zaehler speichert als Object {}, alle anderen als Array []
+  var objectKeys = { zaehler: true };
+  Object.keys(KEYS).forEach(function (k) {
+    data[k] = getData(KEYS[k], objectKeys[k] ? {} : []);
+  });
   db.collection('data').doc(uid).set(data, { merge: true }).catch(function () {});
 }
 

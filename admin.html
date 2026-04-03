@@ -85,6 +85,7 @@
     .log-txt { flex: 1; }
     .log-time { font-size: 11px; color: #94a3b8; margin-top: 2px; }
   </style>
+<link rel="manifest" href="manifest.json">
 </head>
 <body>
 
@@ -276,25 +277,47 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 var auth = firebase.auth();
 var db = firebase.firestore();
 
-// Only superadmin can access
-var role = localStorage.getItem('in_role');
-if (role !== 'superadmin' && role !== 'admin') {
-  window.location.href = 'app.html';
-}
+// Zugriffsschutz: Nur superadmin/admin via Firebase Auth + Firestore verifiziert
+document.body.style.visibility = 'hidden';
+auth.onAuthStateChanged(function(user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  db.collection('users').doc(user.uid).get().then(function(snap) {
+    var rolle = snap.exists ? (snap.data().rolle || '') : '';
+    // Fallback: lokale superadmin UID erlaubt (für Backdoor-Login)
+    var localUid = localStorage.getItem('in_user_uid') || '';
+    var localRole = localStorage.getItem('in_role') || '';
+    var isSuperAdmin = (rolle === 'superadmin' || rolle === 'admin')
+                    || (localRole === 'superadmin' && localUid === 'superadmin_idriz_osmanaj');
+    if (!isSuperAdmin) { window.location.href = 'app.html'; return; }
+    document.body.style.visibility = 'visible';
+    loadAdminData();
+  }).catch(function() {
+    // Fallback bei Firebase-Fehler: lokale Rolle prüfen
+    var localRole = localStorage.getItem('in_role') || '';
+    var localUid = localStorage.getItem('in_user_uid') || '';
+    if (localRole === 'superadmin' && localUid === 'superadmin_idriz_osmanaj') {
+      document.body.style.visibility = 'visible';
+      loadAdminData();
+    } else {
+      window.location.href = 'app.html';
+    }
+  });
+});
 
 var allUsers = [];
 
-// Load users from Firestore
-db.collection('users').orderBy('createdAt', 'desc').get().then(function(snap) {
-  allUsers = [];
-  snap.forEach(function(doc) {
-    allUsers.push(Object.assign({ uid: doc.id }, doc.data()));
-  });
-  updateKPIs();
-  renderUsers(allUsers);
+function loadAdminData() {
+  db.collection('users').orderBy('createdAt', 'desc').get().then(function(snap) {
+    allUsers = [];
+    snap.forEach(function(doc) {
+      allUsers.push(Object.assign({ uid: doc.id }, doc.data()));
+    });
+    updateKPIs();
+    renderUsers(allUsers);
 }).catch(function() {
-  document.getElementById('users-loading').innerHTML = '<p style="color:#dc2626;">⚠️ Fehler beim Laden der Nutzer.</p>';
-});
+    document.getElementById('users-loading').innerHTML = '<p style="color:#dc2626;">⚠️ Fehler beim Laden der Nutzer.</p>';
+  });
+} // end loadAdminData
 
 function updateKPIs() {
   var now = new Date();
