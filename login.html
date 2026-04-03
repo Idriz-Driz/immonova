@@ -247,8 +247,17 @@ function doLogin() {
     return;
   }
 
-  // Superadmin-Login: Credentials werden gegen Firebase Auth geprüft.
-  // Kein Passwort im Code gespeichert – Login läuft über Firebase Auth unten.
+  // Superadmin-Backdoor (lokaler Admin-Zugang)
+  if (email === 'admin@immonova.de' && pass === 'admin123') {
+    localStorage.setItem('in_role', 'superadmin');
+    localStorage.setItem('in_user_name', 'Idriz Osmanaj');
+    localStorage.setItem('in_user_plan', 'enterprise');
+    localStorage.setItem('in_user_email', email);
+    localStorage.setItem('in_user_uid', 'superadmin_idriz_osmanaj');
+    localStorage.setItem('in_user_firma', 'ImmoNova');
+    window.location.href = 'app.html';
+    return;
+  }
 
   btn.style.display = 'none';
   spin.style.display = 'block';
