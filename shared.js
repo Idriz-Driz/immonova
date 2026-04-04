@@ -551,13 +551,68 @@ function badge(txt, color) {
   return '<span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;'+(c[color]||c.gray)+'">'+txt+'</span>';
 }
 
-function formGroup(label, inputHtml, extraStyle) {
-  return '<div style="margin-bottom:14px;'+(extraStyle||'')+'">'
-    + '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px;">'+label+'</label>'
+// ─── UNIFIED FORM DESIGN SYSTEM ───────────────────────────────
+var inputStyle = 'width:100%;height:42px;padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;transition:border-color 0.15s,box-shadow 0.15s;" onfocus="this.style.borderColor=\'#2563eb\';this.style.boxShadow=\'0 0 0 3px rgba(37,99,235,0.1)\'" onblur="this.style.borderColor=\'#e2e8f0\';this.style.boxShadow=\'none\'';
+var labelStyle = 'display:block;font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;';
+var formGroupStyle = 'margin-bottom:14px;';
+var formRowStyle = 'display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0;';
+var formRow3Style = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:0;';
+var selectStyle = inputStyle + ';cursor:pointer;';
+var textareaStyle = 'width:100%;padding:9px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;resize:vertical;min-height:70px;transition:border-color 0.15s,box-shadow 0.15s;" onfocus="this.style.borderColor=\'#2563eb\';this.style.boxShadow=\'0 0 0 3px rgba(37,99,235,0.1)\'" onblur="this.style.borderColor=\'#e2e8f0\';this.style.boxShadow=\'none\'';
+
+function formGroup(label, inputHtml, extraStyleOrRequired) {
+  var extra = typeof extraStyleOrRequired === 'string' ? extraStyleOrRequired : '';
+  var req = extraStyleOrRequired === true;
+  var lbl = req ? label + '<span style="color:#ef4444;margin-left:2px;">*</span>' : label;
+  return '<div style="'+formGroupStyle+extra+'">'
+    + '<label style="'+labelStyle+'">'+lbl+'</label>'
     + inputHtml + '</div>';
 }
 
-var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
+function formInput(id, type, placeholder, extra) {
+  return '<input id="'+id+'" type="'+(type||'text')+'" placeholder="'+(placeholder||'')+'" style="'+inputStyle+'" '+(extra||'')+'>';
+}
+
+function formSelect(id, optionsHtml, extra) {
+  return '<select id="'+id+'" style="'+inputStyle+'" '+(extra||'')+'>'+(optionsHtml||'')+'</select>';
+}
+
+function formTextarea(id, placeholder, rows) {
+  return '<textarea id="'+id+'" placeholder="'+(placeholder||'')+'" rows="'+(rows||3)+'" style="'+textareaStyle+'"></textarea>';
+}
+
+function formRow(col1, col2) {
+  return '<div style="'+formRowStyle+'">'+col1+col2+'</div>';
+}
+
+function formRow3(col1, col2, col3) {
+  return '<div style="'+formRow3Style+'">'+col1+col2+col3+'</div>';
+}
+
+function modalFooter(cancelId, saveLabel, saveAction) {
+  return '<div style="display:flex;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9;">'
+    + '<button onclick="'+saveAction+'" style="flex:1;height:42px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;">'+saveLabel+'</button>'
+    + '<button onclick="hideModal(\''+cancelId+'\')" style="height:42px;padding:0 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>';
+}
+
+// Blocks add/edit/delete in demo mode; returns true if blocked
+function checkDemoBlock() {
+  if (!isDemoMode()) return false;
+  toast('Im Demo-Modus sind keine Änderungen möglich. Jetzt kostenlos registrieren!', 'info');
+  return true;
+}
+
+// Injects sticky demo mode banner at top of page
+function showDemoBanner() {
+  if (!isDemoMode()) return;
+  if (document.getElementById('demo-banner')) return;
+  var b = document.createElement('div');
+  b.id = 'demo-banner';
+  b.style.cssText = 'background:#1e3a8a;color:white;text-align:center;padding:10px 20px;font-size:13px;font-weight:600;position:sticky;top:0;z-index:998;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;';
+  b.innerHTML = '🏢 Du siehst gerade Beispiel-Daten – lege jetzt deine echten Daten an! <a href="login.html#register" style="color:#93c5fd;text-decoration:underline;white-space:nowrap;">Jetzt kostenlos registrieren →</a>';
+  document.body.insertBefore(b, document.body.firstChild);
+}
 
 function emptyState(icon, title, desc, btnLabel, btnOnclick) {
   return '<div style="text-align:center;padding:60px 20px;">'

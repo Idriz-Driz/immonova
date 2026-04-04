@@ -14,6 +14,8 @@
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
 checkAuth(); checkTrial();
+showDemoBanner();
+showDemoBanner();
 var user = getUser(); var uid = user.uid;
 var editWohnung = null;
 var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
@@ -139,14 +141,13 @@ function buildReadModal(mieter) {
 }
 
 function buildManualModal() {
+  var body = formGroup('Wohnungsbezeichnung *', formInput('man-wn','text','z.B. EG Links / OG 2'), true)
+    + modalFooter('manual-modal', 'Weiter →', 'startManual()');
   return '<div id="manual-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:360px;width:100%;margin:20px;">'
-    +'<h3 style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:16px;">Wohnung eingeben</h3>'
-    +'<div style="margin-bottom:16px;">'+lbl('Wohnungsbezeichnung')+'<input id="man-wn" style="'+inputStyle+'" placeholder="z.B. EG Links / OG 2"></div>'
-    +'<div style="display:flex;gap:10px;">'
-    +'<button onclick="closeManual()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="startManual()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Weiter</button>'
-    +'</div></div></div>';
+    +'<div style="background:white;border-radius:16px;padding:28px;max-width:360px;width:100%;margin:20px;">'
+    +'<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:20px;">Wohnung eingeben</div>'
+    + body
+    +'</div></div>';
 }
 
 function openRead(wn) {
@@ -163,8 +164,8 @@ function openRead(wn) {
   document.getElementById('read-modal').style.display = 'flex';
 }
 
-function openAddWohnung() { document.getElementById('manual-modal').style.display='flex'; document.getElementById('man-wn').value=''; }
-function closeManual() { document.getElementById('manual-modal').style.display='none'; }
+function openAddWohnung() { if (checkDemoBlock()) return; showModal('manual-modal'); document.getElementById('man-wn').value=''; }
+function closeManual() { hideModal('manual-modal'); }
 function startManual() {
   var wn = document.getElementById('man-wn').value.trim();
   if (!wn) { alert('Bitte Wohnung eingeben.'); return; }

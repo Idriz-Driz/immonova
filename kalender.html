@@ -475,6 +475,7 @@ function switchView(v) {
 
 // ─── MODAL LOGIC ──────────────────────────────────────────
 function openAddModal(dateStr) {
+  if (checkDemoBlock()) return;
   editingId = null;
   var titleEl = document.getElementById('modal-title-label');
   if (titleEl) titleEl.textContent = 'Neuer Termin';

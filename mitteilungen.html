@@ -14,6 +14,8 @@
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
 checkAuth(); checkTrial();
+showDemoBanner();
+showDemoBanner();
 var user = getUser(); var uid = user.uid;
 var editId = null;
 var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
@@ -105,26 +107,23 @@ function kpi(ico,l,v,s) {
 }
 
 function buildModal() {
-  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:500px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Mitteilung erstellen</h3>'
-    +'<div style="margin-bottom:12px;">'+lbl('Typ')+'<select id="m-typ" onchange="updateTypPreview()" style="'+inputStyle+'">'
-    +Object.keys(TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('')
-    +'</select></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Titel')+'<input id="m-titel" style="'+inputStyle+'" placeholder="z.B. Wasserabsperrung am 15. März"></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;">'+lbl('Datum')+'<input id="m-datum" type="date" style="'+inputStyle+'"></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Empfänger')+'<input id="m-empf" style="'+inputStyle+'" placeholder="Alle Mieter"></div>'
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Inhalt')+'<textarea id="m-text" style="'+inputStyle+'height:120px;resize:vertical;" placeholder="Text der Mitteilung..."></textarea></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Gültig bis (optional)')+'<input id="m-bis" type="date" style="'+inputStyle+'"></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveMitt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+  var typOpts = Object.keys(TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('');
+  var body =
+    formGroup('Typ', formSelect('m-typ', typOpts, 'onchange="updateTypPreview()"'))
+    + formGroup('Titel *', formInput('m-titel','text','z.B. Wasserabsperrung am 15. März'), true)
+    + formRow(
+        formGroup('Datum', formInput('m-datum','date','')),
+        formGroup('Empfänger', formInput('m-empf','text','Alle Mieter'))
+      )
+    + formGroup('Inhalt', formTextarea('m-text','Text der Mitteilung...', 4))
+    + formGroup('Gültig bis (optional)', formInput('m-bis','date',''))
+    + modalFooter('add-modal', '💾 Speichern', 'saveMitt()');
+
+  return modalHTML('add-modal', '<span id="m-title">Mitteilung erstellen</span>', body);
 }
 
 function openAdd() {
+  if (checkDemoBlock()) return;
   editId = null;
   document.getElementById('m-title').textContent = 'Mitteilung erstellen';
   document.getElementById('m-titel').value = '';
@@ -133,7 +132,7 @@ function openAdd() {
   document.getElementById('m-datum').value = today();
   document.getElementById('m-bis').value = '';
   document.getElementById('m-typ').value = 'Info';
-  document.getElementById('add-modal').style.display = 'flex';
+  showModal('add-modal');
 }
 
 function openEdit(id) {
@@ -146,10 +145,10 @@ function openEdit(id) {
   document.getElementById('m-empf').value = m.empfaenger||'Alle Mieter';
   document.getElementById('m-text').value = m.text||'';
   document.getElementById('m-bis').value = m.bis||'';
-  document.getElementById('add-modal').style.display = 'flex';
+  showModal('add-modal');
 }
 
-function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function closeAdd() { hideModal('add-modal'); }
 
 function saveMitt() {
   var titel = document.getElementById('m-titel').value.trim();

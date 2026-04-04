@@ -16,6 +16,7 @@
 <script>
 checkAuth();
 checkTrial();
+showDemoBanner();
 
 var user = getUser();
 
@@ -121,6 +122,7 @@ function deleteTicket(id) {
 }
 
 function openTicketModal(id) {
+  if (!id && checkDemoBlock()) return;
   editTicketId = id || null;
   var tickets = getTickets();
   var t = id ? tickets.find(function(x){ return x.id == id; }) : null;
@@ -488,57 +490,29 @@ function buildModal() {
   var content =
     '<div id="tm-err" style="color:#dc2626;font-size:13px;margin-bottom:8px;min-height:18px;"></div>' +
 
-    formGroup('Titel *',
-      '<input id="tm-titel" type="text" placeholder="z.B. Wasserschaden Badezimmer" style="' + inputStyle + '">') +
+    formGroup('Titel *', formInput('tm-titel','text','z.B. Wasserschaden Badezimmer'), true) +
 
-    formGroup('Beschreibung',
-      '<textarea id="tm-beschreibung" rows="3" placeholder="Beschreiben Sie das Problem..." style="' + inputStyle + 'resize:vertical;"></textarea>') +
+    formGroup('Beschreibung', formTextarea('tm-beschreibung','Beschreiben Sie das Problem...', 3)) +
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">' +
-      formGroup('Priorität',
-        '<select id="tm-prioritaet" style="' + inputStyle + '">' +
-          '<option value="Normal">Normal</option>' +
-          '<option value="Dringend">Dringend</option>' +
-          '<option value="Notfall">Notfall</option>' +
-        '</select>') +
-      formGroup('Status',
-        '<select id="tm-status" style="' + inputStyle + '">' +
-          '<option value="Offen">Offen</option>' +
-          '<option value="In Bearbeitung">In Bearbeitung</option>' +
-          '<option value="Erledigt">Erledigt</option>' +
-        '</select>') +
-      formGroup('Bereich',
-        '<select id="tm-bereich" style="' + inputStyle + '">' +
-          '<option value="Küche">Küche</option>' +
-          '<option value="Bad">Bad</option>' +
-          '<option value="Wohnzimmer">Wohnzimmer</option>' +
-          '<option value="Schlafzimmer">Schlafzimmer</option>' +
-          '<option value="Flur">Flur</option>' +
-          '<option value="Keller">Keller</option>' +
-          '<option value="Außenbereich">Außenbereich</option>' +
-          '<option value="Sonstiges">Sonstiges</option>' +
-        '</select>') +
-    '</div>' +
+    formRow3(
+      formGroup('Priorität', formSelect('tm-prioritaet','<option value="Normal">Normal</option><option value="Dringend">Dringend</option><option value="Notfall">Notfall</option>')),
+      formGroup('Status', formSelect('tm-status','<option value="Offen">Offen</option><option value="In Bearbeitung">In Bearbeitung</option><option value="Erledigt">Erledigt</option>')),
+      formGroup('Bereich', formSelect('tm-bereich','<option value="Küche">Küche</option><option value="Bad">Bad</option><option value="Wohnzimmer">Wohnzimmer</option><option value="Schlafzimmer">Schlafzimmer</option><option value="Flur">Flur</option><option value="Keller">Keller</option><option value="Außenbereich">Außenbereich</option><option value="Sonstiges">Sonstiges</option>'))
+    ) +
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0;">' +
-      formGroup('Mieter',
-        '<input id="tm-mieter" type="text" placeholder="Name des Mieters" style="' + inputStyle + '">') +
-      formGroup('Wohnung',
-        '<input id="tm-wohnung" type="text" placeholder="z.B. EG links / Whg. 3" style="' + inputStyle + '">') +
-    '</div>' +
+    formRow(
+      formGroup('Mieter', formInput('tm-mieter','text','Name des Mieters')),
+      formGroup('Wohnung', formInput('tm-wohnung','text','z.B. EG links / Whg. 3'))
+    ) +
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0;">' +
-      formGroup('Handwerker zuweisen',
-        '<input id="tm-handwerker" type="text" placeholder="Name des Handwerkers" style="' + inputStyle + '">') +
-      formGroup('Datum',
-        '<input id="tm-datum" type="date" style="' + inputStyle + '">') +
-    '</div>' +
+    formRow(
+      formGroup('Handwerker zuweisen', formInput('tm-handwerker','text','Name des Handwerkers')),
+      formGroup('Datum', formInput('tm-datum','date',''))
+    ) +
 
-    formGroup('Kostenvoranschlag (€)',
-      '<input id="tm-kosten" type="number" min="0" step="0.01" placeholder="0,00" style="' + inputStyle + '">') +
+    formGroup('Kostenvoranschlag (€)', formInput('tm-kosten','number','0,00','min="0" step="0.01"')) +
 
-    formGroup('Notizen',
-      '<textarea id="tm-notizen" rows="2" placeholder="Interne Notizen..." style="' + inputStyle + 'resize:vertical;"></textarea>') +
+    formGroup('Notizen', formTextarea('tm-notizen','Interne Notizen...', 2)) +
 
     formGroup('Foto anhängen',
       '<div style="position:relative;">' +
@@ -549,7 +523,7 @@ function buildModal() {
       '</div>') +
 
     '<div id="tm-upload-status" style="display:none;text-align:center;padding:8px;font-size:12px;color:#2563eb;margin-bottom:8px;">⏳ Foto wird hochgeladen...</div>' +
-    '<button onclick="saveTicketModal()" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px;">Speichern</button>';
+    modalFooter('ticket-modal', '💾 Speichern', 'saveTicketModal()');
 
   return modalHTML('ticket-modal', '<span id="tm-title">Ticket erstellen</span>', content);
 }

@@ -14,6 +14,8 @@
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
 checkAuth(); checkTrial();
+showDemoBanner();
+showDemoBanner();
 var user = getUser(); var uid = user.uid;
 var activeTab = 'followup';
 var editId = null; var editType = null;
@@ -173,68 +175,62 @@ function kpi(ico,l,v,s) {
 }
 
 function buildFuModal() {
-  return '<div id="fu-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="fu-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Follow-Up hinzufügen</h3>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Name *','fu-name','text','Max Mustermann')
-    +fg('Telefon','fu-tel','tel','+49 151...')
-    +'</div>'
-    +fg('Firma / Objekt','fu-firma','text','z.B. Musterstr. 5')
-    +fg('Thema / Betreff','fu-thema','text','z.B. Besichtigung Rückruf')
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Rückruf-Datum','fu-dat','date','')
-    +fg('Uhrzeit','fu-uhr','time','')
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Priorität')+'<select id="fu-prio" style="'+inputStyle+'"><option>Mittel</option><option>Hoch</option><option>Niedrig</option></select></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Notizen')+'<textarea id="fu-notiz" style="'+inputStyle+'height:70px;resize:vertical;"></textarea></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeFuModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveFu()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+  var fuBody =
+    formRow(
+      formGroup('Name *', formInput('fu-name','text','Max Mustermann'), true),
+      formGroup('Telefon', formInput('fu-tel','tel','+49 151...'))
+    )
+    + formRow(
+      formGroup('Firma / Objekt', formInput('fu-firma','text','z.B. Musterstr. 5')),
+      formGroup('Priorität', formSelect('fu-prio','<option>Mittel</option><option>Hoch</option><option>Niedrig</option>'))
+    )
+    + formGroup('Thema / Betreff', formInput('fu-thema','text','z.B. Besichtigung, Rückruf'))
+    + formRow(
+      formGroup('Rückruf-Datum', formInput('fu-dat','date','')),
+      formGroup('Uhrzeit', formInput('fu-uhr','time',''))
+    )
+    + formGroup('Notizen', formTextarea('fu-notiz','',2))
+    + modalFooter('fu-modal', '💾 Speichern', 'saveFu()');
+  return modalHTML('fu-modal', '<span id="fu-title">Follow-Up hinzufügen</span>', fuBody);
 }
 
 function buildIntModal() {
-  return '<div id="int-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:520px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="int-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Interessent hinzufügen</h3>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Vorname','int-vn','text','Max')
-    +fg('Nachname','int-nn','text','Mustermann')
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +fg('Email','int-em','email','max@example.de')
-    +fg('Telefon','int-tel','tel','+49 151...')
-    +'</div>'
-    +fg('Gewünschtes Objekt','int-obj','text','z.B. 3-Zimmer, Musterstr.')
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'
-    +fg('Budget (€/Mo)','int-budget','number','900')
-    +fg('Zimmer','int-zi','number','3')
-    +fg('m²','int-qm','number','70')
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Status')+'<select id="int-status" style="'+inputStyle+'">'
-    +INT_STATUS.map(function(s){ return '<option>'+s+'</option>'; }).join('')
-    +'</select></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Notizen')+'<textarea id="int-notiz" style="'+inputStyle+'height:70px;resize:vertical;"></textarea></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeIntModal()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveInt()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+  var statusOpts = INT_STATUS.map(function(s){ return '<option>'+s+'</option>'; }).join('');
+  var intBody =
+    formRow(
+      formGroup('Vorname', formInput('int-vn','text','Max')),
+      formGroup('Nachname', formInput('int-nn','text','Mustermann'))
+    )
+    + formRow(
+      formGroup('E-Mail', formInput('int-em','email','max@example.de')),
+      formGroup('Telefon', formInput('int-tel','tel','+49 151...'))
+    )
+    + formGroup('Gewünschtes Objekt', formInput('int-obj','text','z.B. 3-Zimmer, Musterstr.'))
+    + formRow3(
+      formGroup('Budget (€/Mo)', formInput('int-budget','number','900')),
+      formGroup('Zimmer', formInput('int-zi','number','3')),
+      formGroup('m²', formInput('int-qm','number','70'))
+    )
+    + formGroup('Status', formSelect('int-status', statusOpts))
+    + formGroup('Notizen', formTextarea('int-notiz','',2))
+    + modalFooter('int-modal', '💾 Speichern', 'saveInt()');
+  return modalHTML('int-modal', '<span id="int-title">Interessent hinzufügen</span>', intBody);
 }
 
 function openAdd(type) {
+  if (checkDemoBlock()) return;
   editId = null; editType = type;
   if (type === 'fu') {
     document.getElementById('fu-title').textContent = 'Follow-Up hinzufügen';
     ['fu-name','fu-tel','fu-firma','fu-thema','fu-uhr','fu-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
     document.getElementById('fu-dat').value = today();
     document.getElementById('fu-prio').value = 'Mittel';
-    document.getElementById('fu-modal').style.display = 'flex';
+    showModal('fu-modal');
   } else {
     document.getElementById('int-title').textContent = 'Interessent hinzufügen';
     ['int-vn','int-nn','int-em','int-tel','int-obj','int-budget','int-zi','int-qm','int-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
     document.getElementById('int-status').value = 'Neu';
-    document.getElementById('int-modal').style.display = 'flex';
+    showModal('int-modal');
   }
 }
 
@@ -251,7 +247,7 @@ function openEdit(id, type) {
     document.getElementById('fu-uhr').value = f.uhr||'';
     document.getElementById('fu-prio').value = f.prio||'Mittel';
     document.getElementById('fu-notiz').value = f.notiz||'';
-    document.getElementById('fu-modal').style.display = 'flex';
+    showModal('fu-modal');
   } else {
     var i = getData(KEYS.interessenten, []).find(function(x){ return x.id===id; }); if (!i) return;
     document.getElementById('int-title').textContent = 'Interessent bearbeiten';
@@ -265,12 +261,12 @@ function openEdit(id, type) {
     document.getElementById('int-qm').value = i.qm||'';
     document.getElementById('int-status').value = i.status||'Neu';
     document.getElementById('int-notiz').value = i.notiz||'';
-    document.getElementById('int-modal').style.display = 'flex';
+    showModal('int-modal');
   }
 }
 
-function closeFuModal() { document.getElementById('fu-modal').style.display='none'; }
-function closeIntModal() { document.getElementById('int-modal').style.display='none'; }
+function closeFuModal() { hideModal('fu-modal'); }
+function closeIntModal() { hideModal('int-modal'); }
 
 function saveFu() {
   var name = document.getElementById('fu-name').value.trim();

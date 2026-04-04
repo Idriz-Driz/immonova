@@ -15,6 +15,7 @@
 <script>
 checkAuth();
 checkTrial();
+showDemoBanner();
 
 var user = getUser();
 var activeFilter = 'alle';
@@ -123,6 +124,7 @@ function quickAdd() {
 
 // ─── OPEN MODAL ──────────────────────────────────────────────
 function openNewModal() {
+  if (checkDemoBlock()) return;
   editId = null;
   document.getElementById('m-titel').value = '';
   document.getElementById('m-beschreibung').value = '';
@@ -401,23 +403,20 @@ function buildModal() {
     + '<button onclick="hideModal(\'aufgabe-modal\')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background 0.12s;" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'none\'">✕</button>'
     + '</div>'
     // Fields
-    + formGroup('Titel *', '<input id="m-titel" type="text" placeholder="Aufgabentitel …" ' + inputStyle + '>')
-    + formGroup('Beschreibung', '<textarea id="m-beschreibung" placeholder="Optionale Beschreibung …" rows="3" ' + inputStyle + ' style="resize:vertical;"></textarea>')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Priorität', '<select id="m-prioritaet" ' + inputStyle + '><option value="Hoch">🔴 Hoch</option><option value="Normal" selected>🟡 Normal</option><option value="Niedrig">🟢 Niedrig</option></select>')
-    + formGroup('Status', '<select id="m-status" ' + inputStyle + '><option value="Offen">Offen</option><option value="In Bearbeitung">In Bearbeitung</option><option value="Erledigt">Erledigt</option></select>')
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Fälligkeitsdatum', '<input id="m-faellig" type="date" ' + inputStyle + '>')
-    + formGroup('Kategorie', '<select id="m-kategorie" ' + inputStyle + '><option value="Allgemein">Allgemein</option><option value="Mieter">Mieter</option><option value="Objekt">Objekt</option><option value="Finanzen">Finanzen</option><option value="Behörde">Behörde</option><option value="Sonstiges">Sonstiges</option></select>')
-    + '</div>'
-    + formGroup('Zugewiesen an', '<input id="m-zugewiesen" type="text" placeholder="Name der zuständigen Person …" ' + inputStyle + '>')
-    + formGroup('Erinnerung (optional)', '<input id="m-erinnerung" type="datetime-local" ' + inputStyle + '>')
+    + formGroup('Titel *', formInput('m-titel','text','Aufgabentitel …'), true)
+    + formGroup('Beschreibung', formTextarea('m-beschreibung','Optionale Beschreibung …', 3))
+    + formRow(
+        formGroup('Priorität', formSelect('m-prioritaet','<option value="Hoch">🔴 Hoch</option><option value="Normal" selected>🟡 Normal</option><option value="Niedrig">🟢 Niedrig</option>')),
+        formGroup('Status', formSelect('m-status','<option value="Offen">Offen</option><option value="In Bearbeitung">In Bearbeitung</option><option value="Erledigt">Erledigt</option>'))
+      )
+    + formRow(
+        formGroup('Fälligkeitsdatum', formInput('m-faellig','date','')),
+        formGroup('Kategorie', formSelect('m-kategorie','<option value="Allgemein">Allgemein</option><option value="Mieter">Mieter</option><option value="Objekt">Objekt</option><option value="Finanzen">Finanzen</option><option value="Behörde">Behörde</option><option value="Sonstiges">Sonstiges</option>'))
+      )
+    + formGroup('Zugewiesen an', formInput('m-zugewiesen','text','Name der zuständigen Person …'))
+    + formGroup('Erinnerung (optional)', formInput('m-erinnerung','datetime-local',''))
     // Buttons
-    + '<div style="display:flex;gap:10px;margin-top:22px;">'
-    + '<button onclick="saveModal()" style="flex:1;background:#2563eb;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">Speichern</button>'
-    + '<button onclick="hideModal(\'aufgabe-modal\')" style="flex:1;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#e2e8f0\'" onmouseout="this.style.background=\'#f1f5f9\'">Abbrechen</button>'
-    + '</div>'
+    + modalFooter('aufgabe-modal', '💾 Speichern', 'saveModal()')
     + '</div></div>';
 }
 

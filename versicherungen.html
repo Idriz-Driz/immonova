@@ -14,6 +14,8 @@
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
 checkAuth(); checkTrial();
+showDemoBanner();
+showDemoBanner();
 var user = getUser(); var uid = user.uid;
 var editId = null;
 var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
@@ -146,35 +148,29 @@ function kpi(ico,l,v,s) {
 }
 
 function buildModal() {
-  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:520px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Versicherung hinzufügen</h3>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;grid-column:1/-1;">'+lbl('Versicherungstyp')+'<select id="v-typ" style="'+inputStyle+'">'
-    +Object.keys(VS_TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('')
-    +'</select></div>'
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;">'+lbl('Versicherungsgesellschaft')+'<input id="v-ges" style="'+inputStyle+'" placeholder="z.B. Allianz AG"></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Vertragsnummer')+'<input id="v-num" style="'+inputStyle+'" placeholder="z.B. VS-12345"></div>'
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Objekt / Adresse')+'<input id="v-obj" style="'+inputStyle+'" placeholder="z.B. Musterstr. 1, 80331 München"></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;">'+lbl('Vertragsbeginn')+'<input id="v-beg" type="date" style="'+inputStyle+'"></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Ablaufdatum')+'<input id="v-abl" type="date" style="'+inputStyle+'"></div>'
-    +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;">'+lbl('Jahresprämie (€)')+'<input id="v-pra" type="number" step="0.01" style="'+inputStyle+'" placeholder="1200"></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Zahlweise')+'<select id="v-zahl" style="'+inputStyle+'"><option>Jährlich</option><option>Halbjährlich</option><option>Vierteljährlich</option><option>Monatlich</option></select></div>'
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Notizen')+'<textarea id="v-notiz" style="'+inputStyle+'height:70px;resize:vertical;" placeholder="Besondere Klauseln, Ansprechpartner..."></textarea></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveVs()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+  var typOpts = Object.keys(VS_TYPEN).map(function(t){ return '<option>'+t+'</option>'; }).join('');
+  var body =
+    formGroup('Versicherungstyp', formSelect('v-typ', typOpts))
+    + formRow(
+        formGroup('Versicherungsgesellschaft *', formInput('v-ges','text','z.B. Allianz AG'), true),
+        formGroup('Vertragsnummer', formInput('v-num','text','z.B. VS-12345'))
+      )
+    + formGroup('Objekt / Adresse', formInput('v-obj','text','z.B. Musterstr. 1, 80331 München'))
+    + formRow(
+        formGroup('Vertragsbeginn', formInput('v-beg','date','')),
+        formGroup('Ablaufdatum', formInput('v-abl','date',''))
+      )
+    + formRow(
+        formGroup('Jahresprämie (€)', formInput('v-pra','number','1200','step="0.01"')),
+        formGroup('Zahlweise', formSelect('v-zahl','<option>Jährlich</option><option>Halbjährlich</option><option>Vierteljährlich</option><option>Monatlich</option>'))
+      )
+    + formGroup('Notizen', formTextarea('v-notiz','Besondere Klauseln, Ansprechpartner...', 2))
+    + modalFooter('add-modal', '💾 Speichern', 'saveVs()');
+  return modalHTML('add-modal', '<span id="m-title">Versicherung hinzufügen</span>', body);
 }
 
 function openAdd() {
+  if (checkDemoBlock()) return;
   editId = null;
   document.getElementById('m-title').textContent = 'Versicherung hinzufügen';
   ['v-ges','v-num','v-obj','v-pra','v-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
@@ -182,7 +178,7 @@ function openAdd() {
   document.getElementById('v-abl').value = '';
   document.getElementById('v-typ').value = 'Gebäudeversicherung';
   document.getElementById('v-zahl').value = 'Jährlich';
-  document.getElementById('add-modal').style.display = 'flex';
+  showModal('add-modal');
 }
 
 function openEdit(id) {
@@ -198,10 +194,10 @@ function openEdit(id) {
   document.getElementById('v-pra').value = v.praemie||'';
   document.getElementById('v-zahl').value = v.zahlweise||'Jährlich';
   document.getElementById('v-notiz').value = v.notiz||'';
-  document.getElementById('add-modal').style.display = 'flex';
+  showModal('add-modal');
 }
 
-function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function closeAdd() { hideModal('add-modal'); }
 
 function saveVs() {
   var ges = document.getElementById('v-ges').value.trim();

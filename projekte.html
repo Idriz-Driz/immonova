@@ -212,23 +212,21 @@ function renderGewerke(projekte) {
 }
 
 function buildModal() {
-  var content = formGroup('Projektname *', '<input id="p-name" style="'+inputStyle+'" placeholder="z.B. Dachsanierung Musterstr. 1">')
-    + formGroup('Adresse', '<input id="p-adr" style="'+inputStyle+'" placeholder="Straße, PLZ Stadt">')
-    + formGroup('Auftraggeber', '<input id="p-auftraggeber" style="'+inputStyle+'" placeholder="z.B. Eigentümergemeinschaft">')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Startdatum', '<input id="p-start" type="date" style="'+inputStyle+'">')
-    + formGroup('Enddatum', '<input id="p-end" type="date" style="'+inputStyle+'">')
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Budget (€)', '<input id="p-budget" type="number" style="'+inputStyle+'" placeholder="50000">')
-    + formGroup('Status', '<select id="p-status" style="'+inputStyle+'"><option>Geplant</option><option>In Bearbeitung</option><option>Abgeschlossen</option></select>')
-    + '</div>'
-    + formGroup('Gewerke (kommagetrennt)', '<input id="p-gewerke" style="'+inputStyle+'" placeholder="Dach, Fassade, Elektriker">')
-    + formGroup('Beschreibung', '<textarea id="p-beschr" style="'+inputStyle+'height:80px;resize:vertical;" placeholder="Kurze Beschreibung..."></textarea>')
-    + '<div style="display:flex;gap:10px;margin-top:4px;">'
-    + '<button onclick="hideModal(\'proj-modal\')" style="flex:1;padding:11px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '<button onclick="saveProj()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
-    + '</div>';
+  var content =
+    formGroup('Projektname *', formInput('p-name','text','z.B. Dachsanierung Musterstr. 1'), true)
+    + formGroup('Adresse', formInput('p-adr','text','Straße, PLZ Stadt'))
+    + formGroup('Auftraggeber', formInput('p-auftraggeber','text','z.B. Eigentümergemeinschaft'))
+    + formRow(
+        formGroup('Startdatum', formInput('p-start','date','')),
+        formGroup('Enddatum', formInput('p-end','date',''))
+      )
+    + formRow(
+        formGroup('Budget (€)', formInput('p-budget','number','50000')),
+        formGroup('Status', formSelect('p-status','<option>Geplant</option><option>In Bearbeitung</option><option>Abgeschlossen</option>'))
+      )
+    + formGroup('Gewerke (kommagetrennt)', formInput('p-gewerke','text','Dach, Fassade, Elektriker'))
+    + formGroup('Beschreibung', formTextarea('p-beschr','Kurze Beschreibung...', 3))
+    + modalFooter('proj-modal', '💾 Speichern', 'saveProj()');
   return modalHTML('proj-modal', '🏗️ Projekt', content);
 }
 
@@ -240,6 +238,7 @@ function initProjAutocomplete() {
 }
 
 function openNewProj() {
+  if (checkDemoBlock()) return;
   editId = null;
   document.getElementById('p-name').value = '';
   document.getElementById('p-adr').value = '';

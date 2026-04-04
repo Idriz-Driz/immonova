@@ -15,6 +15,7 @@
 <script>
 checkAuth();
 checkTrial();
+showDemoBanner();
 
 var user = getUser();
 
@@ -502,35 +503,28 @@ function buildModal() {
     + 'onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"';
 
   var body =
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Vorname', '<input id="kn-vn" type="text" placeholder="Vorname..." ' + inputStyle + '>')
-    + formGroup('Nachname', '<input id="kn-nn" type="text" placeholder="Nachname..." ' + inputStyle + '>')
-    + '</div>'
-    + formGroup('Firma', '<input id="kn-firma" type="text" placeholder="Firmenname (optional)..." ' + inputStyle + '>')
-    + formGroup('Kategorie', '<select id="kn-kat" ' + inputStyle + '>' + katOptHtml + '</select>')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Telefon', '<input id="kn-tel" type="tel" placeholder="0151 123456..." ' + inputStyle + '>')
-    + formGroup('E-Mail', '<input id="kn-email" type="email" placeholder="name@beispiel.de..." ' + inputStyle + '>')
-    + '</div>'
-    + formGroup('Adresse', '<input id="kn-adresse" type="text" placeholder="Straße, PLZ, Stadt..." ' + inputStyle + '>')
-    + formGroup('Website', '<input id="kn-website" type="url" placeholder="https://... (optional)" ' + inputStyle + '>')
-    + formGroup('Notizen', '<textarea id="kn-notizen" rows="3" placeholder="Notizen, Hinweise..." ' + taStyle + '></textarea>')
-    + formGroup('Tags (kommagetrennt)', '<input id="kn-tags" type="text" placeholder="z.B. wichtig, VIP, Hausverwaltung..." ' + inputStyle + '>')
+    formRow(
+      formGroup('Vorname', formInput('kn-vn','text','Vorname...')),
+      formGroup('Nachname', formInput('kn-nn','text','Nachname...'))
+    )
+    + formRow(
+      formGroup('Firma', formInput('kn-firma','text','Firmenname (optional)...')),
+      formGroup('Kategorie', formSelect('kn-kat', katOptHtml))
+    )
+    + formRow(
+      formGroup('Telefon', formInput('kn-tel','tel','0151 123456...')),
+      formGroup('E-Mail', formInput('kn-email','email','name@beispiel.de...'))
+    )
+    + formGroup('Adresse', formInput('kn-adresse','text','Straße, PLZ, Stadt...'))
+    + formGroup('Website', formInput('kn-website','url','https://... (optional)'))
+    + formGroup('Notizen', formTextarea('kn-notizen','Notizen, Hinweise...', 3))
+    + formGroup('Tags (kommagetrennt)', formInput('kn-tags','text','z.B. wichtig, VIP, Hausverwaltung...'))
     + '<div id="kn-del-wrap" style="display:none;margin-bottom:14px;">'
     + '<button onclick="confirmDelete(_editId);hideModal(\'kon-modal\')" '
     + 'style="width:100%;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9px;padding:10px;'
-    + 'font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;" '
-    + 'onmouseover="this.style.background=\'#fee2e2\';" onmouseout="this.style.background=\'#fef2f2\';">🗑️ Kontakt löschen</button>'
+    + 'font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Kontakt löschen</button>'
     + '</div>'
-    + '<div style="display:flex;gap:10px;margin-top:4px;">'
-    + '<button onclick="saveKontakt()" '
-    + 'style="flex:1;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;'
-    + 'font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.15s;" '
-    + 'onmouseover="this.style.background=\'#1d4ed8\';" onmouseout="this.style.background=\'#2563eb\';">💾 Speichern</button>'
-    + '<button onclick="hideModal(\'kon-modal\')" '
-    + 'style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:9px;'
-    + 'font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div>';
+    + modalFooter('kon-modal', '💾 Speichern', 'saveKontakt()');
 
   return modalHTML('kon-modal', '<span id="kon-modal-title">Kontakt hinzufügen</span>', body);
 }
@@ -545,6 +539,7 @@ function initKontakteAutocomplete() {
 
 // ─── OPEN MODAL ───────────────────────────────────────────
 function openAddModal() {
+  if (checkDemoBlock()) return;
   _editId = null;
   document.getElementById('kon-modal-title').textContent = '📇 Kontakt hinzufügen';
   document.getElementById('kn-vn').value      = '';

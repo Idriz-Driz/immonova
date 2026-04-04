@@ -15,6 +15,7 @@
 <script>
 checkAuth();
 checkTrial();
+showDemoBanner();
 
 var user = getUser();
 var editId = null;
@@ -148,6 +149,7 @@ function unhoverModalStar() {
 
 // ─── OPEN/CLOSE MODAL ─────────────────────────────────────
 function openNewModal() {
+  if (checkDemoBlock()) return;
   editId = null;
   document.getElementById('hw-modal-title').textContent = 'Handwerker hinzufügen';
   document.getElementById('hw-vn').value = '';
@@ -443,28 +445,27 @@ function buildModal() {
   starsHtml += '</div><input type="hidden" id="hw-bewertung" value="3">';
 
   var body =
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Vorname *', '<input id="hw-vn" ' + inputStyle + ' placeholder="Klaus">')
-    + formGroup('Nachname *', '<input id="hw-nn" ' + inputStyle + ' placeholder="Müller">')
-    + '</div>'
-    + formGroup('Firma', '<input id="hw-firma" ' + inputStyle + ' placeholder="Müller GmbH">')
-    + formGroup('Gewerk', '<select id="hw-gewerk" ' + inputStyle + '>' + gewerkOptsHtml + '</select>')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Telefon', '<input id="hw-tel" ' + inputStyle + ' placeholder="0151 555000">')
-    + formGroup('E-Mail', '<input id="hw-email" type="email" ' + inputStyle + ' placeholder="info@firma.de">')
-    + '</div>'
-    + formGroup('Adresse', '<input id="hw-adresse" ' + inputStyle + ' placeholder="Musterstraße 1, 12345 Stadt">')
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    + formGroup('Stundensatz (€/h)', '<input id="hw-stundensatz" type="number" min="0" step="0.5" ' + inputStyle + ' placeholder="z.B. 75">')
-    + formGroup('Status', '<select id="hw-status" ' + inputStyle + '>' + statusOptsHtml + '</select>')
-    + '</div>'
+    formRow(
+      formGroup('Vorname *', formInput('hw-vn','text','Klaus'), true),
+      formGroup('Nachname *', formInput('hw-nn','text','Müller'), true)
+    )
+    + formRow(
+      formGroup('Firma', formInput('hw-firma','text','Müller GmbH')),
+      formGroup('Gewerk', formSelect('hw-gewerk', gewerkOptsHtml))
+    )
+    + formRow(
+      formGroup('Telefon', formInput('hw-tel','tel','0151 555000')),
+      formGroup('E-Mail', formInput('hw-email','email','info@firma.de'))
+    )
+    + formRow(
+      formGroup('Adresse', formInput('hw-adresse','text','Musterstraße 1, 12345 Stadt')),
+      formGroup('Stundensatz (€/h)', formInput('hw-stundensatz','number','z.B. 75','min="0" step="0.5"'))
+    )
+    + formGroup('Status', formSelect('hw-status', statusOptsHtml))
     + formGroup('Bewertung (1–5)', starsHtml)
-    + formGroup('Notizen', '<textarea id="hw-notizen" rows="3" ' + inputStyle + ' placeholder="Besondere Hinweise, Erfahrungen..."></textarea>')
-    + formGroup('Zertifikate / Versicherungen', '<textarea id="hw-zertifikate" rows="3" ' + inputStyle + ' placeholder="z.B. Haftpflichtversicherung, Meisterbrief..."></textarea>')
-    + '<div style="display:flex;gap:10px;margin-top:8px;">'
-    + '<button onclick="saveHW()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">💾 Speichern</button>'
-    + '<button onclick="hideModal(\'hw-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    + '</div>';
+    + formGroup('Notizen', formTextarea('hw-notizen','Besondere Hinweise, Erfahrungen...', 3))
+    + formGroup('Zertifikate / Versicherungen', formTextarea('hw-zertifikate','z.B. Haftpflichtversicherung, Meisterbrief...', 2))
+    + modalFooter('hw-modal', '💾 Speichern', 'saveHW()');
 
   return modalHTML('hw-modal', '<span id="hw-modal-title">Handwerker hinzufügen</span>', body);
 }

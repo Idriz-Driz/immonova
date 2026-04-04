@@ -15,6 +15,7 @@
 <script>
 checkAuth();
 checkTrial();
+showDemoBanner();
 
 var user = getUser();
 var editObjId = null;
@@ -403,34 +404,29 @@ function buildObjModal() {
   var heizOptions = heizOpts.map(function(h) { return '<option value="' + h + '">' + h + '</option>'; }).join('');
   var energieOptions = energieOpts.map(function(e) { return '<option value="' + e + '">' + e + '</option>'; }).join('');
 
-  var body = '';
-
-  body += formGroup('Objektname *', '<input id="obj-name" ' + inputStyle + ' placeholder="z.B. Musterstraße 12">');
-  body += formGroup('Straße + Hausnummer *', '<input id="obj-strasse" ' + inputStyle + ' placeholder="Musterstraße 12">');
-  body += '<div style="display:grid;grid-template-columns:130px 1fr;gap:12px;">';
-  body += formGroup('PLZ', '<input id="obj-plz" ' + inputStyle + ' placeholder="44135">');
-  body += formGroup('Stadt *', '<input id="obj-stadt" ' + inputStyle + ' placeholder="Dortmund">');
-  body += '</div>';
-  body += formGroup('Typ', '<select id="obj-typ" ' + inputStyle + '>' + typOptions + '</select>');
-  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
-  body += formGroup('Baujahr', '<input id="obj-baujahr" type="number" min="1800" max="2030" ' + inputStyle + ' placeholder="z.B. 1985">');
-  body += formGroup('Wohnfläche gesamt (m²)', '<input id="obj-flaeche" type="number" min="0" ' + inputStyle + ' placeholder="z.B. 420">');
-  body += '</div>';
-  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
-  body += formGroup('Anzahl Einheiten', '<input id="obj-einheiten" type="number" min="1" ' + inputStyle + ' placeholder="z.B. 6">');
-  body += formGroup('Anzahl Stockwerke', '<input id="obj-stockwerke" type="number" min="0" ' + inputStyle + ' placeholder="z.B. 3">');
-  body += '</div>';
-  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
-  body += formGroup('Heizungsart', '<select id="obj-heizung" ' + inputStyle + '><option value="">– wählen –</option>' + heizOptions + '</select>');
-  body += formGroup('Energieausweis-Klasse', '<select id="obj-energie" ' + inputStyle + '><option value="">– wählen –</option>' + energieOptions + '</select>');
-  body += '</div>';
-  body += formGroup('Hausverwaltung Kontakt', '<input id="obj-hausverwaltung" ' + inputStyle + ' placeholder="z.B. Müller Hausverwaltung GmbH">');
-  body += formGroup('Notizen', '<textarea id="obj-notizen" ' + inputStyle + ' rows="3" style="resize:vertical;" placeholder="Besonderheiten, Zustand, Renovierungen..."></textarea>');
-
-  body += '<div style="display:flex;gap:10px;margin-top:4px;">';
-  body += '<button onclick="saveObj()" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">💾 Speichern</button>';
-  body += '<button onclick="hideModal(\'obj-modal\')" style="padding:12px 20px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>';
-  body += '</div>';
+  var body =
+    formGroup('Objektname *', formInput('obj-name','text','z.B. Musterstraße 12'), true)
+    + formGroup('Straße + Hausnummer *', formInput('obj-strasse','text','Musterstraße 12'), true)
+    + formRow(
+        formGroup('PLZ', formInput('obj-plz','text','44135')),
+        formGroup('Stadt *', formInput('obj-stadt','text','Dortmund'), true)
+      )
+    + formGroup('Typ', formSelect('obj-typ', typOptions))
+    + formRow(
+        formGroup('Baujahr', formInput('obj-baujahr','number','z.B. 1985','min="1800" max="2030"')),
+        formGroup('Wohnfläche gesamt (m²)', formInput('obj-flaeche','number','z.B. 420','min="0"'))
+      )
+    + formRow(
+        formGroup('Anzahl Einheiten', formInput('obj-einheiten','number','z.B. 6','min="1"')),
+        formGroup('Anzahl Stockwerke', formInput('obj-stockwerke','number','z.B. 3','min="0"'))
+      )
+    + formRow(
+        formGroup('Heizungsart', formSelect('obj-heizung', '<option value="">– wählen –</option>' + heizOptions)),
+        formGroup('Energieausweis-Klasse', formSelect('obj-energie', '<option value="">– wählen –</option>' + energieOptions))
+      )
+    + formGroup('Hausverwaltung Kontakt', formInput('obj-hausverwaltung','text','z.B. Müller Hausverwaltung GmbH'))
+    + formGroup('Notizen', formTextarea('obj-notizen','Besonderheiten, Zustand, Renovierungen...', 3))
+    + modalFooter('obj-modal', '💾 Speichern', 'saveObj()');
 
   return modalHTML('obj-modal', '<span id="obj-modal-title">Objekt hinzufügen</span>', body);
 }
@@ -573,6 +569,7 @@ function openDetailsModal(id) {
 
 // ─── OPEN / SAVE / DELETE ───────────────────────────────────
 function openNewObjModal() {
+  if (checkDemoBlock()) return;
   editObjId = null;
   _objLat = null; _objLng = null;
   document.getElementById('obj-modal-title').textContent = 'Objekt hinzufügen';

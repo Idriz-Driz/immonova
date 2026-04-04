@@ -14,6 +14,8 @@
 <body style="margin:0;padding:0;font-family:'DM Sans',sans-serif;background:#f8fafc;">
 <script>
 checkAuth(); checkTrial();
+showDemoBanner();
+showDemoBanner();
 var user = getUser(); var uid = user.uid;
 var editId = null;
 var inputStyle = 'width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#0f172a;background:white;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'';
@@ -125,26 +127,21 @@ function buildModal(mieter) {
   var mOpts = '<option value="">– Manuell eingeben –</option>'
     +(mieter||[]).map(function(m){ return '<option value="'+esc(m.name||'')+'|'+esc(m.wn||'')+'">'+esc(m.name||'')+(m.wn?' – '+esc(m.wn):'')+'</option>'; }).join('');
 
-  return '<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">'
-    +'<div style="background:white;border-radius:20px;padding:28px;max-width:480px;width:100%;margin:20px;max-height:90vh;overflow-y:auto;">'
-    +'<h3 id="m-title" style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:20px;">Eintrag hinzufügen</h3>'
-    +'<div style="margin-bottom:12px;">'+lbl('Mieter (aus Liste)')+'<select id="r-mopt" onchange="fillMieter()" style="'+inputStyle+'">'+mOpts+'</select></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;">'+lbl('Mieter Name')+'<input id="r-mieter" style="'+inputStyle+'" placeholder="Max Mustermann"></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Wohnung')+'<input id="r-wohnung" style="'+inputStyle+'" placeholder="EG Links"></div>'
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Bereich')+'<select id="r-bereich" style="'+inputStyle+'">'
-    +BEREICHE.map(function(b){ return '<option>'+b+'</option>'; }).join('')
-    +'</select></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
-    +'<div style="margin-bottom:12px;">'+lbl('Von')+'<input id="r-von" type="date" style="'+inputStyle+'"></div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Bis')+'<input id="r-bis" type="date" style="'+inputStyle+'"></div>'
-    +'</div>'
-    +'<div style="margin-bottom:12px;">'+lbl('Notiz (optional)')+'<textarea id="r-notiz" style="'+inputStyle+'height:70px;resize:vertical;" placeholder="z.B. Jeden Montag + Donnerstag"></textarea></div>'
-    +'<div style="display:flex;gap:10px;margin-top:18px;">'
-    +'<button onclick="closeAdd()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Abbrechen</button>'
-    +'<button onclick="saveRei()" style="flex:1;padding:11px;border-radius:9px;border:none;background:#2563eb;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Speichern</button>'
-    +'</div></div></div>';
+  var bereichOpts = BEREICHE.map(function(b){ return '<option>'+b+'</option>'; }).join('');
+  var body =
+    formGroup('Mieter (aus Liste)', formSelect('r-mopt', mOpts, 'onchange="fillMieter()"'))
+    + formRow(
+        formGroup('Mieter Name *', formInput('r-mieter','text','Max Mustermann'), true),
+        formGroup('Wohnung', formInput('r-wohnung','text','EG Links'))
+      )
+    + formGroup('Bereich', formSelect('r-bereich', bereichOpts))
+    + formRow(
+        formGroup('Von', formInput('r-von','date','')),
+        formGroup('Bis', formInput('r-bis','date',''))
+      )
+    + formGroup('Notiz (optional)', formTextarea('r-notiz','z.B. Jeden Montag + Donnerstag', 2))
+    + modalFooter('add-modal', '💾 Speichern', 'saveRei()');
+  return modalHTML('add-modal', '<span id="m-title">Eintrag hinzufügen</span>', body);
 }
 
 function fillMieter() {
@@ -156,13 +153,14 @@ function fillMieter() {
 }
 
 function openAdd() {
+  if (checkDemoBlock()) return;
   editId = null;
   document.getElementById('m-title').textContent = 'Eintrag hinzufügen';
   ['r-mieter','r-wohnung','r-notiz'].forEach(function(x){ document.getElementById(x).value=''; });
   document.getElementById('r-von').value = today();
   document.getElementById('r-bis').value = '';
   document.getElementById('r-bereich').value = BEREICHE[0];
-  document.getElementById('add-modal').style.display = 'flex';
+  showModal('add-modal');
 }
 
 function openEdit(id) {
@@ -175,10 +173,10 @@ function openEdit(id) {
   document.getElementById('r-von').value = r.von||'';
   document.getElementById('r-bis').value = r.bis||'';
   document.getElementById('r-notiz').value = r.notiz||'';
-  document.getElementById('add-modal').style.display = 'flex';
+  showModal('add-modal');
 }
 
-function closeAdd() { document.getElementById('add-modal').style.display='none'; }
+function closeAdd() { hideModal('add-modal'); }
 
 function saveRei() {
   var mieter = document.getElementById('r-mieter').value.trim();
