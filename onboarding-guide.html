@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Erste Schritte – ImmoNova</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#0f172a;}
+
+@media print {
+  .no-print{display:none!important;}
+  body{background:white;}
+  .page-break{page-break-before:always;}
+}
+
+nav{background:white;border-bottom:1px solid #e2e8f0;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.logo-icon{width:32px;height:32px;background:#2563eb;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.logo-text{font-size:18px;font-weight:800;color:#0f172a;}
+.logo-text span{color:#2563eb;}
+.nav-actions{display:flex;gap:12px;}
+.btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;border:none;cursor:pointer;font-family:inherit;}
+.btn-primary{background:#2563eb;color:white;}
+.btn-outline{background:white;color:#374151;border:1.5px solid #e2e8f0;}
+
+.container{max-width:860px;margin:0 auto;padding:48px 32px 80px;}
+
+/* Hero */
+.hero-section{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);border-radius:20px;padding:48px;margin-bottom:40px;position:relative;overflow:hidden;}
+.hero-section::before{content:'';position:absolute;right:-80px;top:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,0.3) 0%,transparent 70%);}
+.hero-inner{position:relative;z-index:1;}
+.hero-badge{display:inline-block;background:rgba(37,99,235,0.3);border:1px solid rgba(96,165,250,0.4);color:#93c5fd;font-size:12px;font-weight:700;padding:5px 14px;border-radius:20px;margin-bottom:16px;}
+.hero-section h1{font-size:34px;font-weight:800;color:white;margin-bottom:10px;}
+.hero-section p{font-size:15px;color:rgba(255,255,255,0.65);max-width:500px;line-height:1.6;margin-bottom:20px;}
+.hero-meta{display:flex;gap:20px;flex-wrap:wrap;}
+.hero-meta-item{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,0.55);}
+
+/* Progress checklist */
+.checklist-section{background:white;border:1px solid #e2e8f0;border-radius:16px;padding:32px;margin-bottom:32px;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+.section-title{font-size:20px;font-weight:800;color:#0f172a;}
+.progress-tag{font-size:12px;font-weight:700;color:#64748b;}
+
+.checklist{display:flex;flex-direction:column;gap:8px;}
+.check-item{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-radius:12px;cursor:pointer;transition:background 0.15s;border:1.5px solid #e2e8f0;}
+.check-item:hover{background:#f8fafc;}
+.check-item.done{background:#f0fdf4;border-color:#bbf7d0;}
+.check-box{width:22px;height:22px;border-radius:6px;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:all 0.15s;}
+.check-item.done .check-box{background:#16a34a;border-color:#16a34a;color:white;}
+.check-item.done .check-box::after{content:'✓';font-size:13px;font-weight:700;}
+.check-content h3{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:2px;}
+.check-item.done .check-content h3{color:#15803d;text-decoration:line-through;text-decoration-color:#86efac;}
+.check-content p{font-size:12px;color:#94a3b8;line-height:1.5;}
+.check-link{display:inline-block;font-size:12px;font-weight:700;color:#2563eb;margin-top:4px;text-decoration:none;}
+
+/* Steps */
+.steps-section{margin-bottom:32px;}
+.step-card{background:white;border:1px solid #e2e8f0;border-radius:16px;padding:28px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.step-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px;}
+.step-number{width:40px;height:40px;border-radius:10px;background:#2563eb;color:white;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-title{font-size:18px;font-weight:800;color:#0f172a;margin-bottom:4px;}
+.step-sub{font-size:13px;color:#64748b;}
+.step-content{padding-left:56px;}
+.step-list{list-style:none;}
+.step-list li{font-size:14px;color:#374151;padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;}
+.step-list li:last-child{border-bottom:none;}
+.step-list li::before{content:'→';color:#2563eb;font-weight:700;flex-shrink:0;}
+.step-btn{display:inline-flex;align-items:center;gap:6px;background:#eff6ff;color:#2563eb;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;text-decoration:none;margin-top:14px;}
+.step-btn:hover{background:#dbeafe;}
+
+/* Tips */
+.tips-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:32px;}
+.tip-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.tip-icon{font-size:24px;margin-bottom:10px;}
+.tip-card h3{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px;}
+.tip-card p{font-size:13px;color:#64748b;line-height:1.6;}
+
+/* Support box */
+.support-box{background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:16px;padding:28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+.support-box h3{font-size:18px;font-weight:800;color:white;margin-bottom:6px;}
+.support-box p{font-size:14px;color:rgba(255,255,255,0.7);}
+.support-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.support-btn{padding:11px 22px;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;}
+.support-btn-wa{background:#25d366;color:white;}
+.support-btn-email{background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.25);}
+
+/* Shortcuts table */
+.shortcuts{background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:32px;}
+.shortcuts th{background:#f8fafc;padding:12px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0;}
+.shortcuts td{padding:12px 16px;font-size:13px;color:#374151;border-bottom:1px solid #f8fafc;}
+.shortcuts tr:last-child td{border-bottom:none;}
+kbd{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;font-family:monospace;font-size:12px;color:#475569;}
+</style>
+</head>
+<body>
+
+<nav class="no-print">
+  <a href="index.html" class="logo">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-text">Immo<span>Nova</span></div>
+  </a>
+  <div class="nav-actions">
+    <button class="btn btn-outline" onclick="window.print()">🖨️ Drucken</button>
+    <a href="app.html" class="btn btn-primary">→ Zum Dashboard</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero-section">
+    <div class="hero-inner">
+      <div class="hero-badge">🎉 Willkommen bei ImmoNova</div>
+      <h1>Dein Leitfaden für<br>den perfekten Start</h1>
+      <p>Folge dieser Checkliste und du hast ImmoNova in unter 30 Minuten vollständig eingerichtet. Los geht's!</p>
+      <div class="hero-meta">
+        <div class="hero-meta-item">⏱️ Ca. 30 Minuten</div>
+        <div class="hero-meta-item">✅ 8 Schritte</div>
+        <div class="hero-meta-item">🆓 Kostenlos während der Testphase</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checklist -->
+  <div class="checklist-section">
+    <div class="section-header">
+      <div class="section-title">✅ Setup-Checkliste</div>
+      <div class="progress-tag" id="progress-tag">0 / 8 erledigt</div>
+    </div>
+
+    <div class="checklist" id="checklist">
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="0">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>1. Profil vervollständigen</h3>
+          <p>Firmenname, Telefon und Logo in den Einstellungen eintragen</p>
+          <a href="einstellungen.html" class="check-link" onclick="event.stopPropagation()">→ Einstellungen öffnen</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="1">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>2. Erstes Objekt anlegen</h3>
+          <p>Trage dein erstes Gebäude oder Objekt mit Adresse und Einheitenzahl ein</p>
+          <a href="objekte.html" class="check-link" onclick="event.stopPropagation()">→ Objekte öffnen</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="2">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>3. Ersten Mieter anlegen</h3>
+          <p>Name, Wohnung, Miete und Kontaktdaten eintragen. PIN für Mieter-Portal setzen.</p>
+          <a href="mieter.html" class="check-link" onclick="event.stopPropagation()">→ Mieter öffnen</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="3">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>4. Mitarbeiter einladen (optional)</h3>
+          <p>E-Mail-Adressen deiner Mitarbeiter in Einstellungen → Team eintragen</p>
+          <a href="einstellungen.html#team" class="check-link" onclick="event.stopPropagation()">→ Team verwalten</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="4">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>5. Ersten Handwerker eintragen</h3>
+          <p>Name, Telefon, Gewerk und Bewertung. PIN für Handwerker-Portal setzen.</p>
+          <a href="handwerker.html" class="check-link" onclick="event.stopPropagation()">→ Handwerker öffnen</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="5">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>6. Zählerstände erfassen</h3>
+          <p>Strom, Wasser, Gas für jede Wohnung initial eintragen (wird für NK-Abrechnung benötigt)</p>
+          <a href="zaehler.html" class="check-link" onclick="event.stopPropagation()">→ Zählerstände öffnen</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="6">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>7. Versicherungen eintragen</h3>
+          <p>Gebäude-, Haftpflicht- und weitere Versicherungen mit Ablaufdatum eintragen</p>
+          <a href="versicherungen.html" class="check-link" onclick="event.stopPropagation()">→ Versicherungen öffnen</a>
+        </div>
+      </div>
+      <div class="check-item" onclick="toggleCheck(this)" data-idx="7">
+        <div class="check-box"></div>
+        <div class="check-content">
+          <h3>8. Demo-Daten ansehen (optional)</h3>
+          <p>Starte einen Demo-Modus auf der Login-Seite um alle Funktionen mit Beispieldaten zu erkunden</p>
+          <a href="login.html" class="check-link" onclick="event.stopPropagation()">→ Demo starten</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps-section">
+    <h2 style="font-size:22px;font-weight:800;margin-bottom:20px;">📖 Detaillierte Anleitungen</h2>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <div>
+          <div class="step-title">Objekte & Einheiten verwalten</div>
+          <div class="step-sub">So richtest du dein Immobilienportfolio ein</div>
+        </div>
+      </div>
+      <div class="step-content">
+        <ul class="step-list">
+          <li>Klicke in der Sidebar auf <strong>Objekte & Gebäude</strong></li>
+          <li>Klicke auf <strong>+ Objekt hinzufügen</strong> und fülle alle Felder aus</li>
+          <li>Trage die Anzahl der Einheiten (Wohnungen) ein – das wird für die Belegungsquote benötigt</li>
+          <li>Füge eine vollständige Adresse ein um den Google Maps Link zu aktivieren</li>
+        </ul>
+        <a href="objekte.html" class="step-btn">→ Objekte öffnen</a>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <div>
+          <div class="step-title">Mieter anlegen & Portale aktivieren</div>
+          <div class="step-sub">So geben Mieter selbst Schäden ein und lesen Mitteilungen</div>
+        </div>
+      </div>
+      <div class="step-content">
+        <ul class="step-list">
+          <li>Gehe zu <strong>Mieter → + Mieter hinzufügen</strong></li>
+          <li>Fülle alle Pflichtfelder aus: Name, Wohnung, Miete, Einzugsdatum</li>
+          <li>Vergib einen <strong>4-stelligen PIN</strong> – damit loggt sich der Mieter im Mieter-Portal ein</li>
+          <li>Teile dem Mieter den Link <code>deine-url.netlify.app/mieter-portal.html</code> mit</li>
+          <li>Der Mieter kann nun Schäden melden, Tickets einsehen und Nachrichten lesen</li>
+        </ul>
+        <a href="mieter.html" class="step-btn">→ Mieter öffnen</a>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">3</div>
+        <div>
+          <div class="step-title">Tickets & Schäden verwalten</div>
+          <div class="step-sub">Von der Schadenmeldung bis zur Erledigung</div>
+        </div>
+      </div>
+      <div class="step-content">
+        <ul class="step-list">
+          <li>Neue Tickets erscheinen automatisch wenn Mieter einen Schaden über das Portal melden</li>
+          <li>Weise Tickets einem <strong>Handwerker</strong> zu – dieser sieht den Auftrag im Handwerker-Portal</li>
+          <li>Handwerker können Status updaten (Offen → In Bearbeitung → Erledigt) und Fotos hochladen</li>
+          <li>Du siehst alle offenen Tickets im Dashboard als KPI und als Warnbanner</li>
+        </ul>
+        <a href="tickets.html" class="step-btn">→ Tickets öffnen</a>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">4</div>
+        <div>
+          <div class="step-title">Zahlungen verfolgen</div>
+          <div class="step-sub">Welche Mieten sind eingegangen – welche fehlen noch?</div>
+        </div>
+      </div>
+      <div class="step-content">
+        <ul class="step-list">
+          <li>Gehe zu <strong>Zahlungen & Bank</strong></li>
+          <li>Trage eingegangene Mietzahlungen manuell ein oder importiere sie später über die Bank-API (kommt in Phase 2)</li>
+          <li>Die Zahlungsquote wird automatisch berechnet und im Dashboard angezeigt</li>
+          <li>Mahnungen per WhatsApp kannst du direkt aus der Zahlungsübersicht versenden</li>
+          <li>Tipp: Der 5. des Monats ist automatisch als Mahnungshinweis markiert</li>
+        </ul>
+        <a href="zahlungen.html" class="step-btn">→ Zahlungen öffnen</a>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">5</div>
+        <div>
+          <div class="step-title">Dokumente & Nebenkostenabrechnung</div>
+          <div class="step-sub">Professionelle Dokumente auf Knopfdruck</div>
+        </div>
+      </div>
+      <div class="step-content">
+        <ul class="step-list">
+          <li>10 vorgefertigte Vorlagen: Mietvertrag, Kündigung, NK-Abrechnung, Übergabeprotokoll, u.v.m.</li>
+          <li>Klicke auf eine Vorlage und wähle einen Mieter – alle Felder werden automatisch befüllt</li>
+          <li>Die Nebenkostenabrechnung berechnet die Kosten automatisch aus den Zählerständen</li>
+          <li>Klicke auf <strong>Drucken</strong> für ein sauberes PDF-Layout ohne Sidebar und Navigation</li>
+        </ul>
+        <a href="dokumente.html" class="step-btn">→ Dokumente öffnen</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tips -->
+  <h2 style="font-size:22px;font-weight:800;margin-bottom:20px;">💡 Profi-Tipps</h2>
+  <div class="tips-grid">
+    <div class="tip-card">
+      <div class="tip-icon">🔔</div>
+      <h3>Dashboard immer offen lassen</h3>
+      <p>Das Dashboard zeigt automatische Warnungen: Ablaufende Verträge, offene Tickets, fehlende Zahlungen – alles in Echtzeit.</p>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">📱</div>
+      <h3>App auf dem Handy installieren</h3>
+      <p>Öffne ImmoNova im Chrome-Browser auf dem Handy → "Zum Startbildschirm hinzufügen" → fertig. Verhält sich wie eine native App.</p>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">🔍</div>
+      <h3>Suchfunktion nutzen</h3>
+      <p>Die Suchleiste oben findet alles: Mieter, Tickets, Projekte, Kontakte. Schreibe ab 2 Zeichen – Ergebnisse erscheinen sofort.</p>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">💬</div>
+      <h3>WhatsApp-Links überall</h3>
+      <p>Neben jedem Mieter und Handwerker gibt es einen WhatsApp-Button. Klick drauf öffnet direkt einen Chat mit vorbereiteter Nachricht.</p>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">📊</div>
+      <h3>Berichte monatlich drucken</h3>
+      <p>Gehe jeden Monat zu Berichte → drucke die Übersicht als PDF. Perfekt für Eigentümerversammlungen oder Steuerberater.</p>
+    </div>
+    <div class="tip-card">
+      <div class="tip-icon">🎯</div>
+      <h3>CRM für Neuvermietung</h3>
+      <p>Trage Interessenten im CRM ein und setze Follow-Up-Termine. So verpasst du nie einen Besichtigungstermin oder eine Rückmeldung.</p>
+    </div>
+  </div>
+
+  <!-- Shortcuts -->
+  <h2 style="font-size:22px;font-weight:800;margin-bottom:16px;">⌨️ Tastaturkürzel</h2>
+  <table class="shortcuts no-print" style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th>Kürzel</th>
+        <th>Aktion</th>
+        <th>Kürzel</th>
+        <th>Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><kbd>Strg + K</kbd></td><td>Suche öffnen</td><td><kbd>Esc</kbd></td><td>Modal schließen</td></tr>
+      <tr><td><kbd>Strg + N</kbd></td><td>Neuer Eintrag</td><td><kbd>Enter</kbd></td><td>Formular speichern</td></tr>
+      <tr><td><kbd>Alt + D</kbd></td><td>Dashboard</td><td><kbd>Alt + M</kbd></td><td>Mieter</td></tr>
+    </tbody>
+  </table>
+
+  <div style="height:32px;"></div>
+
+  <!-- Support -->
+  <div class="support-box">
+    <div>
+      <h3>Brauchst du Hilfe?</h3>
+      <p>Unser Support-Team antwortet innerhalb von 24 Stunden. Oft schneller.</p>
+    </div>
+    <div class="support-actions">
+      <a href="https://wa.me/491234567890?text=Hallo%20ImmoNova%20Support%2C%20ich%20brauche%20Hilfe%20beim%20Onboarding..." class="support-btn support-btn-wa">💬 WhatsApp Support</a>
+      <a href="support.html" class="support-btn support-btn-email">🎧 Support Center</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleCheck(item) {
+  item.classList.toggle('done');
+  updateProgress();
+  saveChecklist();
+}
+
+function updateProgress() {
+  var done = document.querySelectorAll('.check-item.done').length;
+  var total = document.querySelectorAll('.check-item').length;
+  document.getElementById('progress-tag').textContent = done + ' / ' + total + ' erledigt';
+}
+
+function saveChecklist() {
+  var states = [];
+  document.querySelectorAll('.check-item').forEach(function(el) {
+    states.push(el.classList.contains('done') ? '1' : '0');
+  });
+  try { localStorage.setItem('in_onboarding_checklist', states.join(',')); } catch(e) {}
+}
+
+function loadChecklist() {
+  try {
+    var saved = localStorage.getItem('in_onboarding_checklist');
+    if (!saved) return;
+    var states = saved.split(',');
+    var items = document.querySelectorAll('.check-item');
+    states.forEach(function(s, i) {
+      if (s === '1' && items[i]) items[i].classList.add('done');
+    });
+    updateProgress();
+  } catch(e) {}
+}
+
+loadChecklist();
+</script>
+</body>
+</html>

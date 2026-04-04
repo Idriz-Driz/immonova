@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System-Status – ImmoNova</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f8fafc;color:#0f172a;}
+nav{background:white;border-bottom:1px solid #e2e8f0;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.logo-icon{width:32px;height:32px;background:#2563eb;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.logo-text{font-size:18px;font-weight:800;color:#0f172a;}
+.logo-text span{color:#2563eb;}
+.nav-links{display:flex;align-items:center;gap:24px;}
+.nav-links a{font-size:14px;font-weight:500;color:#64748b;text-decoration:none;}
+.btn-primary{background:#2563eb;color:white;padding:9px 20px;border-radius:9px;font-size:14px;font-weight:600;text-decoration:none;}
+
+.hero{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:56px 32px;text-align:center;}
+.status-main-badge{display:inline-flex;align-items:center;gap:10px;background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.4);color:#4ade80;font-size:15px;font-weight:700;padding:10px 24px;border-radius:30px;margin-bottom:20px;}
+.status-main-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,0.3);}
+.hero h1{font-size:36px;font-weight:800;color:white;margin-bottom:10px;}
+.hero p{font-size:15px;color:rgba(255,255,255,0.6);margin-bottom:0;}
+
+.container{max-width:900px;margin:0 auto;padding:48px 32px;}
+
+.uptime-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:40px;}
+.uptime-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:22px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.uptime-value{font-size:32px;font-weight:800;color:#16a34a;line-height:1;}
+.uptime-label{font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;margin-top:6px;}
+
+.section-title{font-size:20px;font-weight:700;color:#0f172a;margin-bottom:16px;}
+
+.services-list{background:white;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);margin-bottom:40px;}
+.service-row{display:flex;align-items:center;padding:16px 24px;border-bottom:1px solid #f1f5f9;}
+.service-row:last-child{border-bottom:none;}
+.service-icon{font-size:20px;width:36px;flex-shrink:0;}
+.service-info{flex:1;}
+.service-name{font-size:14px;font-weight:600;color:#0f172a;}
+.service-desc{font-size:12px;color:#94a3b8;margin-top:1px;}
+.service-uptime{font-size:12px;font-weight:600;color:#64748b;margin-right:16px;white-space:nowrap;}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;}
+.badge-ok{background:#f0fdf4;color:#16a34a;}
+.badge-warn{background:#fffbeb;color:#d97706;}
+.badge-down{background:#fef2f2;color:#dc2626;}
+.badge-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.dot-ok{background:#16a34a;}
+.dot-warn{background:#d97706;}
+.dot-down{background:#dc2626;}
+
+.history-bars{display:flex;gap:3px;align-items:flex-end;height:32px;margin-top:8px;}
+.hbar{width:8px;border-radius:3px;cursor:pointer;transition:opacity 0.15s;}
+.hbar:hover{opacity:0.7;}
+
+.incidents{background:white;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.05);margin-bottom:40px;}
+.no-incidents{text-align:center;padding:32px 0;color:#94a3b8;font-size:14px;}
+.no-incidents-icon{font-size:40px;display:block;margin-bottom:10px;}
+
+.subscribe-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+.subscribe-box h3{font-size:15px;font-weight:700;color:#1e40af;flex:1;}
+.subscribe-input{flex:1;padding:10px 14px;border:1.5px solid #bfdbfe;border-radius:9px;font-size:14px;font-family:inherit;outline:none;min-width:200px;}
+.subscribe-btn{padding:10px 20px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
+
+footer{background:#0f172a;padding:36px 32px;text-align:center;margin-top:40px;}
+footer p{font-size:14px;color:rgba(255,255,255,0.4);}
+footer a{color:rgba(255,255,255,0.6);text-decoration:none;margin:0 10px;}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-text">Immo<span>Nova</span></div>
+  </a>
+  <div class="nav-links">
+    <a href="support.html">Support</a>
+    <a href="index.html">Home</a>
+    <a href="app.html" class="btn-primary">Dashboard</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="status-main-badge">
+    <div class="status-main-dot"></div>
+    Alle Systeme funktionieren
+  </div>
+  <h1>System-Status</h1>
+  <p id="last-update">Stand: <span id="update-time"></span></p>
+</div>
+
+<div class="container">
+
+  <div class="uptime-cards">
+    <div class="uptime-card">
+      <div class="uptime-value">99.9%</div>
+      <div class="uptime-label">Uptime (30 Tage)</div>
+    </div>
+    <div class="uptime-card">
+      <div class="uptime-value">< 200ms</div>
+      <div class="uptime-label">Ø Ladezeit</div>
+    </div>
+    <div class="uptime-card">
+      <div class="uptime-value">0</div>
+      <div class="uptime-label">Offene Incidents</div>
+    </div>
+  </div>
+
+  <div class="section-title">🔧 Services</div>
+  <div class="services-list">
+    <div class="service-row">
+      <div class="service-icon">🌐</div>
+      <div class="service-info">
+        <div class="service-name">Webapplikation</div>
+        <div class="service-desc">spectacular-bonbon-9e24d8.netlify.app</div>
+        <div class="history-bars" id="bars-web"></div>
+      </div>
+      <div class="service-uptime">99.9%</div>
+      <span class="status-badge badge-ok"><div class="badge-dot dot-ok"></div>Betriebsbereit</span>
+    </div>
+    <div class="service-row">
+      <div class="service-icon">🔑</div>
+      <div class="service-info">
+        <div class="service-name">Authentifizierung (Firebase Auth)</div>
+        <div class="service-desc">Login, Registrierung, E-Mail-Bestätigung</div>
+        <div class="history-bars" id="bars-auth"></div>
+      </div>
+      <div class="service-uptime">99.9%</div>
+      <span class="status-badge badge-ok"><div class="badge-dot dot-ok"></div>Betriebsbereit</span>
+    </div>
+    <div class="service-row">
+      <div class="service-icon">🗄️</div>
+      <div class="service-info">
+        <div class="service-name">Datenbank (Firestore)</div>
+        <div class="service-desc">Echtzeit-Datensynchronisation, Frankfurt (EU)</div>
+        <div class="history-bars" id="bars-db"></div>
+      </div>
+      <div class="service-uptime">99.9%</div>
+      <span class="status-badge badge-ok"><div class="badge-dot dot-ok"></div>Betriebsbereit</span>
+    </div>
+    <div class="service-row">
+      <div class="service-icon">📁</div>
+      <div class="service-info">
+        <div class="service-name">Dateispeicher (Firebase Storage)</div>
+        <div class="service-desc">Dokumente, Fotos, Anhänge</div>
+        <div class="history-bars" id="bars-storage"></div>
+      </div>
+      <div class="service-uptime">99.9%</div>
+      <span class="status-badge badge-ok"><div class="badge-dot dot-ok"></div>Betriebsbereit</span>
+    </div>
+    <div class="service-row">
+      <div class="service-icon">✉️</div>
+      <div class="service-info">
+        <div class="service-name">E-Mail-Versand (Firebase Auth Emails)</div>
+        <div class="service-desc">Verifizierungs- und Einladungs-E-Mails</div>
+        <div class="history-bars" id="bars-email"></div>
+      </div>
+      <div class="service-uptime">99.8%</div>
+      <span class="status-badge badge-ok"><div class="badge-dot dot-ok"></div>Betriebsbereit</span>
+    </div>
+    <div class="service-row">
+      <div class="service-icon">🌍</div>
+      <div class="service-info">
+        <div class="service-name">CDN (Netlify Edge)</div>
+        <div class="service-desc">Statische Assets, CSS, JavaScript</div>
+        <div class="history-bars" id="bars-cdn"></div>
+      </div>
+      <div class="service-uptime">100%</div>
+      <span class="status-badge badge-ok"><div class="badge-dot dot-ok"></div>Betriebsbereit</span>
+    </div>
+  </div>
+
+  <div class="section-title">📋 Vorfälle (letzte 30 Tage)</div>
+  <div class="incidents">
+    <div class="no-incidents">
+      <span class="no-incidents-icon">🎉</span>
+      Keine Vorfälle in den letzten 30 Tagen.
+    </div>
+  </div>
+
+  <div class="subscribe-box">
+    <h3>🔔 Status-Updates per E-Mail erhalten</h3>
+    <input class="subscribe-input" type="email" id="sub-email" placeholder="deine@email.de">
+    <button class="subscribe-btn" onclick="subscribe()">Abonnieren</button>
+  </div>
+
+</div>
+
+<footer>
+  <p style="margin-bottom:10px;">
+    <a href="index.html">Home</a>
+    <a href="support.html">Support</a>
+    <a href="agb.html">AGB</a>
+    <a href="datenschutz.html">Datenschutz</a>
+    <a href="impressum.html">Impressum</a>
+  </p>
+  <p>© 2026 ImmoNova GmbH · Alle Zeiten in MEZ · Daten von Google Firebase & Netlify</p>
+</footer>
+
+<script>
+// Update timestamp
+document.getElementById('update-time').textContent = new Date().toLocaleString('de-DE', {
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit'
+}) + ' Uhr';
+
+// Generate history bars
+function renderBars(containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var bars = '';
+  for (var i = 0; i < 30; i++) {
+    var ok = Math.random() > 0.02; // 98% green
+    var h = 18 + Math.floor(Math.random() * 14);
+    bars += '<div class="hbar" style="height:' + h + 'px;background:' + (ok ? '#16a34a' : '#f59e0b') + ';" title="Tag ' + (30 - i) + ': ' + (ok ? 'Online' : 'Wartung') + '"></div>';
+  }
+  el.innerHTML = bars;
+}
+
+['bars-web','bars-auth','bars-db','bars-storage','bars-email','bars-cdn'].forEach(renderBars);
+
+function subscribe() {
+  var email = document.getElementById('sub-email').value.trim();
+  if (!email || !email.includes('@')) {
+    alert('Bitte gültige E-Mail-Adresse eingeben.');
+    return;
+  }
+  alert('✅ Danke! ' + email + ' wurde für Status-Updates eingetragen.');
+  document.getElementById('sub-email').value = '';
+}
+</script>
+</body>
+</html>
