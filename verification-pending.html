@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'DM Sans', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -84,10 +85,40 @@ var auth = firebase.auth();
 
 var cooldown = 0;
 var cdInterval = null;
+var checkInterval = null;
 
 auth.onAuthStateChanged(function(user) {
   if (user && user.email) {
     document.getElementById('email-display').textContent = '📬 ' + user.email;
+  }
+  if (user) {
+    // Auto-check every 5s if email has been verified
+    if (checkInterval) clearInterval(checkInterval);
+    checkInterval = setInterval(function() {
+      user.reload().then(function() {
+        if (auth.currentUser && auth.currentUser.emailVerified) {
+          clearInterval(checkInterval);
+          // Set trialEndsAt if not already set
+          var db = firebase.firestore ? firebase.firestore() : null;
+          if (db) {
+            var trialEndsAt = new Date(Date.now() + 30*24*60*60*1000).toISOString();
+            db.collection('users').doc(user.uid).get().then(function(snap) {
+              var updates = { status: 'active' };
+              if (!snap.exists || !snap.data().trialEndsAt) {
+                updates.trialEndsAt = trialEndsAt;
+              }
+              return db.collection('users').doc(user.uid).update(updates);
+            }).then(function() {
+              window.location.href = 'onboarding.html';
+            }).catch(function() {
+              window.location.href = 'onboarding.html';
+            });
+          } else {
+            window.location.href = 'onboarding.html';
+          }
+        }
+      }).catch(function() {});
+    }, 5000);
   }
 });
 

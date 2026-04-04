@@ -386,7 +386,7 @@ function render() {
     // Activity Feed
     + '<div style="background:white;border-radius:16px;padding:22px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1px solid #e8edf3;">'
     + sectionTitle('\ud83d\udd14', 'Letzte Aktivit\u00e4ten')
-    + feedHTML
+    + '<div id="dash-live-feed">' + feedHTML + '</div>'
     + '</div>'
 
     // Mini Charts column
@@ -418,9 +418,145 @@ function render() {
   renderLayout('dashboard', 'Dashboard', '', mainContent, '');
 }
 
+// ─── LIVE LISTENERS ─────────────────────────────────────────
+var _renderTimer   = null;
+var _firstLoadDone = false;
+var _loadCount     = 0;
+var LOAD_TOTAL     = 4; // tickets, mieter, followups, aufgaben
+
+function debouncedRender() {
+  clearTimeout(_renderTimer);
+  _renderTimer = setTimeout(render, 150);
+}
+
+function writeAktivitaet(icon, text) {
+  if (!user.uid || user.uid === 'demo') return;
+  try {
+    firebase.firestore()
+      .collection('tenants').doc(user.uid)
+      .collection('aktivitaeten').add({
+        icon: icon,
+        text: text,
+        zeit: firebase.firestore.FieldValue.serverTimestamp()
+      });
+  } catch(e) {}
+}
+
+function updateLiveFeed(items) {
+  var el = document.getElementById('dash-live-feed');
+  if (!el) return;
+  if (!items || items.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:32px 0;color:#94a3b8;font-size:13px;">Noch keine Aktivit\u00e4ten vorhanden.</div>';
+    return;
+  }
+  var colorMap = { '\ud83c\udfab': '#dc2626', '\ud83d\udc64': '#2563eb', '\u2705': '#16a34a', '\ud83d\udcb3': '#16a34a' };
+  el.innerHTML = items.map(function(item) {
+    var ico = item.icon || '\ud83d\udcdd';
+    var timeStr = item.zeit && item.zeit.toDate ? timeAgo(item.zeit.toDate().toISOString()) : '';
+    return activityItem(colorMap[ico] || '#7c3aed', ico + ' ' + (item.text || ''), timeStr);
+  }).join('');
+}
+
+// Update sidebar badge counts in-place (no full re-render needed)
+function updateSidebarBadge(key, count) {
+  var el = document.querySelector('[data-badge="' + key + '"]');
+  if (el) { el.textContent = count; el.style.display = count > 0 ? '' : 'none'; }
+}
+
+function initLiveListeners() {
+  initFirebase();
+  if (!user.uid || user.uid === 'demo') { render(); return; }
+  if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) { render(); return; }
+
+  var db  = firebase.firestore();
+  var uid = user.uid;
+  var base = db.collection('tenants').doc(uid);
+
+  function onInitialSnap() {
+    _loadCount++;
+    if (_loadCount >= LOAD_TOTAL && !_firstLoadDone) {
+      _firstLoadDone = true;
+      render();
+    }
+  }
+
+  // ── tickets ──────────────────────────────────────────────────
+  base.collection('tickets').onSnapshot(function(snap) {
+    var arr = [];
+    snap.forEach(function(d) { arr.push(Object.assign({ id: d.id }, d.data())); });
+    localStorage.setItem(KEYS.tickets, JSON.stringify(arr));
+    if (!_firstLoadDone) { onInitialSnap(); return; }
+    snap.docChanges().forEach(function(ch) {
+      if (ch.type === 'added' && !ch.doc.metadata.fromCache) {
+        var d = ch.doc.data();
+        writeAktivitaet('\ud83c\udfab', 'Neues Ticket: ' + (d.titel || d.pb || 'Unbekannt').substring(0, 40));
+      }
+      if (ch.type === 'modified' && !ch.doc.metadata.fromCache) {
+        var d2 = ch.doc.data();
+        if (d2.status === 'Erledigt') writeAktivitaet('\u2705', 'Ticket erledigt: ' + (d2.titel || d2.pb || 'Unbekannt').substring(0, 40));
+      }
+    });
+    var open = arr.filter(function(t){ return t.status !== 'Erledigt'; }).length;
+    updateSidebarBadge('tickets', open);
+    debouncedRender();
+  }, function() { onInitialSnap(); });
+
+  // ── mieter ───────────────────────────────────────────────────
+  base.collection('mieter').onSnapshot(function(snap) {
+    var arr = [];
+    snap.forEach(function(d) { arr.push(Object.assign({ id: d.id }, d.data())); });
+    localStorage.setItem(KEYS.mieter, JSON.stringify(arr));
+    if (!_firstLoadDone) { onInitialSnap(); return; }
+    snap.docChanges().forEach(function(ch) {
+      if (ch.type === 'added' && !ch.doc.metadata.fromCache) {
+        var d = ch.doc.data();
+        writeAktivitaet('\ud83d\udc64', 'Neuer Mieter: ' + (d.name || 'Unbekannt'));
+      }
+    });
+    debouncedRender();
+  }, function() { onInitialSnap(); });
+
+  // ── followups ────────────────────────────────────────────────
+  base.collection('followups').onSnapshot(function(snap) {
+    var arr = [];
+    snap.forEach(function(d) { arr.push(Object.assign({ id: d.id }, d.data())); });
+    localStorage.setItem(KEYS.followups, JSON.stringify(arr));
+    if (!_firstLoadDone) { onInitialSnap(); return; }
+    debouncedRender();
+  }, function() { onInitialSnap(); });
+
+  // ── aufgaben ─────────────────────────────────────────────────
+  base.collection('aufgaben').onSnapshot(function(snap) {
+    var arr = [];
+    snap.forEach(function(d) { arr.push(Object.assign({ id: d.id }, d.data())); });
+    localStorage.setItem(KEYS.aufgaben, JSON.stringify(arr));
+    if (!_firstLoadDone) { onInitialSnap(); return; }
+    snap.docChanges().forEach(function(ch) {
+      if (ch.type === 'modified' && !ch.doc.metadata.fromCache) {
+        var d = ch.doc.data();
+        if (d.done) writeAktivitaet('\u2705', 'Aufgabe erledigt: ' + (d.text || d.titel || 'Unbekannt').substring(0, 40));
+      }
+    });
+    debouncedRender();
+  }, function() { onInitialSnap(); });
+
+  // ── aktivitaeten (live feed, no full re-render) ──────────────
+  base.collection('aktivitaeten')
+    .orderBy('zeit', 'desc').limit(10)
+    .onSnapshot(function(snap) {
+      var items = [];
+      snap.forEach(function(d) { items.push(d.data()); });
+      updateLiveFeed(items);
+    }, function() {});
+
+  // Safety fallback: if Firestore offline, render from localStorage after 2s
+  setTimeout(function() {
+    if (!_firstLoadDone) { _firstLoadDone = true; render(); }
+  }, 2000);
+}
+
 // ─── INIT ───────────────────────────────────────────────────
-initFirebase();
-startPageListener(user.uid, render);
+initLiveListeners();
 </script>
 </body>
 </html>

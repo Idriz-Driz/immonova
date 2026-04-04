@@ -167,8 +167,29 @@ function toast(msg, type, duration) {
   setTimeout(function() { if (t.parentElement) t.remove(); }, duration || 4000);
 }
 
+// ─── AKTIVITÄTS-FEED ──────────────────────────────────────────
+// Schreibt eine Aktivität in Firestore /tenants/{uid}/aktivitaeten
+// und optional in die lokale Notif-Liste
+function logAktivitaet(ico, text) {
+  var u = getUser();
+  if (!u || !u.uid || u.uid === 'demo') return;
+  if (typeof firebase === 'undefined' || !firebase.apps.length) return;
+  try {
+    firebase.firestore()
+      .collection('tenants').doc(u.uid)
+      .collection('aktivitaeten').add({
+        icon: ico,
+        text: text,
+        zeit: firebase.firestore.FieldValue.serverTimestamp(),
+        uid: u.uid
+      });
+  } catch(e) {}
+}
+
 // ─── NOTIFICATIONS ────────────────────────────────────────────
 function addNotif(ico, txt) {
+  // Also log to Firestore aktivitaeten feed
+  logAktivitaet(ico, txt);
   var notifs = getData(KEYS.notifs, []);
   notifs.unshift({
     ico: ico, txt: txt, unread: true,

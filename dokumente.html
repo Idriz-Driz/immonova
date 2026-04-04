@@ -417,7 +417,7 @@ function render() {
         +'<p style="font-size:12px;color:#64748b;flex:1;line-height:1.5;margin-bottom:14px;">'+esc(t.desc)+'</p>'
         +'<div style="display:flex;gap:6px;">'
         +'<button onclick="previewDoc(\''+t.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#f1f5f9;color:#475569;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">👁️ Vorschau</button>'
-        +'<button onclick="printDoc(\''+t.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Drucken</button>'
+        +'<button onclick="printDoc(\''+t.id+'\')" style="flex:1;padding:8px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📄 Als PDF</button>'
         +'</div></div>';
     });
     cardsHtml += '</div>';
@@ -437,12 +437,21 @@ function kpi(ico,l,v,s) {
 }
 
 function buildPreviewModal() {
+  var mieter = getData(KEYS.mieter, []);
+  var mieterOpts = mieter.length
+    ? mieter.map(function(m, i) {
+        return '<option value="'+i+'">'+(m.name||'Mieter '+(i+1))+' – '+(m.wn||'')+'</option>';
+      }).join('')
+    : '<option value="0">Kein Mieter vorhanden</option>';
+
   return '<div id="preview-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;">'
-    +'<div style="background:white;border-radius:20px;max-width:750px;width:100%;margin:auto;">'
-    +'<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">'
+    +'<div style="background:white;border-radius:20px;max-width:780px;width:100%;margin:auto;">'
+    +'<div style="padding:18px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
     +'<div id="preview-titlebar" style="font-size:16px;font-weight:700;color:#0f172a;"></div>'
-    +'<div style="display:flex;gap:8px;">'
-    +'<button id="preview-print-btn" onclick="" style="padding:8px 16px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;">🖨️ Drucken</button>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+    +'<select id="preview-mieter-sel" onchange="refreshPreview()" style="padding:7px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;color:#0f172a;outline:none;background:white;">'
+    +mieterOpts+'</select>'
+    +'<button id="preview-print-btn" style="padding:8px 16px;border-radius:8px;border:none;background:#2563eb;color:white;font-size:12px;font-weight:700;cursor:pointer;">📄 Als PDF</button>'
     +'<button onclick="closePreview()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;color:#64748b;cursor:pointer;font-size:16px;">✕</button>'
     +'</div>'
     +'</div>'
@@ -450,62 +459,145 @@ function buildPreviewModal() {
     +'</div></div>';
 }
 
+var _previewId = null;
 function getDocData(id) {
   var mieter = getData(KEYS.mieter, []);
-  var firstM = mieter[0] || {};
-  return { mieter: firstM, name: firstM.name||'', wn: firstM.wn||'', jahr: new Date().getFullYear()-1 };
+  var selEl  = document.getElementById('preview-mieter-sel');
+  var idx    = selEl ? parseInt(selEl.value) || 0 : 0;
+  var m      = mieter[idx] || mieter[0] || {};
+  return {
+    mieter:   m,
+    name:     m.name     || 'Max Mustermann',
+    wn:       m.wn       || 'EG Links',
+    jahr:     new Date().getFullYear() - 1,
+    kaltmiete: m.miete   || '800',
+    nebenkosten: m.nebenkosten || '150',
+    beginn:   m.mietbeginn || new Date().toLocaleDateString('de-DE'),
+    kaution:  m.kaution  || (parseFloat(m.miete||800)*3).toString(),
+    hw:       '',
+    leistung: '',
+    neuemiete: m.miete   || '850',
+    betrag:   m.miete    || '800',
+    grund:    '',
+    kuendigung: '',
+    wohnungsuebergabe: m.wn || 'EG Links'
+  };
+}
+
+function refreshPreview() {
+  if (!_previewId) return;
+  var tmpl = TEMPLATES.find(function(t){ return t.id===_previewId; });
+  if (!tmpl) return;
+  document.getElementById('preview-content').innerHTML = tmpl.html(getDocData(_previewId));
 }
 
 function previewDoc(id) {
+  _previewId = id;
   var tmpl = TEMPLATES.find(function(t){ return t.id===id; });
   if (!tmpl) return;
-  var d = getDocData(id);
   document.getElementById('preview-titlebar').textContent = tmpl.ico+' '+tmpl.titel;
-  document.getElementById('preview-content').innerHTML = tmpl.html(d);
+  document.getElementById('preview-content').innerHTML = tmpl.html(getDocData(id));
   document.getElementById('preview-print-btn').onclick = function(){ printDoc(id); };
   document.getElementById('preview-modal').style.display = 'flex';
 }
 
-function closePreview() { document.getElementById('preview-modal').style.display='none'; }
+function closePreview() { document.getElementById('preview-modal').style.display='none'; _previewId=null; }
 
 function printDoc(id) {
   var tmpl = TEMPLATES.find(function(t){ return t.id===id; });
   if (!tmpl) return;
   var d = getDocData(id);
-  var firma = localStorage.getItem('in_firma_name') || user.firma || '';
+  var firma    = localStorage.getItem('in_firma_name') || (user && user.firma) || 'ImmoNova';
   var firmaAdr = [
     localStorage.getItem('in_firma_adr') || '',
-    (localStorage.getItem('in_firma_plz')||'') + ' ' + (localStorage.getItem('in_firma_stadt')||'')
-  ].filter(Boolean).join(', ');
+    ((localStorage.getItem('in_firma_plz')||'') + ' ' + (localStorage.getItem('in_firma_stadt')||'')).trim()
+  ].filter(Boolean).join(' · ');
+  var firmaEmail = localStorage.getItem('in_user_email') || '';
+  var heute      = new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+
   var win = window.open('', '_blank');
-  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
+  if (!win) { alert('Bitte Pop-ups erlauben.'); return; }
+
+  win.document.write('<!DOCTYPE html><html lang="de"><head>'
+    + '<meta charset="UTF-8">'
     + '<title>' + tmpl.titel + ' – ImmoNova</title>'
     + '<style>'
-    + 'body{font-family:Georgia,serif;font-size:13px;line-height:1.7;color:#1e293b;max-width:720px;margin:40px auto;padding:0 28px;}'
-    + 'h2,h3{color:#0f172a;}'
-    + 'table{width:100%;border-collapse:collapse;margin:12px 0;}'
-    + 'th,td{border:1px solid #cbd5e1;padding:9px 12px;}'
-    + 'th{background:#f8fafc;font-weight:700;}'
-    + '.doc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #0f172a;}'
-    + '.doc-firma{font-size:14px;font-weight:700;color:#0f172a;}'
-    + '.doc-firma-sub{font-size:11px;color:#64748b;margin-top:2px;}'
-    + '.doc-logo{font-size:28px;font-weight:800;color:#2563eb;letter-spacing:-1px;}'
-    + '.no-print{display:none;}'
+    // ── Reset & base ──
+    + '*{box-sizing:border-box;margin:0;padding:0;}'
+    + 'body{'
+    +   'font-family:"DM Sans",Arial,sans-serif;font-size:12pt;line-height:1.6;'
+    +   'color:#1e293b;background:white;'
+    +   'max-width:21cm;margin:0 auto;padding:2cm 2cm 2.5cm;'
+    + '}'
+    // ── Typography ──
+    + 'h2{font-size:16pt;font-weight:700;color:#0f172a;margin:18px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;}'
+    + 'h3{font-size:13pt;font-weight:600;color:#0f172a;margin:14px 0 6px;}'
+    + 'p{margin:6px 0;}'
+    + 'ul,ol{margin:6px 0 6px 22px;}'
+    + 'li{margin:3px 0;}'
+    // ── Tables ──
+    + 'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:11pt;}'
+    + 'th,td{border:1px solid #cbd5e1;padding:8px 11px;text-align:left;}'
+    + 'th{background:#f1f5f9;font-weight:700;color:#374151;}'
+    + 'tr:nth-child(even) td{background:#f8fafc;}'
+    // ── Header ──
+    + '.doc-header{'
+    +   'display:flex;justify-content:space-between;align-items:flex-start;'
+    +   'margin-bottom:28px;padding-bottom:16px;'
+    +   'border-bottom:3px solid #2563eb;'
+    + '}'
+    + '.doc-firma-name{font-size:15pt;font-weight:800;color:#0f172a;margin-bottom:3px;}'
+    + '.doc-firma-meta{font-size:9pt;color:#64748b;line-height:1.4;}'
+    + '.doc-logo{text-align:right;}'
+    + '.doc-logo-text{font-size:20pt;font-weight:800;color:#2563eb;letter-spacing:-1px;}'
+    + '.doc-logo-sub{font-size:8pt;color:#94a3b8;margin-top:1px;}'
+    // ── Save button (only visible on screen, not in print) ──
+    + '.save-btn{'
+    +   'display:block;margin:0 auto 24px;padding:12px 28px;'
+    +   'background:#2563eb;color:white;border:none;border-radius:9px;'
+    +   'font-size:13pt;font-weight:700;cursor:pointer;font-family:inherit;'
+    + '}'
+    // ── Footer ──
+    + '.doc-footer{margin-top:48px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:8pt;color:#94a3b8;display:flex;justify-content:space-between;}'
+    // ── Print-specific rules ──
     + '@media print{'
-    + '  body{margin:16px auto;}'
-    + '  .no-print{display:none!important;}'
-    + '  @page{margin:18mm 16mm;}'
+    +   'body{padding:0;max-width:100%;}'
+    +   '.save-btn,.no-print{display:none!important;}'
+    +   '@page{size:A4;margin:20mm 18mm;}'
+    +   'h2{page-break-after:avoid;}'
+    +   'table{page-break-inside:avoid;}'
     + '}'
     + '</style>'
     + '</head><body>'
+
+    // ── Save as PDF button (screen only) ──
+    + '<button class="save-btn" onclick="window.print()">📄 Als PDF speichern / Drucken</button>'
+
+    // ── Letterhead ──
     + '<div class="doc-header">'
-    +   '<div><div class="doc-firma">' + (firma || 'ImmoNova') + '</div><div class="doc-firma-sub">' + firmaAdr + '</div></div>'
-    +   '<div class="doc-logo">🏠 ImmoNova</div>'
+    +   '<div>'
+    +     '<div class="doc-firma-name">' + firma + '</div>'
+    +     '<div class="doc-firma-meta">'
+    +       (firmaAdr ? firmaAdr + '<br>' : '')
+    +       (firmaEmail ? firmaEmail : '')
+    +     '</div>'
+    +   '</div>'
+    +   '<div class="doc-logo">'
+    +     '<div class="doc-logo-text">🏠 ImmoNova</div>'
+    +     '<div class="doc-logo-sub">Immobilienverwaltung</div>'
+    +   '</div>'
     + '</div>'
   );
+
   win.document.write(tmpl.html(d));
-  win.document.write('<p style="margin-top:40px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">Erstellt mit ImmoNova · ' + new Date().toLocaleDateString('de-DE') + '</p>');
-  win.document.write('</body></html>');
+
+  win.document.write(
+    '<div class="doc-footer">'
+    + '<span>Erstellt mit ImmoNova · ' + heute + '</span>'
+    + '<span>' + firma + (firmaEmail ? ' · ' + firmaEmail : '') + '</span>'
+    + '</div>'
+    + '</body></html>'
+  );
   win.document.close();
   setTimeout(function(){ win.print(); }, 600);
 }
