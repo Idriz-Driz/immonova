@@ -349,7 +349,10 @@ function toggleFaq(el) {
   if (!open) item.classList.add('open');
 }
 function startDemo() {
-  startDemoMode();
+  document.getElementById('demo-gate-index').style.display = 'flex';
+}
+function hideDemoGate() {
+  document.getElementById('demo-gate-index').style.display = 'none';
 }
 document.querySelectorAll('a[href^="#"]').forEach(function(a) {
   a.addEventListener('click', function(e) {
@@ -359,5 +362,28 @@ document.querySelectorAll('a[href^="#"]').forEach(function(a) {
 });
 showCookieBanner();
 </script>
+
+<!-- Demo Gate Modal -->
+<div id="demo-gate-index" onclick="if(event.target===this)hideDemoGate()"
+  style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);align-items:center;justify-content:center;z-index:9999;padding:20px;backdrop-filter:blur(4px);">
+  <div style="background:white;border-radius:20px;padding:40px 32px;width:100%;max-width:440px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.25);">
+    <div style="font-size:56px;margin-bottom:16px;">🏢</div>
+    <h2 style="font-size:22px;font-weight:800;color:#0f172a;margin:0 0 10px;">Demo von ImmoNova</h2>
+    <p style="font-size:14px;color:#64748b;line-height:1.65;margin:0 0 22px;">
+      Registriere dich kostenlos, um die Demo zu sehen.<br>
+      <strong style="color:#0f172a;">Keine Kreditkarte nötig</strong> – 30 Tage gratis testen.
+    </p>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;margin-bottom:22px;font-size:13px;color:#1d4ed8;">
+      ✅ Kostenlos &nbsp;·&nbsp; ✅ DSGVO-konform &nbsp;·&nbsp; ✅ Sofort loslegen
+    </div>
+    <a href="login.html#register" style="display:block;width:100%;padding:14px;background:#2563eb;color:white;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;margin-bottom:10px;box-shadow:0 4px 16px rgba(37,99,235,0.3);">
+      → Jetzt kostenlos registrieren
+    </a>
+    <button onclick="hideDemoGate()" style="width:100%;padding:11px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
+      Zurück
+    </button>
+  </div>
+</div>
+
 </body>
 </html>

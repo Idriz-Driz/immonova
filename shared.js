@@ -84,18 +84,28 @@ function getUserRole() { return getUser().role; }
 // ─── DEMO MODE ────────────────────────────────────────────────
 function isDemoMode() { return sessionStorage.getItem('demo_mode') === 'true'; }
 
+// startDemoMode: only usable after real Firebase authentication
+// Call this AFTER the user has verified email and is logged in.
 function startDemoMode() {
+  var uid = localStorage.getItem('in_user_uid');
+  if (!uid || uid === 'demo') {
+    // Not logged in → send to register
+    window.location.href = 'login.html#register';
+    return;
+  }
   sessionStorage.setItem('demo_mode', 'true');
-  localStorage.setItem('in_role', 'verwalter');
-  localStorage.setItem('in_user_uid', 'demo');
-  localStorage.setItem('in_user_name', 'Demo Nutzer');
-  localStorage.setItem('in_user_plan', 'pro');
-  localStorage.setItem('in_user_email', 'demo@immonova.de');
-  localStorage.setItem('in_user_firma', 'Demo Immobilien GmbH');
   Object.keys(DEMO_DATA).forEach(function(k) {
     if (KEYS[k]) setData(KEYS[k], DEMO_DATA[k]);
   });
   window.location.href = 'app.html';
+}
+
+// Used by app pages after login: load demo data for current user session
+function activateDemoForLoggedInUser() {
+  sessionStorage.setItem('demo_mode', 'true');
+  Object.keys(DEMO_DATA).forEach(function(k) {
+    if (KEYS[k]) setData(KEYS[k], DEMO_DATA[k]);
+  });
 }
 
 // ─── AUTH GUARD ───────────────────────────────────────────────

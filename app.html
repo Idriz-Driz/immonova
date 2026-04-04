@@ -19,24 +19,35 @@ var user = getUser();
 
 // ─── HELPERS ───────────────────────────────────────────────
 
-function getGreeting() {
-  var h = new Date().getHours();
-  if (h < 12) return 'Guten Morgen';
-  if (h < 18) return 'Guten Tag';
-  return 'Guten Abend';
-}
+function getBegruessung() {
+  var now = new Date();
+  var h = now.getHours();
+  var min = now.getMinutes();
+  var zeitString = String(h).padStart(2,'0') + ':' + String(min).padStart(2,'0') + ' Uhr';
 
-function getVorname() {
-  if (!user) return '';
-  var name = user.name || user.email || '';
-  return name.split(' ')[0].split('@')[0];
-}
+  var gruss = h >= 5  && h < 12 ? 'Guten Morgen'
+            : h >= 12 && h < 14 ? 'Guten Mittag'
+            : h >= 14 && h < 18 ? 'Guten Nachmittag'
+            : h >= 18 && h < 22 ? 'Guten Abend'
+            : 'Gute Nacht';
 
-function getDatumDe() {
-  return new Date().toLocaleDateString('de-DE', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  var u = getUser();
+  var rawName = (u && u.name) || '';
+  // Never show "Admin" – fall back to a friendly default
+  var vorname = rawName.split(' ')[0] || '';
+  if (!vorname || vorname.toLowerCase() === 'admin') vorname = 'Willkommen';
+
+  var datum = now.toLocaleDateString('de-DE', {
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
   });
+
+  return { gruss: gruss, name: vorname, zeit: zeitString, datum: datum };
 }
+
+// Keep old aliases for any remaining callers
+function getGreeting() { return getBegruessung().gruss; }
+function getVorname()  { return getBegruessung().name;  }
+function getDatumDe()  { return getBegruessung().datum; }
 
 function formatCurrency(n) {
   return (n || 0).toLocaleString('de-DE') + ' \u20ac';
@@ -128,6 +139,191 @@ function activityItem(dotColor, text, timeStr) {
     + '</div>';
 }
 
+// ─── WIDGET SYSTEM ──────────────────────────────────────────
+
+var WIDGET_DEFS = [
+  { id:'einnahmen',  icon:'💰', label:'Monatliche Einnahmen', type:'kpi' },
+  { id:'auslastung', icon:'🏠', label:'Auslastung %',         type:'kpi' },
+  { id:'tickets',    icon:'🎫', label:'Offene Tickets',       type:'kpi' },
+  { id:'mieten',     icon:'⚠️', label:'Offene Mieten',        type:'kpi' },
+  { id:'wohnungen',  icon:'👥', label:'Wohnungsübersicht',    type:'kpi' },
+  { id:'followups',  icon:'🎯', label:'Follow-Ups heute',     type:'kpi' },
+  { id:'termine',    icon:'📅', label:'Nächste Termine',      type:'list' },
+  { id:'aufgaben',   icon:'✅', label:'Offene Aufgaben',      type:'list' },
+  { id:'aktivitaet', icon:'📊', label:'Aktivitäts-Feed',      type:'list' },
+  { id:'projekte',   icon:'🏗️', label:'Aktive Projekte',     type:'list' }
+];
+
+var DEFAULT_WIDGETS = ['einnahmen','tickets','followups','termine'];
+
+function getActiveWidgets() {
+  var saved = localStorage.getItem('dashboard_widgets');
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  return DEFAULT_WIDGETS.slice();
+}
+
+function saveActiveWidgets(arr) {
+  localStorage.setItem('dashboard_widgets', JSON.stringify(arr));
+  try {
+    var uid = user.uid;
+    if (uid && uid !== 'demo') {
+      firebase.firestore().collection('users').doc(uid)
+        .collection('settings').doc('dashboard')
+        .set({ widgets: arr });
+    }
+  } catch(e) {}
+}
+
+function buildWidgetKPIs(data) {
+  var active = getActiveWidgets();
+  if (active.length === 0) {
+    return '<div style="background:white;border-radius:16px;padding:32px;text-align:center;color:#94a3b8;font-size:14px;margin-bottom:24px;border:1px dashed #e2e8f0;">'
+      + '⚙️ Klicke auf <strong>Dashboard anpassen</strong>, um Widgets hinzuzufügen.</div>';
+  }
+
+  var kpiIds  = active.filter(function(id) { var d = WIDGET_DEFS.find(function(w){return w.id===id;}); return d && d.type==='kpi'; });
+  var listIds = active.filter(function(id) { var d = WIDGET_DEFS.find(function(w){return w.id===id;}); return d && d.type==='list'; });
+  var cols = Math.min(Math.max(kpiIds.length, 2), 4);
+
+  var kpiHtml = kpiIds.length > 0
+    ? '<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:16px;margin-bottom:24px;">'
+      + kpiIds.map(function(id) { return buildWidgetCard(id, data); }).join('')
+      + '</div>'
+    : '';
+
+  var listHtml = listIds.length > 0
+    ? '<div style="display:grid;grid-template-columns:repeat('+Math.min(listIds.length,2)+',1fr);gap:16px;margin-bottom:24px;">'
+      + listIds.map(function(id) { return buildWidgetList(id, data); }).join('')
+      + '</div>'
+    : '';
+
+  return kpiHtml + listHtml;
+}
+
+function buildWidgetCard(id, d) {
+  var bg = {einnahmen:'#dcfce7',auslastung:'#dbeafe',tickets:'#ffedd5',mieten:'#fef2f2',wohnungen:'#f0fdf4',followups:'#eff6ff'};
+  switch(id) {
+    case 'einnahmen':
+      return kpiCard('Monatl. Einnahmen', formatCurrency(d.monthlyIncome), 'Summe aller Mieteinnahmen', bg.einnahmen, '💰');
+    case 'auslastung':
+      return kpiCard('Auslastung', d.belegtPct + '%', d.mieter.length + ' von ' + d.totalUnits + ' Einheiten belegt', bg.auslastung, '🏠');
+    case 'tickets':
+      return kpiCard('Offene Tickets', d.offeneTickets.length.toString(), d.offeneTickets.length === 0 ? 'Alles erledigt ✅' : d.offeneTickets.length + ' ausstehend', bg.tickets, '🎫');
+    case 'mieten':
+      var overdue = d.mieter.filter(function(m){ return m.status === 'Rückstand'; }).length;
+      return kpiCard('Offene Mieten', overdue.toString(), overdue === 0 ? 'Alle Mieten aktuell ✅' : overdue + ' im Rückstand', bg.mieten, '⚠️');
+    case 'wohnungen':
+      return kpiCard('Wohnungen', d.totalUnits.toString(), d.mieter.length + ' belegt, ' + Math.max(0,d.totalUnits-d.mieter.length) + ' frei', bg.wohnungen, '👥');
+    case 'followups':
+      var fuHeute = d.followups.filter(function(f){ return !f.done && f.dat === d.todayStr; }).length;
+      return kpiCard('Follow-Ups heute', fuHeute.toString(), fuHeute === 0 ? 'Keine für heute 🎉' : fuHeute + ' zu erledigen', bg.followups, '🎯');
+    default: return '';
+  }
+}
+
+function buildWidgetList(id, d) {
+  var header = function(icon, label, href) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+      + '<div style="font-size:14px;font-weight:700;color:#0f172a;">' + icon + ' ' + label + '</div>'
+      + (href ? '<a href="'+href+'" style="font-size:12px;color:#2563eb;text-decoration:none;font-weight:600;">→ Alle</a>' : '')
+      + '</div>';
+  };
+  var wrap = '<div style="background:white;border-radius:16px;padding:22px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border:1px solid #e8edf3;">';
+  var empty = '<div style="text-align:center;padding:20px 0;color:#94a3b8;font-size:13px;">Keine Einträge vorhanden.</div>';
+
+  switch(id) {
+    case 'termine': {
+      var fut = d.termine.filter(function(t){ return t.datum >= d.todayStr; })
+        .sort(function(a,b){ return a.datum.localeCompare(b.datum); }).slice(0,5);
+      return wrap + header('📅','Nächste Termine','kalender.html')
+        + (fut.length === 0 ? empty : fut.map(function(t){
+          return activityItem('#2563eb', '<strong>'+t.titel+'</strong> – ' + t.datum + (t.uhrzeit?' · '+t.uhrzeit:''), '');
+        }).join(''))
+        + '</div>';
+    }
+    case 'aufgaben': {
+      var off = d.aufgaben.filter(function(a){ return a.status !== 'Erledigt'; }).slice(0,5);
+      return wrap + header('✅','Offene Aufgaben','aufgaben.html')
+        + (off.length === 0 ? empty : off.map(function(a){
+          var pCol = a.prioritaet==='Hoch'?'#dc2626':a.prioritaet==='Normal'?'#d97706':'#16a34a';
+          return activityItem(pCol, '<strong>'+a.titel+'</strong>' + (a.faellig?' · fällig: '+a.faellig:''), '');
+        }).join(''))
+        + '</div>';
+    }
+    case 'aktivitaet': {
+      return wrap + header('📊','Letzte Aktivitäten','')
+        + '<div id="dash-live-feed">' + '<div style="text-align:center;padding:20px 0;color:#94a3b8;font-size:13px;">Lade...</div>' + '</div>'
+        + '</div>';
+    }
+    case 'projekte': {
+      var aktiv = d.projekte.filter(function(p){ return p.status !== 'Abgeschlossen'; }).slice(0,5);
+      return wrap + header('🏗️','Aktive Projekte','projekte.html')
+        + (aktiv.length === 0 ? empty : aktiv.map(function(p){
+          return activityItem('#7c3aed', '<strong>'+(p.name||'–')+'</strong> – '+(p.status||'Geplant'), '');
+        }).join(''))
+        + '</div>';
+    }
+    default: return '';
+  }
+}
+
+function openWidgetPanel() {
+  var active = getActiveWidgets();
+  var panelEl = document.getElementById('widget-panel');
+  if (!panelEl) return;
+  WIDGET_DEFS.forEach(function(w) {
+    var cb = document.getElementById('wc-' + w.id);
+    if (cb) cb.checked = active.indexOf(w.id) >= 0;
+  });
+  panelEl.style.display = 'flex';
+}
+
+function closeWidgetPanel() {
+  var panelEl = document.getElementById('widget-panel');
+  if (panelEl) panelEl.style.display = 'none';
+}
+
+function saveWidgetPanel() {
+  var active = [];
+  WIDGET_DEFS.forEach(function(w) {
+    var cb = document.getElementById('wc-' + w.id);
+    if (cb && cb.checked) active.push(w.id);
+  });
+  saveActiveWidgets(active);
+  closeWidgetPanel();
+  render();
+}
+
+function buildWidgetPanelHTML() {
+  var checkboxes = WIDGET_DEFS.map(function(w) {
+    return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;cursor:pointer;transition:background 0.1s;" '
+      + 'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'transparent\'">'
+      + '<input type="checkbox" id="wc-'+w.id+'" style="width:16px;height:16px;accent-color:#2563eb;cursor:pointer;flex-shrink:0;">'
+      + '<span style="font-size:14px;">' + w.icon + '</span>'
+      + '<span style="font-size:14px;color:#0f172a;font-weight:500;">' + w.label + '</span>'
+      + '</label>';
+  }).join('');
+
+  return '<div id="widget-panel" onclick="if(event.target===this)closeWidgetPanel()" '
+    + 'style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.4);z-index:2000;align-items:flex-start;justify-content:flex-end;backdrop-filter:blur(2px);">'
+    + '<div style="background:white;width:320px;height:100%;overflow-y:auto;box-shadow:-8px 0 32px rgba(0,0,0,0.15);display:flex;flex-direction:column;">'
+    + '<div style="padding:24px 20px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">'
+    + '<div style="font-size:16px;font-weight:700;color:#0f172a;">⚙️ Dashboard anpassen</div>'
+    + '<button onclick="closeWidgetPanel()" style="background:#f1f5f9;border:none;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;color:#64748b;">✕</button>'
+    + '</div>'
+    + '<div style="padding:12px 8px;flex:1;">'
+    + '<div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;padding:4px 12px 8px;">Widgets auswählen</div>'
+    + checkboxes
+    + '</div>'
+    + '<div style="padding:16px 20px;border-top:1px solid #f1f5f9;display:flex;gap:10px;">'
+    + '<button onclick="saveWidgetPanel()" style="flex:1;padding:11px;background:#2563eb;color:white;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💾 Speichern</button>'
+    + '<button onclick="closeWidgetPanel()" style="padding:11px 16px;background:#f1f5f9;color:#64748b;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
+    + '</div>'
+    + '</div></div>';
+}
+
 // ─── MAIN RENDER ────────────────────────────────────────────
 
 function render() {
@@ -137,12 +333,23 @@ function render() {
   var termine   = getData(KEYS.termine,  []);
   var aufgaben  = getData(KEYS.aufgaben, []);
   var followups = getData(KEYS.followups,[]);
+  var projekte  = getData(KEYS.projekte, []);
   var todayStr  = today();
 
   // ── KPI Calculations ─────────────────────────────────────
   var monthlyIncome  = mieter.reduce(function(s, m) { return s + (parseFloat(m.miete) || 0); }, 0);
   var offeneTickets  = tickets.filter(function(t) { return t.status !== 'Erledigt'; });
   var objetCount     = objekte.length;
+  var totalUnits     = Math.max(objekte.reduce(function(s,o){ return s+(parseInt(o.einheiten||o.wohnungen||1)||1); },0), mieter.length, 1);
+  var belegtPct      = Math.min(100, Math.round(mieter.length / totalUnits * 100));
+
+  // Widget data bundle
+  var widgetData = {
+    mieter: mieter, tickets: tickets, objekte: objekte, termine: termine,
+    aufgaben: aufgaben, followups: followups, projekte: projekte,
+    monthlyIncome: monthlyIncome, offeneTickets: offeneTickets,
+    totalUnits: totalUnits, belegtPct: belegtPct, todayStr: todayStr
+  };
 
   // ── Warnings ─────────────────────────────────────────────
   var now = new Date();
@@ -337,26 +544,22 @@ function render() {
     // Welcome Row
     + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">'
     + '<div>'
-    + '<h1 style="margin:0 0 4px;font-size:23px;font-weight:700;color:#0f172a;">' + getGreeting() + ', ' + getVorname() + '! \ud83d\udc4b</h1>'
-    + '<div style="font-size:13px;color:#94a3b8;">' + getDatumDe() + '</div>'
+    + '<h1 id="dash-gruss" style="margin:0 0 4px;font-size:23px;font-weight:700;color:#0f172a;"></h1>'
+    + '<div id="dash-zeit" style="font-size:13px;color:#94a3b8;"></div>'
     + '</div>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
     + '<a href="mieter.html" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:white;border-radius:9px;padding:9px 16px;text-decoration:none;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,0.25);">+ Mieter</a>'
     + '<a href="tickets.html" style="display:inline-flex;align-items:center;gap:6px;background:white;color:#374151;border:1px solid #e2e8f0;border-radius:9px;padding:9px 16px;text-decoration:none;font-size:13px;font-weight:600;">+ Ticket</a>'
     + '<a href="kalender.html" style="display:inline-flex;align-items:center;gap:6px;background:white;color:#374151;border:1px solid #e2e8f0;border-radius:9px;padding:9px 16px;text-decoration:none;font-size:13px;font-weight:600;">\ud83d\udcc5 Termin</a>'
+    + '<button onclick="openWidgetPanel()" style="display:inline-flex;align-items:center;gap:6px;background:white;color:#64748b;border:1px solid #e2e8f0;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">\u2699\ufe0f Dashboard anpassen</button>'
     + '</div>'
     + '</div>'
 
     // Warning Banners
     + (warningsHTML ? '<div style="margin-bottom:20px;">' + warningsHTML + '</div>' : '')
 
-    // KPI Cards (4 cards)
-    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">'
-    + kpiCard('Mieter', mieter.length.toString(), mieter.length === 1 ? '1 aktiver Mietvertrag' : mieter.length + ' aktive Mietvertr\u00e4ge', '#dbeafe', '\ud83d\udc65')
-    + kpiCard('Offene Tickets', offeneTickets.length.toString(), offeneTickets.length === 0 ? 'Alles erledigt \u2705' : '\u2191 ' + offeneTickets.length + ' ausstehend', '#ffedd5', '\ud83c\udfab')
-    + kpiCard('Monatl. Einnahmen', formatCurrency(monthlyIncome), 'Summe aller Mieteinnahmen', '#dcfce7', '\ud83d\udcb0')
-    + kpiCard('Objekte', objetCount.toString(), objetCount === 0 ? 'Noch keine Objekte' : objetCount + (objetCount === 1 ? ' Objekt verwaltet' : ' Objekte verwaltet'), '#f3e8ff', '\ud83c\udfe2')
-    + '</div>'
+    // Dynamic Widget KPIs
+    + buildWidgetKPIs(widgetData)
 
     // Quick Actions (6 buttons)
     + '<div style="background:white;border-radius:16px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1px solid #e8edf3;margin-bottom:24px;">'
@@ -416,6 +619,25 @@ function render() {
     + '</div>'; // end max-width wrapper
 
   renderLayout('dashboard', 'Dashboard', '', mainContent, '');
+
+  // Append widget panel slide-in (once)
+  if (!document.getElementById('widget-panel')) {
+    document.body.insertAdjacentHTML('beforeend', buildWidgetPanelHTML());
+  }
+
+  // Fill live greeting/clock
+  updateGreeting();
+  if (!window._grussTimer) {
+    window._grussTimer = setInterval(updateGreeting, 60000);
+  }
+}
+
+function updateGreeting() {
+  var b = getBegruessung();
+  var g = document.getElementById('dash-gruss');
+  var z = document.getElementById('dash-zeit');
+  if (g) g.innerHTML = b.gruss + ', ' + b.name + '! \uD83D\uDC4B';
+  if (z) z.textContent = b.datum + ' \u00B7 ' + b.zeit;
 }
 
 // ─── LIVE LISTENERS ─────────────────────────────────────────
