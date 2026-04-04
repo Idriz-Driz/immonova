@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="shared.js"></script>
 <link rel="manifest" href="manifest.json">
 </head>
@@ -149,6 +150,23 @@ function openTicketModal(id) {
   var errEl = document.getElementById('tm-err');
   if (errEl) errEl.textContent = '';
 
+  // Reset foto area
+  var fotoInput = document.getElementById('tm-foto');
+  if (fotoInput) fotoInput.value = '';
+  var fotoPreview = document.getElementById('tm-foto-preview');
+  if (fotoPreview) {
+    if (t && t.fotoURL) {
+      document.getElementById('tm-foto-img').src = t.fotoURL;
+      fotoPreview.style.display = 'block';
+      var fotoArea = document.getElementById('tm-foto-area');
+      if (fotoArea) fotoArea.style.display = 'none';
+    } else {
+      fotoPreview.style.display = 'none';
+      var fotoArea2 = document.getElementById('tm-foto-area');
+      if (fotoArea2) fotoArea2.style.display = 'block';
+    }
+  }
+
   showModal('ticket-modal');
 }
 
@@ -172,31 +190,85 @@ function saveTicketModal() {
     return;
   }
 
-  var tickets = getTickets();
+  var ticketBase = {
+    titel: titel, beschreibung: beschreibung, prioritaet: prioritaet,
+    status: status, bereich: bereich, mieter: mieter, wohnung: wohnung,
+    handwerker: handwerker, datum: datum, kosten: kosten, notizen: notizen
+  };
 
+  // Keep existing fotoURL when editing (unless new file selected)
   if (editTicketId) {
-    var idx = tickets.findIndex(function(x){ return x.id == editTicketId; });
-    if (idx >= 0) {
-      tickets[idx] = {
-        id: editTicketId,
-        titel: titel, beschreibung: beschreibung, prioritaet: prioritaet,
-        status: status, bereich: bereich, mieter: mieter, wohnung: wohnung,
-        handwerker: handwerker, datum: datum, kosten: kosten, notizen: notizen
-      };
-    }
-  } else {
-    tickets.push({
-      id: Date.now(),
-      titel: titel, beschreibung: beschreibung, prioritaet: prioritaet,
-      status: status, bereich: bereich, mieter: mieter, wohnung: wohnung,
-      handwerker: handwerker, datum: datum, kosten: kosten, notizen: notizen
-    });
+    var existingTickets = getTickets();
+    var existingT = existingTickets.find(function(x){ return x.id == editTicketId; });
+    if (existingT && existingT.fotoURL) ticketBase.fotoURL = existingT.fotoURL;
   }
 
-  saveTickets(tickets);
-  addNotif('🎫', (editTicketId ? 'Ticket bearbeitet: ' : 'Ticket erstellt: ') + titel.substring(0, 30));
-  hideModal('ticket-modal');
-  render();
+  uploadFotoAndSave(ticketBase, function(fotoURL) {
+    if (fotoURL) ticketBase.fotoURL = fotoURL;
+
+    var tickets = getTickets();
+    if (editTicketId) {
+      var idx = tickets.findIndex(function(x){ return x.id == editTicketId; });
+      if (idx >= 0) {
+        tickets[idx] = Object.assign({ id: editTicketId }, ticketBase);
+      }
+    } else {
+      tickets.push(Object.assign({ id: Date.now() }, ticketBase));
+    }
+
+    saveTickets(tickets);
+    addNotif('🎫', (editTicketId ? 'Ticket bearbeitet: ' : 'Ticket erstellt: ') + titel.substring(0, 30));
+    hideModal('ticket-modal');
+    render();
+  });
+}
+
+// ── Foto upload helpers ──────────────────────────────────────────
+function previewFoto(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('tm-foto-img').src = e.target.result;
+    document.getElementById('tm-foto-preview').style.display = 'block';
+    document.getElementById('tm-foto-area').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearFoto() {
+  document.getElementById('tm-foto').value = '';
+  document.getElementById('tm-foto-preview').style.display = 'none';
+  document.getElementById('tm-foto-area').style.display = 'block';
+}
+
+function uploadFotoAndSave(ticketData, callback) {
+  var fileInput = document.getElementById('tm-foto');
+  if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+    callback(null);
+    return;
+  }
+  var file = fileInput.files[0];
+  var statusEl = document.getElementById('tm-upload-status');
+  if (statusEl) statusEl.style.display = 'block';
+
+  try {
+    var storage = firebase.storage();
+    var ref = storage.ref('tickets/' + user.uid + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_'));
+    ref.put(file).then(function() {
+      return ref.getDownloadURL();
+    }).then(function(url) {
+      if (statusEl) statusEl.style.display = 'none';
+      callback(url);
+    }).catch(function(err) {
+      if (statusEl) statusEl.style.display = 'none';
+      console.warn('Foto-Upload fehlgeschlagen:', err);
+      callback(null);
+    });
+  } catch(e) {
+    if (statusEl) statusEl.style.display = 'none';
+    callback(null);
+  }
 }
 
 // ── View toggle ──────────────────────────────────────────────────
@@ -283,6 +355,9 @@ function ticketCardHTML(t) {
       '<div style="font-size:13px;font-weight:700;color:#1e293b;line-height:1.3;flex:1;">' + (t.titel || '(kein Titel)') + '</div>' +
       '<div style="display:flex;gap:4px;flex-shrink:0;">' + prioBadgeHTML(t.prioritaet || 'Normal') + '</div>' +
     '</div>' +
+
+    // Foto
+    (t.fotoURL ? '<img src="' + t.fotoURL + '" style="width:100%;height:100px;object-fit:cover;border-radius:7px;margin-bottom:8px;" loading="lazy">' : '') +
 
     // Description
     (descShort ? '<div style="font-size:12px;color:#64748b;line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + descShort + '</div>' : '') +
@@ -465,6 +540,15 @@ function buildModal() {
     formGroup('Notizen',
       '<textarea id="tm-notizen" rows="2" placeholder="Interne Notizen..." style="' + inputStyle + 'resize:vertical;"></textarea>') +
 
+    formGroup('Foto anhängen',
+      '<div style="position:relative;">' +
+      '<input type="file" id="tm-foto" accept="image/*" style="display:none;" onchange="previewFoto(this)">' +
+      '<div onclick="document.getElementById(\'tm-foto\').click()" id="tm-foto-area" style="border:2px dashed #e2e8f0;border-radius:10px;padding:16px;text-align:center;cursor:pointer;color:#94a3b8;font-size:13px;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'#2563eb\'" onmouseout="this.style.borderColor=\'#e2e8f0\'">' +
+      '📷 Foto auswählen oder per Drag & Drop</div>' +
+      '<div id="tm-foto-preview" style="margin-top:8px;display:none;"><img id="tm-foto-img" style="max-width:100%;max-height:160px;border-radius:8px;object-fit:cover;" src=""><button onclick="clearFoto()" style="display:block;margin-top:6px;background:none;border:none;color:#dc2626;font-size:12px;cursor:pointer;font-family:inherit;">✕ Foto entfernen</button></div>' +
+      '</div>') +
+
+    '<div id="tm-upload-status" style="display:none;text-align:center;padding:8px;font-size:12px;color:#2563eb;margin-bottom:8px;">⏳ Foto wird hochgeladen...</div>' +
     '<button onclick="saveTicketModal()" style="width:100%;background:#2563eb;color:white;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px;">Speichern</button>';
 
   return modalHTML('ticket-modal', '<span id="tm-title">Ticket erstellen</span>', content);

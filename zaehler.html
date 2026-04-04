@@ -28,6 +28,11 @@ var ZAEHLER_TYPEN = [
 function gid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function lbl(t) { return '<label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:5px;text-transform:uppercase;">'+t+'</label>'; }
+function fmtVal(v) {
+  var n = parseFloat(v);
+  if (isNaN(n) || v === '' || v === undefined || v === null) return '–';
+  return n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
 
 function render() {
   var mieter = getData(KEYS.mieter, []);
@@ -85,9 +90,9 @@ function render() {
             +'<span style="font-size:16px;">'+t.ico+'</span>'
             +'<span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;">'+t.label+'</span>'
             +'</div>'
-            +'<div style="font-size:20px;font-weight:800;color:#0f172a;">'+(z[t.key+'_aktuell']||'–')+'<span style="font-size:12px;font-weight:400;color:#94a3b8;"> '+t.unit+'</span></div>'
+            +'<div style="font-size:20px;font-weight:800;color:#0f172a;">'+fmtVal(z[t.key+'_aktuell'])+'<span style="font-size:12px;font-weight:400;color:#94a3b8;"> '+t.unit+'</span></div>'
             +(hasDiff?'<div style="font-size:11px;color:'+(diff>0?'#dc2626':'#16a34a')+';">Δ '+(diff>0?'+':'')+diff.toLocaleString('de-DE',{maximumFractionDigits:1})+' '+t.unit+' vs. Vorjahr</div>':'<div style="font-size:11px;color:#94a3b8;">Kein Vorjahr</div>')
-            +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Vorjahr: '+(z[t.key+'_vorjahr']||'–')+' '+t.unit+'</div>'
+            +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">Vorjahr: '+fmtVal(z[t.key+'_vorjahr'])+' '+t.unit+'</div>'
             +(z[t.key+'_datum']?'<div style="font-size:10px;color:#94a3b8;">Abgelesen: '+fmtDate(z[t.key+'_datum'])+'</div>':'')
             +'</div>';
         }).join('')
