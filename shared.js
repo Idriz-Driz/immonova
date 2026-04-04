@@ -608,6 +608,138 @@ function injectGlobalStyles() {
   document.head.appendChild(s);
 }
 
+// ─── ADDRESS AUTOCOMPLETE (Nominatim/OpenStreetMap) ───────────
+// Usage: initAddressAutocomplete('input-id', function(result){ ... })
+// result: { strasse, hausnummer, plz, stadt, bundesland, land, formatted }
+function initAddressAutocomplete(inputId, callback) {
+  var input = document.getElementById(inputId);
+  if (!input) return;
+
+  // Dropdown container
+  var dropdown = document.createElement('div');
+  dropdown.style.cssText = [
+    'position:absolute;left:0;right:0;top:100%;',
+    'background:white;border:1.5px solid #2563eb;border-radius:0 0 10px 10px;',
+    'box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:9999;',
+    'max-height:220px;overflow-y:auto;display:none;'
+  ].join('');
+
+  // Make parent relative
+  var wrap = input.parentElement;
+  if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+  wrap.appendChild(dropdown);
+
+  var debounceTimer;
+  var lastQuery = '';
+
+  input.addEventListener('input', function() {
+    var q = input.value.trim();
+    if (q === lastQuery) return;
+    lastQuery = q;
+    clearTimeout(debounceTimer);
+    if (q.length < 3) { dropdown.style.display = 'none'; return; }
+    debounceTimer = setTimeout(function() { fetchSuggestions(q); }, 350);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { dropdown.style.display = 'none'; }
+    if (e.key === 'ArrowDown') {
+      var first = dropdown.querySelector('.acItem');
+      if (first) { first.focus(); e.preventDefault(); }
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!wrap.contains(e.target)) dropdown.style.display = 'none';
+  });
+
+  function fetchSuggestions(q) {
+    var url = 'https://nominatim.openstreetmap.org/search'
+      + '?format=json&q=' + encodeURIComponent(q)
+      + '&countrycodes=de&addressdetails=1&limit=6&accept-language=de';
+
+    dropdown.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#94a3b8;">Suche...</div>';
+    dropdown.style.display = 'block';
+
+    fetch(url, { headers: { 'Accept-Language': 'de' } })
+      .then(function(r) { return r.json(); })
+      .then(function(results) {
+        dropdown.innerHTML = '';
+        if (!results.length) {
+          dropdown.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:#94a3b8;">Keine Ergebnisse</div>';
+          return;
+        }
+        results.forEach(function(r, idx) {
+          var item = document.createElement('div');
+          item.className = 'acItem';
+          item.tabIndex = 0;
+          item.style.cssText = [
+            'padding:10px 14px;cursor:pointer;font-size:13px;color:#0f172a;',
+            'border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;',
+            'transition:background 0.1s;outline:none;'
+          ].join('');
+
+          var icon = r.type === 'house' ? '🏠' : r.type === 'road' ? '🛣️' : '📍';
+          item.innerHTML = '<span style="flex-shrink:0;">' + icon + '</span>'
+            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + r.display_name + '</span>';
+
+          function select() {
+            var addr = r.address || {};
+            var strasse = addr.road || addr.pedestrian || addr.footway || '';
+            var hausnummer = addr.house_number || '';
+            var plz = addr.postcode || '';
+            var stadt = addr.city || addr.town || addr.village || addr.hamlet || '';
+            var bundesland = addr.state || '';
+            var formatted = strasse + (hausnummer ? ' ' + hausnummer : '')
+              + (plz ? ', ' + plz : '') + (stadt ? ' ' + stadt : '');
+            input.value = formatted || r.display_name;
+            dropdown.style.display = 'none';
+            lastQuery = input.value;
+            if (callback) callback({
+              strasse: strasse,
+              hausnummer: hausnummer,
+              plz: plz,
+              stadt: stadt,
+              bundesland: bundesland,
+              land: 'Deutschland',
+              lat: parseFloat(r.lat) || 0,
+              lng: parseFloat(r.lon) || 0,
+              formatted: formatted || r.display_name
+            });
+          }
+
+          item.addEventListener('click', select);
+          item.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') select();
+            if (e.key === 'ArrowDown') {
+              var next = item.nextElementSibling;
+              if (next) { next.focus(); e.preventDefault(); }
+            }
+            if (e.key === 'ArrowUp') {
+              var prev = item.previousElementSibling;
+              if (prev) { prev.focus(); } else { input.focus(); }
+              e.preventDefault();
+            }
+            if (e.key === 'Escape') { dropdown.style.display = 'none'; input.focus(); }
+          });
+          item.addEventListener('mouseover', function() { item.style.background = '#eff6ff'; });
+          item.addEventListener('mouseout',  function() { item.style.background = 'white'; });
+          dropdown.appendChild(item);
+        });
+        dropdown.style.display = 'block';
+      })
+      .catch(function() {
+        dropdown.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:#dc2626;">Fehler bei der Adresssuche</div>';
+      });
+  }
+}
+
+// ─── GOOGLE MAPS LINK HELPER ─────────────────────────────────
+function mapsLink(address) {
+  if (!address) return '#';
+  return 'https://maps.google.com/?q=' + encodeURIComponent(address);
+}
+
 // Run on load
 (function() {
   injectGlobalStyles();

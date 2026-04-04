@@ -422,6 +422,7 @@ function render() {
     + navItem('benachrichtigungen','🔔', 'Benachrichtigungen')
     + navItem('erscheinungsbild', '🎨', 'Erscheinungsbild')
     + navItem('daten',            '🗄️', 'Daten & Export')
+    + navItem('integrationen',    '🔌', 'Integrationen')
     + navItem('team',             '👥', 'Team', true)
     + '</div>';
 
@@ -852,6 +853,75 @@ function render() {
     + '</div>';
 
   // ═══════════════════════════════════════════════════════
+  // TAB: INTEGRATIONEN
+  // ═══════════════════════════════════════════════════════
+  var integrationenHTML =
+    '<div class="settings-anim">'
+    + '<div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:4px;">🔌 Integrationen</div>'
+    + '<div style="font-size:13px;color:#64748b;margin-bottom:24px;">Verbinden Sie externe Dienste mit ImmoNova – weitere Integrationen kommen in Phase 2.</div>'
+
+    // finAPI
+    + '<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px dashed #93c5fd;border-radius:14px;padding:24px;margin-bottom:16px;display:flex;align-items:flex-start;gap:16px;">'
+    + '<div style="width:52px;height:52px;background:#2563eb;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">🏦</div>'
+    + '<div style="flex:1;">'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+    + '<div style="font-size:15px;font-weight:700;color:#1e3a8a;">finAPI – Bankverbindung</div>'
+    + '<span style="background:#1e3a8a;color:white;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;">PHASE 2</span>'
+    + '</div>'
+    + '<div style="font-size:13px;color:#3b82f6;margin-bottom:10px;">Automatischer Kontoabruf & Zahlungsabgleich</div>'
+    + '<div style="font-size:12px;color:#64748b;line-height:1.6;margin-bottom:12px;">Verbinden Sie Ihr Geschäftskonto über die PSD2-konforme finAPI-Schnittstelle. Eingehende Mietzahlungen werden automatisch erkannt und den richtigen Mietern zugeordnet.</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+    + '<span style="background:white;border:1px solid #bfdbfe;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;">✓ PSD2-konform</span>'
+    + '<span style="background:white;border:1px solid #bfdbfe;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;">✓ Automatischer Abgleich</span>'
+    + '<span style="background:white;border:1px solid #bfdbfe;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;">✓ 3.000+ Banken</span>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+
+    // GoCardless
+    + '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px dashed #86efac;border-radius:14px;padding:24px;margin-bottom:16px;display:flex;align-items:flex-start;gap:16px;">'
+    + '<div style="width:52px;height:52px;background:#16a34a;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">💳</div>'
+    + '<div style="flex:1;">'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+    + '<div style="font-size:15px;font-weight:700;color:#14532d;">GoCardless – SEPA-Lastschrift</div>'
+    + '<span style="background:#14532d;color:white;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;">PHASE 2</span>'
+    + '</div>'
+    + '<div style="font-size:13px;color:#16a34a;margin-bottom:10px;">Automatischer Mieteinzug per SEPA-Lastschrift</div>'
+    + '<div style="font-size:12px;color:#64748b;line-height:1.6;margin-bottom:12px;">Verwalten Sie SEPA-Mandate digital und ziehen Sie Mieten automatisch ein. Rückbuchungen werden erkannt und Mieter automatisch benachrichtigt.</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+    + '<span style="background:white;border:1px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#15803d;">✓ SEPA Core</span>'
+    + '<span style="background:white;border:1px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#15803d;">✓ Mandate-Verwaltung</span>'
+    + '<span style="background:white;border:1px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#15803d;">✓ Automatische Mahnung</span>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+
+    // WhatsApp Business API
+    + '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px dashed #86efac;border-radius:14px;padding:24px;margin-bottom:16px;display:flex;align-items:flex-start;gap:16px;">'
+    + '<div style="width:52px;height:52px;background:#25d366;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">💬</div>'
+    + '<div style="flex:1;">'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+    + '<div style="font-size:15px;font-weight:700;color:#14532d;">WhatsApp Business API</div>'
+    + '<span style="background:#14532d;color:white;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;">PHASE 2</span>'
+    + '</div>'
+    + '<div style="font-size:13px;color:#16a34a;margin-bottom:10px;">Automatische Benachrichtigungen & Mieter-Kommunikation</div>'
+    + '<div style="font-size:12px;color:#64748b;line-height:1.6;margin-bottom:12px;">Senden Sie Zahlungserinnerungen, Ticket-Updates und wichtige Mitteilungen direkt per WhatsApp an Ihre Mieter. DSGVO-konforme Opt-in-Verwaltung inklusive.</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+    + '<span style="background:white;border:1px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#15803d;">✓ Zahlungserinnerungen</span>'
+    + '<span style="background:white;border:1px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#15803d;">✓ Ticket-Updates</span>'
+    + '<span style="background:white;border:1px solid #bbf7d0;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#15803d;">✓ DSGVO Opt-in</span>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+
+    + '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;text-align:center;">'
+    + '<div style="font-size:13px;font-weight:600;color:#64748b;margin-bottom:4px;">Weitere Integrationen geplant</div>'
+    + '<div style="font-size:12px;color:#94a3b8;">Lexoffice, DATEV, Stripe, DocuSign – melden Sie Interesse unter <strong>support@immonova.de</strong></div>'
+    + '</div>'
+
+    + '</div>';
+
+  // ═══════════════════════════════════════════════════════
   // ACTIVE CONTENT
   // ═══════════════════════════════════════════════════════
   var tabContent;
@@ -862,6 +932,7 @@ function render() {
   else if (activeTab === 'benachrichtigungen')tabContent = benachHTML;
   else if (activeTab === 'erscheinungsbild')  tabContent = erschHTML;
   else if (activeTab === 'daten')             tabContent = datenHTML;
+  else if (activeTab === 'integrationen')     tabContent = integrationenHTML;
   else if (activeTab === 'team')              tabContent = teamHTML;
   else                                         tabContent = profilHTML;
 

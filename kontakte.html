@@ -535,6 +535,14 @@ function buildModal() {
   return modalHTML('kon-modal', '<span id="kon-modal-title">Kontakt hinzufügen</span>', body);
 }
 
+// ─── ADDRESS AUTOCOMPLETE ─────────────────────────────────
+function initKontakteAutocomplete() {
+  var inp = document.getElementById('kn-adresse');
+  if (!inp || inp._acInit) return;
+  inp._acInit = true;
+  initAddressAutocomplete('kn-adresse', function(r) { /* address fills automatically */ });
+}
+
 // ─── OPEN MODAL ───────────────────────────────────────────
 function openAddModal() {
   _editId = null;
@@ -551,6 +559,7 @@ function openAddModal() {
   document.getElementById('kn-tags').value    = '';
   document.getElementById('kn-del-wrap').style.display = 'none';
   showModal('kon-modal');
+  setTimeout(initKontakteAutocomplete, 0);
 }
 
 function openEditModal(id) {
@@ -574,6 +583,7 @@ function openEditModal(id) {
   document.getElementById('kn-tags').value    = (k.tags   || []).join(', ');
   document.getElementById('kn-del-wrap').style.display = 'block';
   showModal('kon-modal');
+  setTimeout(initKontakteAutocomplete, 0);
 }
 
 // ─── SAVE ─────────────────────────────────────────────────

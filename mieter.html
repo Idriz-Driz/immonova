@@ -136,8 +136,20 @@ function openAddModal() {
   document.getElementById('f-score').value = '80';
   document.getElementById('f-status').value = 'Aktiv';
   document.getElementById('f-notizen').value = '';
+  if (document.getElementById('f-adresse')) document.getElementById('f-adresse').value = '';
   document.getElementById('f-err').textContent = '';
   openModal('add-modal');
+  initMieterAutocomplete();
+}
+
+function initMieterAutocomplete() {
+  var inp = document.getElementById('f-adresse');
+  if (!inp || inp._acInit) return;
+  inp._acInit = true;
+  initAddressAutocomplete('f-adresse', function(r) {
+    var combined = r.strasse + (r.hausnummer ? ' ' + r.hausnummer : '') + (r.plz ? ', ' + r.plz : '') + (r.stadt ? ' ' + r.stadt : '');
+    inp.value = combined;
+  });
 }
 
 /* ── Open edit modal ────────────────────────────────────── */
@@ -163,8 +175,10 @@ function openEditModal(id) {
   document.getElementById('f-score').value = m.score||'80';
   document.getElementById('f-status').value = m.status||'Aktiv';
   document.getElementById('f-notizen').value = m.notizen||'';
+  if (document.getElementById('f-adresse')) document.getElementById('f-adresse').value = m.adresse||'';
   document.getElementById('f-err').textContent = '';
   openModal('add-modal');
+  initMieterAutocomplete();
 }
 
 /* ── Save mieter ────────────────────────────────────────── */
@@ -183,6 +197,7 @@ function saveMieter() {
   var haustiere  = document.getElementById('f-haustiere').checked;
   var score      = parseInt(document.getElementById('f-score').value)||80;
   var status     = document.getElementById('f-status').value||'Aktiv';
+  var adresse    = document.getElementById('f-adresse') ? (document.getElementById('f-adresse').value||'').trim() : '';
   var notizen    = (document.getElementById('f-notizen').value||'').trim();
   var errEl      = document.getElementById('f-err');
 
@@ -211,7 +226,7 @@ function saveMieter() {
     var newEntry = { id: generateId(), vn:vn, nn:nn, email:email, tel:tel, wohnung:wohnung, objekt:objekt,
       miete:miete, kaution:kaution, kautionStatus:'Ausstehend',
       mietbeginn:mietbeginn, mietende:mietende, personen:personen, haustiere:haustiere,
-      score:score, status:status, notizen:notizen,
+      score:score, status:status, adresse:adresse, notizen:notizen,
       history:[{ ts: now, text: 'Mieter angelegt: ' + vn + ' ' + nn }] };
     mieterList.push(newEntry);
     addNotif('👥', 'Neuer Mieter: ' + vn + ' ' + nn);
@@ -515,6 +530,8 @@ function render() {
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     + formGroup('Wohnung * (z.B. 1 OG)','<input id="f-wohnung" type="text" placeholder="1 OG" style="'+inputStyle+'">')
     + formGroup('Objekt / Gebäude','<input id="f-objekt" type="text" placeholder="Hauptstraße 15" style="'+inputStyle+'">')
+    + '</div>'
+    + formGroup('Adresse (Straße + Nr.)','<input id="f-adresse" type="text" placeholder="Musterstraße 5, 44137 Dortmund" style="'+inputStyle+'" autocomplete="off">')
     + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     + formGroup('Monatliche Miete (€) *','<input id="f-miete" type="number" min="0" step="0.01" placeholder="750" style="'+inputStyle+'">')

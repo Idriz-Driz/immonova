@@ -210,6 +210,15 @@ function goStep(n) {
   currentStep = n;
   document.getElementById('step-' + n).classList.add('active');
   updateProgress();
+  if (n === 1) {
+    setTimeout(function() {
+      var inp = document.getElementById('o-adr');
+      if (inp && !inp._acInit) {
+        inp._acInit = true;
+        initAddressAutocomplete('o-adr', function(r) { /* address fills automatically */ });
+      }
+    }, 0);
+  }
 }
 
 function updateProgress() {

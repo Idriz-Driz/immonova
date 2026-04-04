@@ -59,14 +59,14 @@ function render() {
     content = renderGewerke(projekte);
   }
 
-  var actionBtn = '<button onclick="showModal(\'proj-modal\')" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>';
+  var actionBtn = '<button onclick="openNewProj()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">+ Projekt erstellen</button>';
 
   renderLayout('projekte', 'Projekte', actionBtn, tabBar + content, buildModal());
 }
 
 function renderListe(projekte) {
   if (!projekte.length) {
-    return emptyState('🏗️','Keine Projekte vorhanden','Erstelle dein erstes Bauprojekt oder Renovierungsvorhaben','+ Projekt erstellen','showModal(\'proj-modal\')');
+    return emptyState('🏗️','Keine Projekte vorhanden','Erstelle dein erstes Bauprojekt oder Renovierungsvorhaben','+ Projekt erstellen','openNewProj()');
   }
   var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">';
   projekte.forEach(function(p) {
@@ -117,7 +117,7 @@ function renderListe(projekte) {
 function renderPlantafel(projekte) {
   var withDates = projekte.filter(function(p){ return p.start && p.end; });
   if (!withDates.length) {
-    return emptyState('📊','Keine Projekte mit Terminen','Lege Start- und Enddaten bei deinen Projekten fest','+ Projekt erstellen','showModal(\'proj-modal\')');
+    return emptyState('📊','Keine Projekte mit Terminen','Lege Start- und Enddaten bei deinen Projekten fest','+ Projekt erstellen','openNewProj()');
   }
 
   var minTs = Math.min.apply(null, withDates.map(function(p){ return new Date(p.start).getTime(); }));
@@ -191,7 +191,7 @@ function renderGewerke(projekte) {
   });
   var keys = Object.keys(gewerkeMap);
   if (!keys.length) {
-    return emptyState('🔧','Keine Gewerke vorhanden','Trage Gewerke (kommagetrennt) bei deinen Projekten ein','+ Projekt erstellen','showModal(\'proj-modal\')');
+    return emptyState('🔧','Keine Gewerke vorhanden','Trage Gewerke (kommagetrennt) bei deinen Projekten ein','+ Projekt erstellen','openNewProj()');
   }
   return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">'
     + keys.map(function(g) {
@@ -232,6 +232,28 @@ function buildModal() {
   return modalHTML('proj-modal', '🏗️ Projekt', content);
 }
 
+function initProjAutocomplete() {
+  var inp = document.getElementById('p-adr');
+  if (!inp || inp._acInit) return;
+  inp._acInit = true;
+  initAddressAutocomplete('p-adr', function(r) { /* address fills automatically */ });
+}
+
+function openNewProj() {
+  editId = null;
+  document.getElementById('p-name').value = '';
+  document.getElementById('p-adr').value = '';
+  document.getElementById('p-auftraggeber').value = '';
+  document.getElementById('p-start').value = '';
+  document.getElementById('p-end').value = '';
+  document.getElementById('p-budget').value = '';
+  document.getElementById('p-status').value = 'Geplant';
+  document.getElementById('p-gewerke').value = '';
+  document.getElementById('p-beschr').value = '';
+  showModal('proj-modal');
+  setTimeout(initProjAutocomplete, 0);
+}
+
 function openEdit(id) {
   var p = getData(KEYS.projekte, []).find(function(x){ return x.id===id; });
   if (!p) return;
@@ -246,6 +268,7 @@ function openEdit(id) {
   document.getElementById('p-gewerke').value = p.gewerke||'';
   document.getElementById('p-beschr').value = p.beschreibung||'';
   showModal('proj-modal');
+  setTimeout(initProjAutocomplete, 0);
 }
 
 function saveProj() {

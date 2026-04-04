@@ -577,6 +577,19 @@ function openNewObjModal() {
   document.getElementById('obj-hausverwaltung').value = '';
   document.getElementById('obj-notizen').value = '';
   showModal('obj-modal');
+  initObjAutocomplete();
+}
+
+function initObjAutocomplete() {
+  if (document.getElementById('obj-strasse')._acInit) return;
+  document.getElementById('obj-strasse')._acInit = true;
+  initAddressAutocomplete('obj-strasse', function(r) {
+    if (r.plz)   document.getElementById('obj-plz').value   = r.plz;
+    if (r.stadt) document.getElementById('obj-stadt').value = r.stadt;
+    if (!document.getElementById('obj-name').value) {
+      document.getElementById('obj-name').value = r.strasse + (r.hausnummer ? ' ' + r.hausnummer : '') + ', ' + r.plz + ' ' + r.stadt;
+    }
+  });
 }
 
 function openEditObjModal(id) {
@@ -601,6 +614,7 @@ function openEditObjModal(id) {
   document.getElementById('obj-hausverwaltung').value = obj.hausverwaltung || '';
   document.getElementById('obj-notizen').value = obj.notizen || '';
   showModal('obj-modal');
+  initObjAutocomplete();
 }
 
 function saveObj() {
