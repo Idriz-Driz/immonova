@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Tenant data: photos, documents, etc.
+    match /tenants/{tenantId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && (request.auth.uid == tenantId
+        || firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.parentUid == tenantId);
+    }
+
+    // Ticket photos (handwerker + verwalter)
+    match /tickets/{tenantId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && (request.auth.uid == tenantId
+        || firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.parentUid == tenantId);
+    }
+
+    // Handwerker completion photos
+    match /handwerker/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

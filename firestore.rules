@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+    function getUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isSuperAdmin() {
+      return getUser().rolle == 'superadmin';
+    }
+    function belongsToTenant(tenantId) {
+      return request.auth.uid == tenantId ||
+        getUser().parentUid == tenantId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isAuth() &&
+        isEmailVerified() &&
+        (request.auth.uid == userId || isSuperAdmin());
+    }
+
+    match /tenants/{tenantId}/{document=**} {
+      allow read, write: if isAuth() &&
+        isEmailVerified() &&
+        (belongsToTenant(tenantId) || isSuperAdmin());
+    }
+  }
+}
