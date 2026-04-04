@@ -54,6 +54,7 @@
     .spinner-wrap { display: none; text-align: center; padding: 8px; color: #64748b; font-size: 13px; }
     .spinner { width: 20px; height: 20px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 6px; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
     .welcome-hero { text-align: center; padding: 12px 0 24px; }
     .welcome-hero .big-ico { font-size: 72px; display: block; margin-bottom: 16px; }
     .welcome-hero h2 { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
@@ -205,11 +206,29 @@ auth.onAuthStateChanged(function(user) {
   if (!user) window.location.href = 'login.html';
 });
 
+function launchConfetti() {
+  var colors = ['#2563eb','#7c3aed','#16a34a','#f59e0b','#ec4899','#06b6d4'];
+  for (var i = 0; i < 80; i++) {
+    (function() {
+      var el = document.createElement('div');
+      el.style.cssText = 'position:fixed;top:-10px;left:' + Math.random()*100 + '%;'
+        + 'width:' + (6+Math.random()*6) + 'px;height:' + (10+Math.random()*10) + 'px;'
+        + 'background:' + colors[Math.floor(Math.random()*colors.length)] + ';'
+        + 'border-radius:2px;z-index:9999;pointer-events:none;opacity:1;'
+        + 'animation:confettiFall ' + (1.5+Math.random()*2) + 's linear forwards;'
+        + 'animation-delay:' + Math.random()*0.8 + 's;';
+      document.body.appendChild(el);
+      setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 4000);
+    })();
+  }
+}
+
 function goStep(n) {
   document.getElementById('step-' + currentStep).classList.remove('active');
   currentStep = n;
   document.getElementById('step-' + n).classList.add('active');
   updateProgress();
+  if (n === 3) { setTimeout(launchConfetti, 200); }
   if (n === 1) {
     setTimeout(function() {
       var inp = document.getElementById('o-adr');

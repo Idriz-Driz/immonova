@@ -415,6 +415,31 @@ function doLogin() {
       });
     })
     .catch(function(e) {
+      // Auto-bootstrap superadmin if account doesn't exist yet
+      if ((e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') && email === 'admin@immonova.de') {
+        auth.createUserWithEmailAndPassword(email, pass)
+          .then(function(cred) {
+            return db.collection('users').doc(cred.user.uid).set({
+              rolle: 'superadmin', vn: 'Admin', nn: 'ImmoNova',
+              onboardingDone: true, plan: 'enterprise',
+              createdAt: new Date().toISOString()
+            }).then(function() {
+              localStorage.setItem('in_role',       'superadmin');
+              localStorage.setItem('in_user_name',  'Admin ImmoNova');
+              localStorage.setItem('in_user_uid',   cred.user.uid);
+              localStorage.setItem('in_user_plan',  'enterprise');
+              localStorage.setItem('in_user_email', email);
+              localStorage.setItem('in_user_firma', 'ImmoNova');
+              setLoading('l', false);
+              window.location.href = 'app.html';
+            });
+          })
+          .catch(function() {
+            setLoading('l', false);
+            showMsg('login-msg', '⚠️ Admin-Konto konnte nicht erstellt werden. Passwort mind. 6 Zeichen.');
+          });
+        return;
+      }
       setLoading('l', false);
       var msgs = {
         'auth/user-not-found':    '⚠️ Kein Konto mit dieser E-Mail gefunden.',

@@ -901,7 +901,7 @@
       appId: "1:639601807117:web:45d09a1a9f44df3a916a44"
     };
     firebase.initializeApp(firebaseConfig);
-    // const db = firebase.firestore(); // available for future use
+    var db = firebase.firestore();
 
     // ── Default Mieter ───────────────────────────────────────
     const DEFAULT_MIETER = [
@@ -1182,6 +1182,36 @@
       }).join('');
     }
 
+    // ── TERMIN RESPONSE ───────────────────────────────────────
+    function respondTermin(tid, newStatus) {
+      // Update localStorage
+      var termine = lsGet('in_termine');
+      var ownerUid = localStorage.getItem('in_user_uid') || localStorage.getItem('in_mieter_uid') || '';
+      for (var i = 0; i < termine.length; i++) {
+        if (String(termine[i].id) === String(tid)) {
+          termine[i].terminStatus = newStatus;
+          break;
+        }
+      }
+      lsSet('in_termine', termine);
+
+      // Sync to Firestore if uid known
+      if (ownerUid) {
+        db.collection('tenants').doc(ownerUid).collection('termine').doc(String(tid))
+          .update({ terminStatus: newStatus })
+          .catch(function() {});
+      }
+
+      var label = newStatus === 'angenommen' ? '✅ Termin angenommen' : '❌ Termin abgelehnt';
+      var bg = newStatus === 'angenommen' ? '#16a34a' : '#dc2626';
+      var t = document.createElement('div');
+      t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:' + bg + ';color:white;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);';
+      t.textContent = label;
+      document.body.appendChild(t);
+      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 2500);
+      renderTermine();
+    }
+
     // ── TERMINE ───────────────────────────────────────────────
     function renderTermine() {
       const container = document.getElementById('termine-list');
@@ -1210,6 +1240,8 @@
         const uhrzeit   = t.uhrzeit || t.time || '';
         const betreff   = t.betreff || t.titel || t.title || 'Termin';
         const ort       = t.ort || t.location || '';
+        const tid       = t.id || '';
+        const status    = t.terminStatus || '';
 
         let dayStr   = '–';
         let monthStr = '–';
@@ -1219,18 +1251,33 @@
           monthStr = d.toLocaleDateString('de-DE', { month: 'short' });
         }
 
+        let statusBadge = '';
+        let actionBtns  = '';
+        if (status === 'angenommen') {
+          statusBadge = '<span style="display:inline-block;background:#dcfce7;color:#16a34a;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px;">✅ Angenommen</span>';
+        } else if (status === 'abgelehnt') {
+          statusBadge = '<span style="display:inline-block;background:#fee2e2;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px;">❌ Abgelehnt</span>';
+        } else if (tid) {
+          actionBtns = '<div style="display:flex;gap:8px;margin-top:10px;">'
+            + '<button onclick="respondTermin(\'' + tid + '\',\'angenommen\')" style="flex:1;padding:7px;border:1.5px solid #bbf7d0;border-radius:8px;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Annehmen</button>'
+            + '<button onclick="respondTermin(\'' + tid + '\',\'abgelehnt\')" style="flex:1;padding:7px;border:1.5px solid #fecaca;border-radius:8px;background:#fef2f2;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">❌ Ablehnen</button>'
+            + '</div>';
+        }
+
         return '<div class="termin-card">'
           + '<div class="termin-date-box">'
           +   '<div class="termin-day">'   + dayStr   + '</div>'
           +   '<div class="termin-month">' + monthStr + '</div>'
           + '</div>'
-          + '<div class="termin-details">'
+          + '<div class="termin-details" style="flex:1;">'
           +   '<div class="termin-betreff">' + escapeHtml(betreff) + '</div>'
           +   '<div class="termin-meta">'
           +     (uhrzeit ? '<span>🕐 ' + escapeHtml(uhrzeit) + ' Uhr</span>' : '')
           +     (ort     ? '<span>📍 ' + escapeHtml(ort)     + '</span>'     : '')
           +     (rawDate ? '<span>📅 ' + formatDate(rawDate) + '</span>'     : '')
           +   '</div>'
+          +   statusBadge
+          +   actionBtns
           + '</div>'
           + '</div>';
       }).join('');

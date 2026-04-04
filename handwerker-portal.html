@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -997,8 +998,47 @@
     if (!sel) return;
     var newStatus = sel.value;
 
-    if (newStatus === 'Fotos hochladen') {
-      showToast('📷 Foto-Upload wird in Kürze verfügbar.');
+    if (newStatus === 'Fotos hochladen' || newStatus === 'Erledigt') {
+      // Offer photo upload as completion proof
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.onchange = function() {
+        var file = fileInput.files[0];
+        if (!file) {
+          // No photo selected – just update status
+          doStatusUpdate(tid, newStatus);
+          return;
+        }
+        showToast('⏳ Foto wird hochgeladen...');
+        try {
+          var storage = firebase.storage();
+          var hwName = localStorage.getItem('in_hw_name') || 'handwerker';
+          var ref = storage.ref('handwerker/' + hwName.replace(/\s/g,'_') + '/' + tid + '_' + Date.now());
+          ref.put(file).then(function() {
+            return ref.getDownloadURL();
+          }).then(function(url) {
+            // Save fotoURL alongside status
+            var tickets = getLS('in_tickets', []);
+            for (var i = 0; i < tickets.length; i++) {
+              if (String(tickets[i].id) === String(tid)) {
+                tickets[i].status = newStatus;
+                tickets[i].erledigungsFoto = url;
+                break;
+              }
+            }
+            setLS('in_tickets', tickets);
+            showToast('✅ Foto hochgeladen & Status aktualisiert.');
+            renderAuftraege();
+          }).catch(function(err) {
+            console.warn('Foto-Upload fehlgeschlagen:', err);
+            doStatusUpdate(tid, newStatus);
+          });
+        } catch(e) {
+          doStatusUpdate(tid, newStatus);
+        }
+      };
+      fileInput.click();
       return;
     }
 
@@ -1020,6 +1060,23 @@
       renderAuftraege();
     } else {
       showToast('Auftrag nicht gefunden.');
+    }
+  }
+
+  function doStatusUpdate(tid, newStatus) {
+    var tickets = getLS('in_tickets', []);
+    var found = false;
+    for (var i = 0; i < tickets.length; i++) {
+      if (String(tickets[i].id) === String(tid)) {
+        tickets[i].status = newStatus;
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      setLS('in_tickets', tickets);
+      showToast('✅ Status auf "' + newStatus + '" aktualisiert.');
+      renderAuftraege();
     }
   }
 

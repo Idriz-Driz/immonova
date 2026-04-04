@@ -20,6 +20,7 @@ var user = getUser();
 var editObjId = null;
 var filterTyp = 'alle';
 var searchQ = '';
+var _objLat = null, _objLng = null; // for map preview
 
 // ─── DEFAULT DEMO DATA ──────────────────────────────────────
 var DEMO_OBJEKTE = [
@@ -370,10 +371,21 @@ function buildCard(obj) {
 
   html += '</div>'; // end padding div
 
+  // Map preview (OSM iframe when lat/lng available)
+  if (obj.lat && obj.lng) {
+    var lat = parseFloat(obj.lat), lng = parseFloat(obj.lng);
+    var bbox = (lng-0.005) + '%2C' + (lat-0.003) + '%2C' + (lng+0.005) + '%2C' + (lat+0.003);
+    var osmUrl = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox + '&layer=mapnik&marker=' + lat + '%2C' + lng;
+    html += '<div style="border-top:1px solid #f1f5f9;">';
+    html += '<iframe src="' + osmUrl + '" width="100%" height="130" style="border:0;display:block;" loading="lazy" title="Kartenvorschau"></iframe>';
+    html += '</div>';
+  }
+
   // Action buttons
   html += '<div style="display:flex;gap:8px;padding:12px 20px 16px;border-top:1px solid #f1f5f9;">';
   html += '<button onclick="openEditObjModal(\'' + obj.id + '\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">✏️ Bearbeiten</button>';
-  html += '<button onclick="openDetailsModal(\'' + obj.id + '\')" style="flex:1;padding:9px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#2563eb;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#dbeafe\'" onmouseout="this.style.background=\'#eff6ff\'">👁️ Details</button>';
+  html += '<a href="' + mapsUrl + '" target="_blank" rel="noopener" style="flex:1;padding:9px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#2563eb;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background=\'#dbeafe\'" onmouseout="this.style.background=\'#eff6ff\'">📍 Auf Karte</a>';
+  html += '<button onclick="openDetailsModal(\'' + obj.id + '\')" style="flex:1;padding:9px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#0f172a;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">👁️ Details</button>';
   html += '<button onclick="deleteObj(\'' + obj.id + '\')" style="padding:9px 13px;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;color:#dc2626;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.12s;" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'#fff5f5\'">🗑️</button>';
   html += '</div>';
 
@@ -562,6 +574,7 @@ function openDetailsModal(id) {
 // ─── OPEN / SAVE / DELETE ───────────────────────────────────
 function openNewObjModal() {
   editObjId = null;
+  _objLat = null; _objLng = null;
   document.getElementById('obj-modal-title').textContent = 'Objekt hinzufügen';
   document.getElementById('obj-name').value = '';
   document.getElementById('obj-strasse').value = '';
@@ -589,6 +602,8 @@ function initObjAutocomplete() {
     if (!document.getElementById('obj-name').value) {
       document.getElementById('obj-name').value = r.strasse + (r.hausnummer ? ' ' + r.hausnummer : '') + ', ' + r.plz + ' ' + r.stadt;
     }
+    if (r.lat) _objLat = r.lat;
+    if (r.lng) _objLng = r.lng;
   });
 }
 
@@ -598,6 +613,8 @@ function openEditObjModal(id) {
   var obj = null;
   for (var i = 0; i < objs.length; i++) { if (objs[i].id === id) { obj = objs[i]; break; } }
   if (!obj) return;
+  _objLat = obj.lat || null;
+  _objLng = obj.lng || null;
 
   document.getElementById('obj-modal-title').textContent = 'Objekt bearbeiten';
   document.getElementById('obj-name').value = obj.name || '';
@@ -640,7 +657,9 @@ function saveObj() {
     heizung: document.getElementById('obj-heizung').value,
     energie: document.getElementById('obj-energie').value,
     hausverwaltung: document.getElementById('obj-hausverwaltung').value.trim(),
-    notizen: document.getElementById('obj-notizen').value.trim()
+    notizen: document.getElementById('obj-notizen').value.trim(),
+    lat: _objLat || null,
+    lng: _objLng || null
   };
 
   if (editObjId) {
