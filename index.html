@@ -1,11 +1,363 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=login.html">
-  <title>ImmoNova</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoNova – Die modernste Immobilienverwaltung Deutschlands</title>
+<meta name="description" content="ImmoNova vereint Mieter, Tickets, Zahlungen, CRM und mehr in einer professionellen Plattform. 30 Tage kostenlos. DSGVO-konform. Server in Frankfurt.">
+<meta property="og:title" content="ImmoNova – Immobilienverwaltung neu gedacht">
+<meta property="og:description" content="Verwalte Mieter, Tickets, Zahlungen und mehr. 30 Tage kostenlos testen.">
+<meta property="og:type" content="website">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%232563eb'/><text y='22' x='50%' text-anchor='middle' font-size='18'>🏠</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{--primary:#2563eb;--primary-dark:#1d4ed8;--sidebar-bg:#0f172a;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--bg:#f8fafc;}
+html{scroll-behavior:smooth;}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:white;line-height:1.6;}
+a{color:inherit;text-decoration:none;}
+nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.92);border-bottom:1px solid var(--border);backdrop-filter:blur(12px);}
+.nav-inner{max-width:1100px;margin:0 auto;padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;gap:24px;}
+.nav-logo{display:flex;align-items:center;gap:9px;}
+.nav-logo-icon{width:32px;height:32px;background:var(--primary);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.nav-logo-text{font-size:18px;font-weight:700;color:var(--text);}
+.nav-logo-text span{color:var(--primary);}
+.nav-links{display:flex;align-items:center;gap:4px;}
+.nav-link{padding:7px 12px;border-radius:7px;font-size:14px;font-weight:500;color:var(--muted);transition:all 0.15s;}
+.nav-link:hover{color:var(--text);background:#f1f5f9;}
+.nav-actions{display:flex;align-items:center;gap:8px;}
+.btn-login{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);border:1px solid var(--border);background:white;transition:all 0.15s;}
+.btn-login:hover{color:var(--text);background:#f8fafc;}
+.btn-cta{padding:8px 18px;border-radius:8px;font-size:14px;font-weight:700;color:white;background:var(--primary);transition:background 0.15s;box-shadow:0 2px 8px rgba(37,99,235,0.3);}
+.btn-cta:hover{background:var(--primary-dark);}
+@media(max-width:700px){.nav-links{display:none;}}
+.hero{padding:80px 24px 60px;text-align:center;background:white;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:0;left:0;right:0;height:100%;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(37,99,235,0.08) 0%,transparent 70%);pointer-events:none;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:#eff6ff;color:var(--primary);font-size:13px;font-weight:700;padding:5px 14px;border-radius:20px;border:1px solid #bfdbfe;margin-bottom:24px;}
+.hero h1{font-size:clamp(34px,6vw,66px);font-weight:800;color:var(--text);line-height:1.1;max-width:820px;margin:0 auto 20px;letter-spacing:-1px;}
+.hero h1 span{color:var(--primary);}
+.hero-sub{font-size:18px;color:var(--muted);max-width:540px;margin:0 auto 36px;line-height:1.6;}
+.hero-actions{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+.btn-hero-primary{padding:14px 28px;background:var(--primary);color:white;border-radius:10px;font-size:16px;font-weight:700;transition:background 0.15s;box-shadow:0 4px 16px rgba(37,99,235,0.35);}
+.btn-hero-primary:hover{background:var(--primary-dark);}
+.btn-hero-secondary{padding:14px 28px;background:white;color:var(--text);border:1.5px solid var(--border);border-radius:10px;font-size:16px;font-weight:600;transition:all 0.15s;cursor:pointer;}
+.btn-hero-secondary:hover{border-color:#2563eb;color:var(--primary);background:#eff6ff;}
+.hero-trust{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;}
+.trust-item{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px;}
+.screenshot-wrap{max-width:960px;margin:48px auto 0;padding:0 24px;}
+.screenshot-window{background:#0f172a;border-radius:16px;overflow:hidden;box-shadow:0 32px 80px rgba(15,23,42,0.22),0 0 0 1px rgba(255,255,255,0.05);}
+.window-bar{background:#1e293b;padding:12px 16px;display:flex;align-items:center;gap:8px;}
+.dot{width:11px;height:11px;border-radius:50%;}
+.window-content{background:#f8fafc;padding:16px;display:grid;grid-template-columns:160px 1fr;gap:12px;min-height:260px;}
+.mock-sidebar{background:#0f172a;border-radius:8px;padding:10px;}
+.mock-nav-item{padding:6px 8px;border-radius:6px;font-size:10px;color:#94a3b8;display:flex;align-items:center;gap:6px;margin-bottom:2px;}
+.mock-nav-item.active{background:rgba(37,99,235,0.2);color:#60a5fa;font-weight:600;}
+.mock-content{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.mock-card{background:white;border-radius:8px;padding:12px;border:1px solid var(--border);}
+.mock-card-label{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+.mock-card-val{font-size:18px;font-weight:800;color:var(--text);}
+.mock-bar{height:5px;border-radius:3px;background:#e2e8f0;margin-top:6px;overflow:hidden;}
+.mock-bar-fill{height:100%;border-radius:3px;background:var(--primary);}
+.logo-strip{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:18px 24px;}
+.logo-strip-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+.logo-strip p{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-right:16px;white-space:nowrap;}
+.comp-pill{background:#f1f5f9;color:var(--muted);font-size:13px;font-weight:600;padding:5px 13px;border-radius:20px;border:1px solid var(--border);}
+.section{padding:80px 24px;max-width:1100px;margin:0 auto;}
+.section-label{font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;}
+.section-title{font-size:clamp(26px,4vw,42px);font-weight:800;color:var(--text);line-height:1.15;margin-bottom:14px;letter-spacing:-0.5px;}
+.section-sub{font-size:17px;color:var(--muted);line-height:1.6;margin-bottom:48px;}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+@media(max-width:800px){.features-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:520px){.features-grid{grid-template-columns:1fr;}}
+.feature-card{background:white;border:1px solid var(--border);border-radius:14px;padding:22px;transition:all 0.2s;}
+.feature-card:hover{border-color:#93c5fd;box-shadow:0 8px 24px rgba(37,99,235,0.1);transform:translateY(-2px);}
+.feature-icon{font-size:26px;margin-bottom:12px;}
+.feature-name{font-size:15px;font-weight:700;color:var(--text);margin-bottom:7px;}
+.feature-desc{font-size:14px;color:var(--muted);line-height:1.6;}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:0 auto;}
+@media(max-width:800px){.pricing-grid{grid-template-columns:1fr;max-width:400px;}}
+.pricing-card{border:1.5px solid var(--border);border-radius:16px;padding:28px;position:relative;transition:all 0.2s;}
+.pricing-card.popular{border-color:var(--primary);box-shadow:0 8px 32px rgba(37,99,235,0.12);}
+.popular-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--primary);color:white;font-size:11px;font-weight:700;padding:3px 14px;border-radius:20px;white-space:nowrap;}
+.plan-name{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;}
+.plan-price{font-size:34px;font-weight:800;color:var(--text);line-height:1;margin-bottom:4px;}
+.plan-units{font-size:13px;color:var(--muted);margin-bottom:20px;}
+.plan-features{list-style:none;margin-bottom:24px;}
+.plan-features li{font-size:13px;color:#374151;padding:5px 0;display:flex;align-items:center;gap:7px;}
+.plan-features li::before{content:'✓';color:var(--primary);font-weight:700;flex-shrink:0;}
+.plan-btn{display:block;text-align:center;padding:11px;border-radius:9px;font-size:14px;font-weight:700;transition:all 0.15s;}
+.plan-btn-primary{background:var(--primary);color:white;box-shadow:0 2px 8px rgba(37,99,235,0.3);}
+.plan-btn-primary:hover{background:var(--primary-dark);}
+.plan-btn-outline{background:white;color:var(--text);border:1.5px solid var(--border);}
+.plan-btn-outline:hover{border-color:var(--primary);color:var(--primary);background:#eff6ff;}
+.testimonials-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+@media(max-width:800px){.testimonials-grid{grid-template-columns:1fr;}}
+.testimonial-card{background:#f8fafc;border:1px solid var(--border);border-radius:14px;padding:24px;}
+.t-stars{color:#fbbf24;font-size:14px;margin-bottom:10px;}
+.t-text{font-size:14px;color:#374151;line-height:1.7;margin-bottom:14px;font-style:italic;}
+.t-author{display:flex;align-items:center;gap:10px;}
+.t-avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;}
+.faq-list{max-width:720px;margin:0 auto;}
+.faq-item{border-bottom:1px solid var(--border);}
+.faq-q{padding:17px 0;font-size:15px;font-weight:600;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;user-select:none;}
+.faq-q:hover{color:var(--primary);}
+.faq-chevron{font-size:11px;color:var(--muted);transition:transform 0.2s;flex-shrink:0;}
+.faq-a{display:none;padding-bottom:14px;font-size:14px;color:var(--muted);line-height:1.7;}
+.faq-item.open .faq-a{display:block;}
+.faq-item.open .faq-chevron{transform:rotate(180deg);}
+.cta-band{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:80px 24px;text-align:center;}
+.cta-band h2{font-size:clamp(26px,4vw,42px);font-weight:800;color:white;margin-bottom:12px;letter-spacing:-0.5px;}
+.cta-band p{font-size:17px;color:#93c5fd;margin-bottom:32px;}
+.cta-actions{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;}
+.btn-cta-white{padding:13px 26px;background:white;color:var(--primary);border-radius:10px;font-size:15px;font-weight:700;transition:all 0.15s;box-shadow:0 4px 14px rgba(0,0,0,0.2);}
+.btn-cta-white:hover{background:#eff6ff;}
+.btn-cta-outline{padding:13px 26px;background:transparent;color:white;border:1.5px solid rgba(255,255,255,0.3);border-radius:10px;font-size:15px;font-weight:600;transition:all 0.15s;}
+.btn-cta-outline:hover{background:rgba(255,255,255,0.1);}
+footer{background:#0f172a;padding:60px 24px 28px;}
+.footer-inner{max-width:1100px;margin:0 auto;}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:40px;}
+@media(max-width:700px){.footer-grid{grid-template-columns:1fr 1fr;}}
+.footer-col h4{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:12px;}
+.footer-col a{display:block;font-size:13px;color:#64748b;margin-bottom:8px;transition:color 0.1s;}
+.footer-col a:hover{color:#94a3b8;}
+.footer-bottom{border-top:1px solid #1e293b;padding-top:22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.footer-bottom p{font-size:12px;color:#475569;}
+</style>
 </head>
 <body>
-  <script>window.location.href = 'login.html';</script>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">🏢</div>
+      <div class="nav-logo-text">Immo<span>Nova</span></div>
+    </a>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#preise" class="nav-link">Preise</a>
+      <a href="#testimonials" class="nav-link">Referenzen</a>
+      <a href="#faq" class="nav-link">FAQ</a>
+      <a href="support.html" class="nav-link">Support</a>
+    </div>
+    <div class="nav-actions">
+      <a href="login.html" class="btn-login">Anmelden</a>
+      <a href="login.html?register=1" class="btn-cta">Kostenlos starten</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">🚀 Jetzt in der Beta-Phase – kostenlos testen</div>
+  <h1>Die modernste<br><span>Immobilienverwaltung</span><br>Deutschlands</h1>
+  <p class="hero-sub">Mieter, Tickets, Zahlungen, CRM und mehr – alles in einer Plattform. DSGVO-konform. Made in Germany.</p>
+  <div class="hero-actions">
+    <a href="login.html?register=1" class="btn-hero-primary">Kostenlos starten – 30 Tage</a>
+    <button class="btn-hero-secondary" onclick="startDemo()">🎮 Demo ansehen</button>
+  </div>
+  <div class="hero-trust">
+    <span class="trust-item">🔒 DSGVO-konform</span>
+    <span class="trust-item">🇩🇪 Server Frankfurt</span>
+    <span class="trust-item">✅ Keine Kreditkarte</span>
+    <span class="trust-item">⚡ Sofort einsatzbereit</span>
+  </div>
+</section>
+
+<div class="screenshot-wrap">
+  <div class="screenshot-window">
+    <div class="window-bar">
+      <div class="dot" style="background:#ef4444;"></div>
+      <div class="dot" style="background:#f59e0b;"></div>
+      <div class="dot" style="background:#22c55e;"></div>
+      <div style="flex:1;background:#1e293b;border-radius:5px;height:18px;margin-left:10px;max-width:180px;display:flex;align-items:center;padding:0 8px;">
+        <span style="font-size:10px;color:#64748b;">immonova.tech/app</span>
+      </div>
+    </div>
+    <div class="window-content">
+      <div class="mock-sidebar">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:12px;padding:4px 4px;">
+          <div style="width:20px;height:20px;background:#2563eb;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;">🏢</div>
+          <span style="font-size:10px;font-weight:700;color:white;">Immo<span style="color:#60a5fa;">Nova</span></span>
+        </div>
+        <div class="mock-nav-item active">🏠 Dashboard</div>
+        <div class="mock-nav-item">👥 Mieter</div>
+        <div class="mock-nav-item">🎫 Tickets <span style="background:#dc2626;color:white;font-size:8px;padding:1px 4px;border-radius:6px;margin-left:auto;">3</span></div>
+        <div class="mock-nav-item">💳 Zahlungen</div>
+        <div class="mock-nav-item">🎯 CRM</div>
+        <div class="mock-nav-item">📊 Berichte</div>
+      </div>
+      <div class="mock-content">
+        <div class="mock-card">
+          <div class="mock-card-label">Monatl. Einnahmen</div>
+          <div class="mock-card-val">12.840 €</div>
+          <div class="mock-bar"><div class="mock-bar-fill" style="width:78%;"></div></div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-label">Belegungsquote</div>
+          <div class="mock-card-val">94%</div>
+          <div class="mock-bar"><div class="mock-bar-fill" style="width:94%;background:#16a34a;"></div></div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-label">Offene Tickets</div>
+          <div class="mock-card-val" style="color:#dc2626;">3</div>
+          <div class="mock-bar"><div class="mock-bar-fill" style="width:30%;background:#dc2626;"></div></div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-label">Follow-Ups heute</div>
+          <div class="mock-card-val" style="color:#d97706;">5</div>
+          <div class="mock-bar"><div class="mock-bar-fill" style="width:50%;background:#d97706;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="logo-strip">
+  <div class="logo-strip-inner">
+    <p>Vergleichbar mit:</p>
+    <span class="comp-pill">Immoware24</span>
+    <span class="comp-pill">Hero Software</span>
+    <span class="comp-pill">Buildium</span>
+    <span class="comp-pill">Lexoffice</span>
+    <span class="comp-pill">HubSpot</span>
+  </div>
+</div>
+
+<section class="section" id="features">
+  <div style="text-align:center;margin-bottom:52px;">
+    <div class="section-label">Features</div>
+    <h2 class="section-title" style="margin:0 auto 12px;">Alles was du brauchst,<br>in einer Plattform</h2>
+    <p class="section-sub" style="max-width:540px;margin:0 auto;">Von der Mieterverwaltung bis zur Nebenkostenabrechnung – ImmoNova deckt jeden Aspekt der modernen Immobilienverwaltung ab.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card"><div class="feature-icon">👥</div><div class="feature-name">Mieterverwaltung</div><div class="feature-desc">Vollständige Profile, Verträge, Kautionen, Miethistorie und Bonitätsscore auf einen Blick.</div></div>
+    <div class="feature-card"><div class="feature-icon">🎫</div><div class="feature-name">Ticket & Schadenmanagement</div><div class="feature-desc">Schäden erfassen, Handwerker zuweisen, Status verfolgen – wie Jira, aber für Vermieter.</div></div>
+    <div class="feature-card"><div class="feature-icon">💳</div><div class="feature-name">Zahlungen & Mahnwesen</div><div class="feature-desc">Mieteinnahmen tracken, automatische WhatsApp-Mahnungen, Zahlungsquote visualisiert.</div></div>
+    <div class="feature-card"><div class="feature-icon">🎯</div><div class="feature-name">Follow-Up CRM</div><div class="feature-desc">Interessenten verwalten, Wiedervorlage setzen, Kanban-Board für Vermietungspipeline.</div></div>
+    <div class="feature-card"><div class="feature-icon">🏗️</div><div class="feature-name">Projekte & Plantafel</div><div class="feature-desc">Baustellen und Renovierungen mit Gantt-Plantafel planen und überwachen.</div></div>
+    <div class="feature-card"><div class="feature-icon">📄</div><div class="feature-name">Dokumente & Vorlagen</div><div class="feature-desc">Mietverträge, Nebenkostenabrechnung, Übergabeprotokoll – mit einem Klick drucken.</div></div>
+    <div class="feature-card"><div class="feature-icon">💬</div><div class="feature-name">Echtzeit-Nachrichten</div><div class="feature-desc">Direkt-Chat mit Mietern und Handwerkern. Wie WhatsApp Business, aber integriert.</div></div>
+    <div class="feature-card"><div class="feature-icon">🔢</div><div class="feature-name">Zählerstände & Nebenkosten</div><div class="feature-desc">Strom, Gas, Wasser erfassen und direkt in die Nebenkostenabrechnung übernehmen.</div></div>
+    <div class="feature-card"><div class="feature-icon">📊</div><div class="feature-name">Berichte & Analysen</div><div class="feature-desc">Renditeberechnung, Einnahmen-Trend, Auslastungsquote – als PDF exportierbar.</div></div>
+  </div>
+</section>
+
+<section style="background:#f8fafc;padding:80px 24px;" id="preise">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:44px;">
+      <div class="section-label">Preise</div>
+      <h2 class="section-title">Transparent. Flexibel. Fair.</h2>
+      <p class="section-sub" style="max-width:540px;margin:0 auto;">Alle Pläne starten mit 30 Tagen kostenloser Testphase. Individuelle Preise? <a href="mailto:kontakt@immonova.de" style="color:var(--primary);">kontakt@immonova.de</a></p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <div class="plan-name">Starter</div>
+        <div class="plan-price">Auf Anfrage</div>
+        <div class="plan-units">bis 5 Einheiten · Privatvermieter</div>
+        <ul class="plan-features">
+          <li>5 Mieteinheiten</li><li>Dashboard & Mieter</li><li>Ticket-System</li><li>Mieter-Portal</li><li>Dokument-Vorlagen</li><li>Email-Support</li>
+        </ul>
+        <a href="login.html?register=1" class="plan-btn plan-btn-outline">Kostenlos starten</a>
+      </div>
+      <div class="pricing-card popular">
+        <div class="popular-badge">⭐ Beliebteste Wahl</div>
+        <div class="plan-name">Pro</div>
+        <div class="plan-price">Auf Anfrage</div>
+        <div class="plan-units">bis 50 Einheiten · Verwalter</div>
+        <ul class="plan-features">
+          <li>50 Mieteinheiten</li><li>Alles aus Starter</li><li>CRM & Interessenten</li><li>WhatsApp-Integration</li><li>Erweiterte Berichte</li><li>Handwerker-Portal</li><li>Projektplanung</li><li>Prioritäts-Support</li>
+        </ul>
+        <a href="login.html?register=1" class="plan-btn plan-btn-primary">Kostenlos starten</a>
+      </div>
+      <div class="pricing-card">
+        <div class="plan-name">Business</div>
+        <div class="plan-price">Auf Anfrage</div>
+        <div class="plan-units">Unbegrenzt · Verwaltungsunternehmen</div>
+        <ul class="plan-features">
+          <li>Unbegrenzte Einheiten</li><li>Alles aus Pro</li><li>Team-Funktionen (RBAC)</li><li>API-Zugang</li><li>SEPA-Lastschrift (bald)</li><li>Bankkonto-Integration (bald)</li><li>Dedizierter Betreuer</li><li>SLA-Garantie</li>
+        </ul>
+        <a href="mailto:kontakt@immonova.de" class="plan-btn plan-btn-outline">Beratungsgespräch</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="testimonials">
+  <div style="text-align:center;margin-bottom:44px;">
+    <div class="section-label">Referenzen</div>
+    <h2 class="section-title">Was unsere Nutzer sagen</h2>
+  </div>
+  <div class="testimonials-grid">
+    <div class="testimonial-card"><div class="t-stars">★★★★★</div><div class="t-text">"ImmoNova hat unsere Verwaltung komplett digitalisiert. Was früher 4 Stunden dauerte, erledigen wir jetzt in 20 Minuten."</div><div class="t-author"><div class="t-avatar">M</div><div><div style="font-size:14px;font-weight:700;color:#0f172a;">Michael B.</div><div style="font-size:12px;color:#64748b;">Verwalter · 34 Einheiten · München</div></div></div></div>
+    <div class="testimonial-card"><div class="t-stars">★★★★★</div><div class="t-text">"Das CRM-Modul hat unsere Vermietungsquote von 78% auf 94% gesteigert. Kein Follow-Up geht mehr verloren."</div><div class="t-author"><div class="t-avatar">S</div><div><div style="font-size:14px;font-weight:700;color:#0f172a;">Sandra K.</div><div style="font-size:12px;color:#64748b;">Maklerin · 12 Objekte · Hamburg</div></div></div></div>
+    <div class="testimonial-card"><div class="t-stars">★★★★★</div><div class="t-text">"Ich verwalte 3 Mehrfamilienhäuser allein. ImmoNova gibt mir den Überblick den ich früher nie hatte."</div><div class="t-author"><div class="t-avatar">T</div><div><div style="font-size:14px;font-weight:700;color:#0f172a;">Thomas R.</div><div style="font-size:12px;color:#64748b;">Privatvermieter · 24 Einheiten · Berlin</div></div></div></div>
+  </div>
+</section>
+
+<section style="background:#f8fafc;padding:80px 24px;" id="faq">
+  <div style="max-width:1100px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:44px;"><div class="section-label">FAQ</div><h2 class="section-title">Häufige Fragen</h2></div>
+    <div class="faq-list">
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Wie lange ist die Testphase und brauche ich eine Kreditkarte? <span class="faq-chevron">▼</span></div><div class="faq-a">30 Tage kostenlos, keine Kreditkarte, keine Verpflichtungen. Nach der Testphase Plan wählen oder Konto löschen.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Ist ImmoNova DSGVO-konform? <span class="faq-chevron">▼</span></div><div class="faq-a">Ja. Alle Daten werden auf Servern in Frankfurt (Deutschland) gespeichert. Firebase (Google Cloud) mit EU-West Rechenzentrum. AVV auf Anfrage verfügbar.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Wie viele Einheiten kann ich verwalten? <span class="faq-chevron">▼</span></div><div class="faq-a">Starter: bis 5, Pro: bis 50, Business: unbegrenzt. Individuell auf Anfrage.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Kann ich mein Team einladen? <span class="faq-chevron">▼</span></div><div class="faq-a">Ja! Ab Pro-Plan kannst du Mitarbeiter per Email einladen und Rollen vergeben (Verwalter, Mitarbeiter).</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Gibt es eine mobile App? <span class="faq-chevron">▼</span></div><div class="faq-a">ImmoNova ist als PWA konzipiert und kann auf dem Smartphone-Homescreen installiert werden. Native iOS/Android App ist in der Roadmap.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Kann ich bestehende Daten importieren? <span class="faq-chevron">▼</span></div><div class="faq-a">Ja, via JSON-Import. CSV-Import für Mieter/Zahlungen ist in Entwicklung. Kontaktiere uns für individuelle Migration.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Wie sicher sind meine Daten? <span class="faq-chevron">▼</span></div><div class="faq-a">TLS-Verschlüsselung, Passwörter niemals im Klartext, Firebase Security Rules, regelmäßige Backups.</div></div>
+      <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Was kostet der Support? <span class="faq-chevron">▼</span></div><div class="faq-a">Email-Support in allen Plänen inklusive. Business erhält dedizierten Ansprechpartner + 24h Reaktionszeit.</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="cta-band">
+  <h2>Bereit loszulegen?</h2>
+  <p>30 Tage kostenlos. Keine Kreditkarte. Sofort einsatzbereit.</p>
+  <div class="cta-actions">
+    <a href="login.html?register=1" class="btn-cta-white">Kostenlos starten</a>
+    <a href="mailto:kontakt@immonova.de" class="btn-cta-outline">Beratungsgespräch anfragen</a>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div>
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
+          <div style="width:26px;height:26px;background:#2563eb;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;">🏢</div>
+          <span style="font-size:15px;font-weight:700;color:white;">Immo<span style="color:#60a5fa;">Nova</span></span>
+        </div>
+        <p style="font-size:13px;color:#64748b;line-height:1.6;max-width:240px;">Die modernste Immobilienverwaltungs-Software. DSGVO-konform. Made in Germany.</p>
+      </div>
+      <div class="footer-col"><h4>Produkt</h4><a href="#features">Features</a><a href="#preise">Preise</a><a href="login.html?register=1">Kostenlos starten</a><a href="status.html">System-Status</a></div>
+      <div class="footer-col"><h4>Unternehmen</h4><a href="support.html">Support</a><a href="mailto:kontakt@immonova.de">Kontakt</a><a href="pitch.html">Über uns</a><a href="onboarding-guide.html">Getting Started</a></div>
+      <div class="footer-col"><h4>Rechtliches</h4><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a><a href="agb.html">AGB</a><a href="avv.html">AVV</a></div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 ImmoNova · Idriz Osmanaj · Dortmund, Deutschland</p>
+      <div style="display:flex;gap:14px;"><span style="font-size:12px;color:#475569;">🔒 SSL</span><span style="font-size:12px;color:#475569;">🇩🇪 Frankfurt</span><span style="font-size:12px;color:#475569;">✅ DSGVO</span></div>
+    </div>
+  </div>
+</footer>
+
+<script src="shared.js"></script>
+<script>
+function toggleFaq(el) {
+  var item = el.parentElement;
+  var open = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(function(i){ i.classList.remove('open'); });
+  if (!open) item.classList.add('open');
+}
+function startDemo() {
+  startDemoMode();
+}
+document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+  a.addEventListener('click', function(e) {
+    var target = document.querySelector(this.getAttribute('href'));
+    if (target) { e.preventDefault(); target.scrollIntoView({ behavior:'smooth', block:'start' }); }
+  });
+});
+showCookieBanner();
+</script>
 </body>
 </html>
