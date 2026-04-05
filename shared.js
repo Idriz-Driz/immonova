@@ -395,6 +395,138 @@ function cleanupListeners() {
   _activeListeners = {};
 }
 
+// ─── SESSION TIMEOUT (8h) ─────────────────────────────────────
+var SESSION_TIMEOUT = 8 * 60 * 60 * 1000;
+
+function resetActivity() {
+  localStorage.setItem('last_activity', Date.now().toString());
+}
+
+function checkSession() {
+  var stored = parseInt(localStorage.getItem('last_activity') || '0');
+  if (stored && (Date.now() - stored) > SESSION_TIMEOUT) {
+    var uid = localStorage.getItem('in_user_uid');
+    if (uid && uid !== 'demo') {
+      if (typeof firebase !== 'undefined' && firebase.apps.length) {
+        firebase.auth().signOut().catch(function(){});
+      }
+      sessionStorage.clear();
+      localStorage.removeItem('in_role');
+      localStorage.removeItem('in_user_uid');
+      window.location.href = 'login.html?reason=timeout';
+    }
+  }
+}
+
+// Register activity listeners and start session check interval
+(function() {
+  resetActivity();
+  ['mousedown','mousemove','keypress','scroll','touchstart','click'].forEach(function(ev) {
+    document.addEventListener(ev, resetActivity, { passive: true });
+  });
+  setInterval(checkSession, 60000);
+})();
+
+// ─── GLOBAL LOADER ────────────────────────────────────────────
+function showLoader(msg) {
+  if (document.getElementById('global-loader')) return;
+  var loader = document.createElement('div');
+  loader.id = 'global-loader';
+  loader.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;';
+  loader.innerHTML = '<style>@keyframes spin{to{transform:rotate(360deg)}}</style>'
+    + '<div style="width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 0.75s linear infinite;"></div>'
+    + '<div style="margin-top:16px;font-size:14px;color:#64748b;font-weight:500;">' + escHtml(msg || 'Laden...') + '</div>';
+  document.body.appendChild(loader);
+}
+
+function hideLoader() {
+  var l = document.getElementById('global-loader');
+  if (l) l.remove();
+}
+
+function handleError(err, context) {
+  console.error(context || 'Error', err);
+  hideLoader();
+  toast('Ein Fehler ist aufgetreten. Bitte versuche es erneut.', 'error');
+}
+
+// ─── OFFLINE BANNER ───────────────────────────────────────────
+var _offlineQueue = [];
+
+function processOfflineQueue() {
+  var uid = getUser().uid;
+  if (uid && uid !== 'demo') syncToFirebase(uid);
+  _offlineQueue = [];
+}
+
+window.addEventListener('online', function() {
+  var b = document.getElementById('offline-banner');
+  if (b) b.remove();
+  toast('Wieder online ✅', 'success');
+  processOfflineQueue();
+});
+
+window.addEventListener('offline', function() {
+  if (document.getElementById('offline-banner')) return;
+  var banner = document.createElement('div');
+  banner.id = 'offline-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#d97706;color:white;padding:10px;text-align:center;font-size:13px;font-weight:600;z-index:9999;';
+  banner.textContent = '📡 Kein Internet – Offline-Modus aktiv';
+  document.body.prepend(banner);
+});
+
+// ─── PWA META TAGS ────────────────────────────────────────────
+function injectMeta() {
+  var head = document.head;
+  if (document.querySelector('meta[name="theme-color"]')) return;
+  var tags = [
+    '<meta name="theme-color" content="#2563eb">',
+    '<meta name="apple-mobile-web-app-capable" content="yes">',
+    '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
+    '<meta name="apple-mobile-web-app-title" content="ImmoNova">',
+    '<link rel="apple-touch-icon" href="/icons/icon-192.png">',
+    '<link rel="manifest" href="/manifest.json">'
+  ];
+  head.insertAdjacentHTML('beforeend', tags.join(''));
+}
+injectMeta();
+
+// ─── SERVICE WORKER REGISTER ──────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+
+// ─── WEBCRYPTO (async – for future server operations) ─────────
+// Note: getData/setData remain synchronous for compatibility.
+// Use these for high-sensitivity operations (e.g. API tokens).
+async function encryptSecure(data) {
+  try {
+    var uid = (localStorage.getItem('in_user_uid') || 'immonova_default').padEnd(32,'x').substring(0,32);
+    var keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(uid), { name:'AES-GCM' }, false, ['encrypt','decrypt']);
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var encoded = new TextEncoder().encode(JSON.stringify(data));
+    var encrypted = await crypto.subtle.encrypt({ name:'AES-GCM', iv:iv }, keyMaterial, encoded);
+    var combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+    return btoa(String.fromCharCode.apply(null, combined));
+  } catch(e) { return JSON.stringify(data); }
+}
+
+async function decryptSecure(encoded) {
+  try {
+    var uid = (localStorage.getItem('in_user_uid') || 'immonova_default').padEnd(32,'x').substring(0,32);
+    var keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(uid), { name:'AES-GCM' }, false, ['encrypt','decrypt']);
+    var combined = Uint8Array.from(atob(encoded), function(c){ return c.charCodeAt(0); });
+    var iv = combined.slice(0,12);
+    var data = combined.slice(12);
+    var decrypted = await crypto.subtle.decrypt({ name:'AES-GCM', iv:iv }, keyMaterial, data);
+    return JSON.parse(new TextDecoder().decode(decrypted));
+  } catch(e) { try { return JSON.parse(encoded); } catch(e2) { return null; } }
+}
+
 // ─── LOGOUT ───────────────────────────────────────────────────
 function doLogout() {
   if (!confirm('Möchtest du dich wirklich abmelden?')) return;

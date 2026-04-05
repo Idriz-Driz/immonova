@@ -1,60 +1,58 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>ImmoNova – Mieter-Portal</title>
+  <meta name="description" content="ImmoNova Mieter-Portal – Schäden melden, Nachrichten, Termine" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ImmoNova" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com; frame-src 'none'; object-src 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --blue-900: #0f2044;
-      --blue-800: #1a3260;
-      --blue-700: #1e3a6e;
-      --blue-600: #2451a3;
-      --blue-500: #2d63c8;
-      --blue-400: #4a7fd4;
-      --blue-100: #dce8fb;
-      --blue-50:  #eef4fd;
-      --white:    #ffffff;
-      --gray-50:  #f8f9fb;
-      --gray-100: #f1f3f7;
-      --gray-200: #e2e6ee;
-      --gray-300: #c8cedb;
-      --gray-400: #9aa3b5;
-      --gray-600: #5c667a;
-      --gray-800: #2d3245;
-      --red-500:  #e53e3e;
-      --red-100:  #fff0f0;
-      --yellow-500: #d69e2e;
-      --yellow-100: #fffbea;
-      --green-500: #38a169;
-      --green-100: #f0fff4;
-      --orange-500: #dd6b20;
-      --orange-100: #fff5eb;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
-      --shadow-lg: 0 10px 30px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.07);
-      --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --red: #dc2626;
+      --green: #16a34a;
+      --orange: #d97706;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --gray-700: #334155;
+      --gray-800: #1e293b;
+      --white: #ffffff;
     }
 
-    body {
+    html, body {
+      height: 100%;
       font-family: 'DM Sans', sans-serif;
       background: var(--gray-50);
       color: var(--gray-800);
-      min-height: 100vh;
+      overflow-x: hidden;
     }
 
-    /* ─── LOGIN PAGE ─────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════
+       LOGIN PAGE
+    ══════════════════════════════════════════════ */
     #login-page {
       min-height: 100vh;
-      background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 60%, var(--blue-500) 100%);
+      background: linear-gradient(160deg, #0f2044 0%, #1e3a8a 55%, #2563eb 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -63,836 +61,1210 @@
 
     .login-card {
       background: var(--white);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      padding: 44px 40px 36px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px 32px 32px;
       width: 100%;
-      max-width: 420px;
+      max-width: 400px;
     }
 
-    .login-logo {
+    .login-brand {
       text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .login-brand .brand-icon {
+      font-size: 48px;
+      line-height: 1;
       margin-bottom: 8px;
     }
 
-    .login-logo .logo-icon {
-      font-size: 2.8rem;
-      line-height: 1;
-    }
-
-    .login-logo .logo-name {
-      font-size: 1.6rem;
+    .login-brand .brand-name {
+      font-size: 24px;
       font-weight: 700;
-      color: var(--blue-900);
+      color: var(--gray-800);
       letter-spacing: -0.5px;
-      margin-top: 4px;
     }
 
-    .login-logo .logo-sub {
-      font-size: 0.85rem;
+    .login-brand .brand-sub {
+      font-size: 13px;
       color: var(--gray-400);
-      font-weight: 500;
       margin-top: 2px;
-      letter-spacing: 0.3px;
     }
 
-    .info-box {
-      background: var(--blue-50);
-      border: 1px solid var(--blue-100);
-      border-radius: var(--radius-md);
-      padding: 14px 16px;
-      margin: 22px 0;
-      font-size: 0.875rem;
-      color: var(--blue-600);
-      line-height: 1.55;
-    }
-
-    .login-form label {
-      display: block;
-      font-size: 0.82rem;
+    .login-card h2 {
+      font-size: 15px;
       font-weight: 600;
-      color: var(--gray-600);
-      margin-bottom: 6px;
-      margin-top: 16px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .login-form input {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1.5px solid var(--gray-200);
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.95rem;
-      color: var(--gray-800);
-      background: var(--white);
-      transition: border-color 0.2s, box-shadow 0.2s;
-      outline: none;
-    }
-
-    .login-form input:focus {
-      border-color: var(--blue-500);
-      box-shadow: 0 0 0 3px rgba(45, 99, 200, 0.12);
-    }
-
-    .login-form input::placeholder {
-      color: var(--gray-300);
-    }
-
-    .btn-login {
-      width: 100%;
-      margin-top: 24px;
-      padding: 13px;
-      background: linear-gradient(135deg, var(--blue-600), var(--blue-500));
-      color: var(--white);
-      border: none;
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.15s;
-      box-shadow: 0 4px 14px rgba(45, 99, 200, 0.35);
-    }
-
-    .btn-login:hover { opacity: 0.92; transform: translateY(-1px); }
-    .btn-login:active { transform: translateY(0); }
-
-    .login-error {
-      margin-top: 14px;
-      background: var(--red-100);
-      border: 1px solid #fca5a5;
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      font-size: 0.875rem;
-      color: var(--red-500);
-      display: none;
-    }
-
-    .login-footer {
+      color: var(--gray-500);
       text-align: center;
-      margin-top: 28px;
-      padding-top: 20px;
-      border-top: 1px solid var(--gray-100);
-    }
-
-    .login-footer a {
-      font-size: 0.875rem;
-      color: var(--gray-400);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-
-    .login-footer a:hover { color: var(--blue-500); }
-
-    /* ─── PORTAL ─────────────────────────────────────────────── */
-    #portal-page { display: none; min-height: 100vh; }
-
-    .portal-header {
-      background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-800) 100%);
-      color: var(--white);
-      padding: 0 24px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
-    }
-
-    .portal-header-inner {
-      max-width: 960px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 62px;
-      gap: 12px;
-    }
-
-    .header-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .header-logo .h-icon { font-size: 1.5rem; }
-
-    .header-logo .h-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-
-    .header-logo .h-sub {
-      font-size: 0.72rem;
-      color: rgba(255,255,255,0.55);
-      font-weight: 400;
-      margin-top: 1px;
-    }
-
-    .header-user {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      flex-shrink: 0;
-    }
-
-    .user-info {
-      text-align: right;
-    }
-
-    .user-info .u-name {
-      font-size: 0.875rem;
-      font-weight: 600;
-    }
-
-    .user-info .u-wohnung {
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.55);
-    }
-
-    .btn-logout {
-      padding: 7px 14px;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.2);
-      color: var(--white);
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-      white-space: nowrap;
-    }
-
-    .btn-logout:hover { background: rgba(255,255,255,0.2); }
-
-    /* ─── TABS ───────────────────────────────────────────────── */
-    .tab-bar {
-      background: var(--white);
-      border-bottom: 1px solid var(--gray-200);
-      position: sticky;
-      top: 62px;
-      z-index: 99;
-    }
-
-    .tab-bar-inner {
-      max-width: 960px;
-      margin: 0 auto;
-      display: flex;
-      overflow-x: auto;
-      scrollbar-width: none;
-      padding: 0 8px;
-    }
-
-    .tab-bar-inner::-webkit-scrollbar { display: none; }
-
-    .tab-btn {
-      padding: 14px 20px;
-      background: transparent;
-      border: none;
-      border-bottom: 2.5px solid transparent;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--gray-400);
-      cursor: pointer;
-      white-space: nowrap;
-      transition: color 0.2s, border-color 0.2s;
-    }
-
-    .tab-btn:hover { color: var(--blue-600); }
-
-    .tab-btn.active {
-      color: var(--blue-600);
-      border-bottom-color: var(--blue-500);
-      background: transparent;
-    }
-
-    /* ─── MAIN CONTENT ───────────────────────────────────────── */
-    .portal-main {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 28px 20px 48px;
-    }
-
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-
-    /* ─── SECTION HEADER ─────────────────────────────────────── */
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .section-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--gray-800);
-    }
-
-    /* ─── BUTTONS ────────────────────────────────────────────── */
-    .btn-primary {
-      padding: 9px 18px;
-      background: var(--blue-500);
-      color: var(--white);
-      border: none;
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, transform 0.15s;
-      box-shadow: 0 2px 8px rgba(45, 99, 200, 0.28);
-    }
-
-    .btn-primary:hover { background: var(--blue-600); transform: translateY(-1px); }
-    .btn-primary:active { transform: translateY(0); }
-
-    .btn-secondary {
-      padding: 9px 18px;
-      background: var(--white);
-      color: var(--gray-600);
-      border: 1.5px solid var(--gray-200);
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    .btn-secondary:hover { border-color: var(--gray-300); color: var(--gray-800); }
-
-    .btn-send {
-      padding: 10px 18px;
-      background: var(--blue-500);
-      color: var(--white);
-      border: none;
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-      white-space: nowrap;
-    }
-
-    .btn-send:hover { background: var(--blue-600); }
-
-    /* ─── CARDS ──────────────────────────────────────────────── */
-    .card {
-      background: var(--white);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--gray-200);
-      box-shadow: var(--shadow-sm);
-      padding: 18px 20px;
-      margin-bottom: 12px;
-    }
-
-    .card:last-child { margin-bottom: 0; }
-
-    /* ─── FORM CARD ──────────────────────────────────────────── */
-    .form-card {
-      background: var(--blue-50);
-      border: 1.5px solid var(--blue-100);
-      border-radius: var(--radius-md);
-      padding: 22px 24px;
       margin-bottom: 24px;
-      box-shadow: var(--shadow-sm);
     }
 
-    .form-card h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--blue-900);
+    .pin-field-wrap {
       margin-bottom: 16px;
     }
 
-    .form-row {
-      margin-bottom: 14px;
-    }
-
-    .form-row label {
+    .pin-field-wrap label {
       display: block;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--gray-600);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gray-500);
       text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.6px;
       margin-bottom: 6px;
     }
 
-    .form-row input,
-    .form-row textarea,
-    .form-row select {
+    .pin-field-wrap input {
       width: 100%;
-      padding: 10px 13px;
-      border: 1.5px solid var(--gray-200);
-      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      border: 2px solid var(--gray-200);
+      border-radius: 12px;
       font-family: 'DM Sans', sans-serif;
-      font-size: 0.92rem;
+      font-size: 16px;
       color: var(--gray-800);
       background: var(--white);
-      outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
-      appearance: none;
+      outline: none;
+      -webkit-appearance: none;
     }
 
-    .form-row input:focus,
-    .form-row textarea:focus,
-    .form-row select:focus {
-      border-color: var(--blue-500);
-      box-shadow: 0 0 0 3px rgba(45, 99, 200, 0.10);
+    .pin-field-wrap input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
     }
 
-    .form-row textarea {
-      resize: vertical;
-      min-height: 90px;
+    .pin-field-wrap input::placeholder { color: var(--gray-400); }
+
+    .btn-login {
+      width: 100%;
+      margin-top: 8px;
+      padding: 15px;
+      background: var(--primary);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      box-shadow: 0 4px 16px rgba(37,99,235,0.35);
+      -webkit-appearance: none;
     }
 
-    .form-row-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
+    .btn-login:hover { background: var(--primary-dark); }
+    .btn-login:active { transform: scale(0.98); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .login-error {
+      margin-top: 12px;
+      padding: 12px 14px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--red);
+      display: none;
     }
 
-    .form-actions {
+    .login-footer-link {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+
+    .login-footer-link a {
+      color: var(--gray-400);
+      text-decoration: none;
+    }
+
+    .login-footer-link a:hover { color: var(--primary); }
+
+    /* ══════════════════════════════════════════════
+       APP SHELL
+    ══════════════════════════════════════════════ */
+    #app {
+      display: none;
+      min-height: 100vh;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ───────────────────────────────────── */
+    #app-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: var(--primary);
+      z-index: 200;
       display: flex;
-      gap: 10px;
-      margin-top: 18px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
 
-    /* ─── BADGES ─────────────────────────────────────────────── */
+    .header-logo {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--white);
+      white-space: nowrap;
+    }
+
+    .header-greeting {
+      font-size: 14px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.9);
+      text-align: center;
+      flex: 1;
+      margin: 0 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .header-bell {
+      position: relative;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px;
+      flex-shrink: 0;
+    }
+
+    .bell-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #ef4444;
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+    }
+
+    /* ── SCROLL CONTENT ───────────────────────────── */
+    #tab-content {
+      margin-top: 56px;
+      margin-bottom: 64px;
+      min-height: calc(100vh - 120px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 16px 16px 24px;
+      max-width: 600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .tab-panel.active { display: block; }
+
+    /* Chat panel has no padding (full bleed) */
+    #panel-chat {
+      padding: 0;
+      display: none;
+      flex-direction: column;
+      height: calc(100vh - 120px - 56px);
+    }
+
+    #panel-chat.active {
+      display: flex;
+    }
+
+    /* ── BOTTOM NAV ───────────────────────────────── */
+    #bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: var(--white);
+      border-top: 1px solid var(--gray-200);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+      display: flex;
+      z-index: 200;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px 4px;
+      transition: color 0.15s;
+      color: var(--gray-400);
+      font-family: 'DM Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .nav-btn .nav-icon { font-size: 22px; line-height: 1; }
+    .nav-btn .nav-label { font-size: 10px; font-weight: 600; }
+    .nav-btn.active { color: var(--primary); }
+
+    /* ══════════════════════════════════════════════
+       COMMON COMPONENTS
+    ══════════════════════════════════════════════ */
+    .card {
+      background: var(--white);
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 18px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--gray-700);
+      margin-bottom: 10px;
+      margin-top: 4px;
+    }
+
+    .section-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .link-btn {
+      font-size: 13px;
+      color: var(--primary);
+      font-weight: 600;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-family: 'DM Sans', sans-serif;
+    }
+
     .badge {
       display: inline-block;
       padding: 3px 10px;
       border-radius: 20px;
-      font-size: 0.75rem;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .badge-offen { background: #fee2e2; color: #dc2626; }
+    .badge-bearbeitung { background: #fff7ed; color: #d97706; }
+    .badge-erledigt { background: #dcfce7; color: #16a34a; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--gray-400);
+    }
+
+    .empty-state .empty-icon { font-size: 40px; margin-bottom: 10px; }
+    .empty-state p { font-size: 14px; font-weight: 500; line-height: 1.5; }
+
+    /* Toast */
+    #portal-toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--gray-800);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 14px;
       font-weight: 600;
-      line-height: 1.4;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+      max-width: calc(100vw - 40px);
     }
 
-    .badge-offen    { background: #fee2e2; color: var(--red-500); }
-    .badge-progress { background: var(--yellow-100); color: var(--yellow-500); }
-    .badge-erledigt { background: var(--green-100); color: var(--green-500); }
+    #portal-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
 
-    .badge-normal   { background: var(--gray-100); color: var(--gray-600); }
-    .badge-dringend { background: var(--orange-100); color: var(--orange-500); }
-    .badge-notfall  { background: #fee2e2; color: var(--red-500); }
+    #portal-toast.success { background: var(--green); }
+    #portal-toast.error { background: var(--red); }
 
-    /* ─── TICKET CARD ────────────────────────────────────────── */
-    .ticket-card {
+    /* ══════════════════════════════════════════════
+       HOME TAB
+    ══════════════════════════════════════════════ */
+    .welcome-card {
       background: var(--white);
-      border: 1px solid var(--gray-200);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm);
-      padding: 16px 20px;
-      margin-bottom: 12px;
-    }
-
-    .ticket-header {
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 18px;
+      margin-bottom: 14px;
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 8px;
     }
 
-    .ticket-title {
-      font-size: 0.975rem;
+    .welcome-card h2 {
+      font-size: 18px;
       font-weight: 700;
       color: var(--gray-800);
+      margin-bottom: 4px;
     }
 
-    .ticket-badges {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
+    .welcome-card .wohnung-info {
+      font-size: 13px;
+      color: var(--gray-500);
+    }
+
+    .welcome-date {
+      font-size: 12px;
+      color: var(--gray-400);
+      text-align: right;
       flex-shrink: 0;
     }
 
-    .ticket-meta {
-      font-size: 0.8rem;
+    .btn-damage {
+      width: 100%;
+      height: 64px;
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      border-radius: 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(220,38,38,0.3);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.15s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-damage:active { opacity: 0.9; transform: scale(0.98); }
+
+    .ticket-card-small {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    .ticket-card-small:last-child { border-bottom: none; padding-bottom: 0; }
+    .ticket-card-small:first-child { padding-top: 0; }
+
+    .ticket-card-small .t-desc {
+      flex: 1;
+      font-size: 13px;
+      color: var(--gray-700);
+      line-height: 1.4;
+    }
+
+    .ticket-card-small .t-date {
+      font-size: 11px;
       color: var(--gray-400);
+      white-space: nowrap;
+      margin-top: 2px;
     }
 
-    .ticket-bereich {
-      display: inline-block;
-      font-size: 0.78rem;
-      color: var(--blue-600);
-      background: var(--blue-50);
-      border: 1px solid var(--blue-100);
-      border-radius: 4px;
-      padding: 2px 8px;
-      margin-top: 6px;
-      font-weight: 500;
+    .termin-home-card {
+      background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+      border-radius: 14px;
+      padding: 16px 18px;
+      color: white;
+      margin-bottom: 12px;
     }
 
-    /* ─── MESSAGES ───────────────────────────────────────────── */
-    .messages-container {
+    .termin-home-card .t-label { font-size: 11px; font-weight: 700; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .termin-home-card .t-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .termin-home-card .t-meta { font-size: 13px; opacity: 0.85; }
+
+    /* ══════════════════════════════════════════════
+       TICKETS TAB
+    ══════════════════════════════════════════════ */
+    .ticket-full-card {
       background: var(--white);
-      border: 1px solid var(--gray-200);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm);
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 16px;
+      margin-bottom: 10px;
       overflow: hidden;
     }
 
-    .messages-list {
-      padding: 20px;
-      min-height: 280px;
-      max-height: 440px;
+    .ticket-full-card .tf-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .ticket-full-card .tf-desc {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-800);
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    .ticket-full-card .tf-meta {
+      font-size: 12px;
+      color: var(--gray-400);
+      margin-top: 4px;
+    }
+
+    .ticket-full-card .tf-thumb {
+      width: 100%;
+      max-height: 160px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    /* FAB */
+    .fab {
+      position: fixed;
+      right: 20px;
+      bottom: 80px;
+      width: 56px;
+      height: 56px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 28px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(37,99,235,0.4);
+      z-index: 100;
+      transition: transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fab:active { transform: scale(0.93); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 500;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-sheet {
+      background: var(--white);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 600px;
+      padding: 24px 20px 40px;
+      max-height: 90vh;
       overflow-y: auto;
+      animation: slideUp 0.25s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--gray-200);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gray-800);
+      margin-bottom: 20px;
+    }
+
+    .form-field {
+      margin-bottom: 14px;
+    }
+
+    .form-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .form-field textarea,
+    .form-field select,
+    .form-field input[type="text"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--gray-200);
+      border-radius: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      color: var(--gray-800);
+      background: var(--white);
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      resize: vertical;
+    }
+
+    .form-field textarea { min-height: 90px; }
+
+    .form-field textarea:focus,
+    .form-field select:focus,
+    .form-field input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    .form-field .file-btn {
+      width: 100%;
+      padding: 12px;
+      border: 2px dashed var(--gray-200);
+      border-radius: 10px;
+      background: var(--gray-50);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      color: var(--gray-500);
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 15px;
+      background: var(--primary);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.15s;
+    }
+
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .btn-secondary-outline {
+      width: 100%;
+      padding: 13px;
+      background: transparent;
+      color: var(--gray-500);
+      border: 2px solid var(--gray-200);
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* ══════════════════════════════════════════════
+       FOTO TAB
+    ══════════════════════════════════════════════ */
+    #foto-preview-wrap {
+      display: none;
+      margin-bottom: 14px;
+    }
+
+    #foto-preview {
+      width: 100%;
+      max-height: 250px;
+      object-fit: cover;
+      border-radius: 12px;
+      display: block;
+    }
+
+    .btn-red {
+      width: 100%;
+      padding: 15px;
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      box-shadow: 0 4px 12px rgba(220,38,38,0.3);
+      transition: opacity 0.15s;
+    }
+
+    .btn-red:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ══════════════════════════════════════════════
+       CHAT TAB
+    ══════════════════════════════════════════════ */
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
     }
+
+    .msg-row {
+      display: flex;
+    }
+
+    .msg-row.mine { justify-content: flex-end; }
+    .msg-row.theirs { justify-content: flex-start; }
 
     .msg-bubble {
       max-width: 75%;
       padding: 10px 14px;
-      border-radius: 14px;
-      font-size: 0.9rem;
-      line-height: 1.5;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.45;
+      word-break: break-word;
     }
 
-    .msg-bubble.mieter {
-      align-self: flex-end;
-      background: var(--blue-500);
-      color: var(--white);
+    .msg-row.mine .msg-bubble {
+      background: var(--primary);
+      color: white;
       border-bottom-right-radius: 4px;
     }
 
-    .msg-bubble.verwalter {
-      align-self: flex-start;
+    .msg-row.theirs .msg-bubble {
       background: var(--gray-100);
       color: var(--gray-800);
       border-bottom-left-radius: 4px;
     }
 
-    .msg-sender {
-      font-size: 0.72rem;
-      font-weight: 700;
-      margin-bottom: 3px;
-      opacity: 0.75;
-    }
-
     .msg-time {
-      font-size: 0.7rem;
-      margin-top: 4px;
-      opacity: 0.6;
+      font-size: 10px;
+      opacity: 0.65;
+      margin-top: 3px;
       text-align: right;
     }
 
-    .msg-bubble.verwalter .msg-time { text-align: left; }
+    .msg-row.theirs .msg-time { text-align: left; }
 
-    .messages-input-area {
+    #chat-input-bar {
+      padding: 10px 12px;
+      background: var(--white);
       border-top: 1px solid var(--gray-200);
-      padding: 14px 16px;
       display: flex;
-      gap: 10px;
-      background: var(--gray-50);
-    }
-
-    .messages-input-area input {
-      flex: 1;
-      padding: 10px 14px;
-      border: 1.5px solid var(--gray-200);
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.92rem;
-      color: var(--gray-800);
-      background: var(--white);
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .messages-input-area input:focus {
-      border-color: var(--blue-500);
-      box-shadow: 0 0 0 3px rgba(45, 99, 200, 0.10);
-    }
-
-    /* ─── MITTEILUNGEN ───────────────────────────────────────── */
-    .mitteilung-card {
-      background: var(--white);
-      border: 1px solid var(--gray-200);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm);
-      padding: 18px 20px;
-      margin-bottom: 12px;
-    }
-
-    .mitteilung-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--gray-800);
-      margin-bottom: 4px;
-    }
-
-    .mitteilung-date {
-      font-size: 0.78rem;
-      color: var(--gray-400);
-      margin-bottom: 10px;
-    }
-
-    .mitteilung-text {
-      font-size: 0.9rem;
-      color: var(--gray-600);
-      line-height: 1.6;
-    }
-
-    /* ─── TERMINE ────────────────────────────────────────────── */
-    .termin-card {
-      background: var(--white);
-      border: 1px solid var(--gray-200);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm);
-      padding: 16px 20px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: flex-start;
-      gap: 16px;
-    }
-
-    .termin-date-box {
-      background: var(--blue-50);
-      border: 1px solid var(--blue-100);
-      border-radius: var(--radius-sm);
-      padding: 8px 12px;
-      text-align: center;
-      min-width: 60px;
+      align-items: center;
+      gap: 8px;
       flex-shrink: 0;
     }
 
-    .termin-day {
-      font-size: 1.5rem;
+    #chat-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 2px solid var(--gray-200);
+      border-radius: 22px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+
+    #chat-input:focus { border-color: var(--primary); }
+
+    .chat-send-btn {
+      width: 42px;
+      height: 42px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .chat-attach-btn {
+      width: 42px;
+      height: 42px;
+      background: var(--gray-100);
+      color: var(--gray-500);
+      border: none;
+      border-radius: 50%;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ══════════════════════════════════════════════
+       PROFIL TAB
+    ══════════════════════════════════════════════ */
+    .profil-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      font-size: 28px;
       font-weight: 700;
-      color: var(--blue-600);
-      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
     }
 
-    .termin-month {
-      font-size: 0.72rem;
-      color: var(--blue-400);
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-
-    .termin-details { flex: 1; }
-
-    .termin-betreff {
-      font-size: 0.975rem;
+    .profil-name {
+      font-size: 20px;
       font-weight: 700;
       color: var(--gray-800);
+      text-align: center;
       margin-bottom: 4px;
     }
 
-    .termin-meta {
-      font-size: 0.82rem;
-      color: var(--gray-400);
-    }
-
-    .termin-meta span { margin-right: 14px; }
-
-    /* ─── EMPTY STATE ────────────────────────────────────────── */
-    .empty-state {
+    .profil-sub {
+      font-size: 14px;
+      color: var(--gray-500);
       text-align: center;
-      padding: 48px 24px;
-      color: var(--gray-400);
+      margin-bottom: 20px;
     }
 
-    .empty-state .empty-icon { font-size: 2.8rem; margin-bottom: 12px; }
-    .empty-state p { font-size: 0.95rem; font-weight: 500; }
-
-    /* ─── RESPONSIVE ─────────────────────────────────────────── */
-    @media (max-width: 600px) {
-      .login-card { padding: 32px 22px 28px; }
-      .portal-header-inner { height: 56px; padding: 0; }
-      .portal-header { padding: 0 14px; }
-      .portal-main { padding: 20px 14px 40px; }
-      .header-logo .h-sub { display: none; }
-      .user-info .u-name { font-size: 0.8rem; }
-      .tab-btn { padding: 12px 14px; font-size: 0.82rem; }
-      .form-row-2 { grid-template-columns: 1fr; }
-      .msg-bubble { max-width: 88%; }
-      .termin-card { flex-direction: column; gap: 10px; }
-      .termin-date-box { display: flex; align-items: center; gap: 8px; min-width: unset; padding: 7px 12px; }
-      .termin-day { font-size: 1.1rem; }
+    .profil-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--gray-100);
+      font-size: 14px;
     }
+
+    .profil-info-row:last-child { border-bottom: none; }
+    .profil-info-row .pi-label { color: var(--gray-500); font-weight: 500; }
+    .profil-info-row .pi-value { color: var(--gray-800); font-weight: 600; }
+
+    .btn-contact {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-phone { background: var(--green); color: white; }
+    .btn-whatsapp { background: #25d366; color: white; }
+
+    .btn-logout-red {
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      color: var(--red);
+      border: 2px solid var(--red);
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+
+    .install-section {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .install-section h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gray-700);
+      margin-bottom: 10px;
+    }
+
+    .install-steps {
+      font-size: 13px;
+      color: var(--gray-600);
+      line-height: 2;
+    }
+
+    .btn-install {
+      width: 100%;
+      padding: 13px;
+      background: var(--gray-800);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    /* ══════════════════════════════════════════════
+       SUCCESS OVERLAY
+    ══════════════════════════════════════════════ */
+    #success-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.97);
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ══════════════════════════════════════════════
+       INSTALL BANNER
+    ══════════════════════════════════════════════ */
+    #install-banner {
+      display: none;
+      position: fixed;
+      bottom: 72px;
+      left: 16px;
+      right: 16px;
+      background: #0f172a;
+      color: white;
+      padding: 14px 16px;
+      border-radius: 14px;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      z-index: 300;
+    }
+
+    #install-banner.show { display: flex; }
+
+    /* Spinner */
+    .spin {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-  <!-- ══════════════════════════════════════════════════════ -->
-  <!--  LOGIN PAGE                                           -->
-  <!-- ══════════════════════════════════════════════════════ -->
-  <div id="login-page">
+  <!-- ══════════════════════════════════════
+       LOGIN PAGE
+  ══════════════════════════════════════ -->
+  <div id="login-page" style="display:none;">
     <div class="login-card">
-      <div class="login-logo">
-        <div class="logo-icon">🏢</div>
-        <div class="logo-name">ImmoNova</div>
-        <div class="logo-sub">Mieter-Portal</div>
+      <div class="login-brand">
+        <div class="brand-icon">🏢</div>
+        <div class="brand-name">ImmoNova</div>
+        <div class="brand-sub">Mieter-Portal</div>
       </div>
 
-      <div class="info-box">
-        Als Mieter kannst du Schäden melden, Dokumente einsehen und mit deinem Verwalter kommunizieren.
+      <h2>Mit PIN einloggen</h2>
+
+      <div class="pin-field-wrap">
+        <label for="input-pin">Meine PIN</label>
+        <input type="password" id="input-pin" inputmode="numeric" pattern="[0-9]*"
+               placeholder="4–6-stellige PIN" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') handlePinLogin()" />
       </div>
 
-      <div class="login-form">
-        <label for="input-name">Vollständiger Name</label>
-        <input type="text" id="input-name" placeholder="z.B. Max Mustermann" autocomplete="name" />
+      <button class="btn-login" id="login-btn" onclick="handlePinLogin()">🔐 Einloggen</button>
+      <div class="login-error" id="login-error"></div>
 
-        <label for="input-wohnung">Wohnungsbezeichnung</label>
-        <input type="text" id="input-wohnung" placeholder="z.B. EG oder 1 OG" autocomplete="off" />
-
-        <button class="btn-login" onclick="handleLogin()">🏠 Als Mieter einloggen</button>
-
-        <div class="login-error" id="login-error"></div>
-      </div>
-
-      <div class="login-footer">
+      <div class="login-footer-link">
         <a href="login.html">Zur Hauptseite →</a>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════ -->
-  <!--  PORTAL PAGE                                          -->
-  <!-- ══════════════════════════════════════════════════════ -->
-  <div id="portal-page">
+  <!-- ══════════════════════════════════════
+       APP SHELL
+  ══════════════════════════════════════ -->
+  <div id="app">
 
     <!-- Header -->
-    <header class="portal-header">
-      <div class="portal-header-inner">
-        <div class="header-logo">
-          <span class="h-icon">🏢</span>
-          <div>
-            <div class="h-title">ImmoNova</div>
-            <div class="h-sub">Mieter-Portal</div>
-          </div>
-        </div>
-        <div class="header-user">
-          <div class="user-info">
-            <div class="u-name" id="header-name">–</div>
-            <div class="u-wohnung" id="header-wohnung">–</div>
-          </div>
-          <button class="btn-logout" onclick="handleLogout()">Abmelden</button>
-        </div>
-      </div>
+    <header id="app-header">
+      <div class="header-logo">🏢 ImmoNova</div>
+      <div class="header-greeting" id="header-greeting">Hallo!</div>
+      <button class="header-bell" onclick="switchTab('home')" aria-label="Benachrichtigungen">
+        🔔
+        <span class="bell-badge" id="bell-badge" style="display:none;">0</span>
+      </button>
     </header>
 
-    <!-- Tab Bar -->
-    <div class="tab-bar">
-      <div class="tab-bar-inner">
-        <button class="tab-btn active" onclick="switchTab('tickets', this)">🎫 Tickets</button>
-        <button class="tab-btn" onclick="switchTab('nachrichten', this)">💬 Nachrichten</button>
-        <button class="tab-btn" onclick="switchTab('mitteilungen', this)">📋 Mitteilungen</button>
-        <button class="tab-btn" onclick="switchTab('termine', this)">📅 Termine</button>
+    <!-- Tab Content -->
+    <div id="tab-content">
+
+      <!-- ── HOME ───────────────────────────────────── -->
+      <div class="tab-panel active" id="panel-home">
+
+        <div class="welcome-card">
+          <div>
+            <h2 id="home-greeting">Guten Tag! 👋</h2>
+            <div class="wohnung-info" id="home-wohnung">Wohnung: –</div>
+          </div>
+          <div class="welcome-date" id="home-date"></div>
+        </div>
+
+        <button class="btn-damage" onclick="openFotoTab()">
+          🔴 Schaden melden
+        </button>
+
+        <div class="card" id="home-tickets-card">
+          <div class="section-header-row">
+            <div class="section-title">Offene Tickets</div>
+            <button class="link-btn" onclick="switchTab('tickets')">Alle anzeigen →</button>
+          </div>
+          <div id="home-tickets-list">
+            <div class="empty-state" style="padding:16px 0;">
+              <p>Keine offenen Tickets.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="home-termin-wrap"></div>
+
       </div>
-    </div>
 
-    <!-- Main Content -->
-    <main class="portal-main">
-
-      <!-- ── TAB: TICKETS ───────────────────────────────── -->
-      <div class="tab-panel active" id="panel-tickets">
-        <div class="section-header">
-          <div class="section-title">Schäden & Tickets</div>
-          <button class="btn-primary" onclick="toggleSchadenForm()">+ Schaden melden</button>
+      <!-- ── TICKETS ─────────────────────────────────── -->
+      <div class="tab-panel" id="panel-tickets">
+        <div class="section-header-row" style="margin-bottom:14px;">
+          <div class="section-title" style="margin:0;">Meine Tickets</div>
         </div>
-
-        <!-- Schaden-Formular -->
-        <div class="form-card" id="schaden-form" style="display:none;">
-          <h3>Neuen Schaden melden</h3>
-
-          <div class="form-row">
-            <label for="s-titel">Titel</label>
-            <input type="text" id="s-titel" placeholder="Kurze Beschreibung des Schadens" />
-          </div>
-
-          <div class="form-row">
-            <label for="s-beschreibung">Beschreibung</label>
-            <textarea id="s-beschreibung" placeholder="Bitte beschreibe den Schaden so genau wie möglich…"></textarea>
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-row" style="margin-bottom:0;">
-              <label for="s-dringlichkeit">Dringlichkeit</label>
-              <select id="s-dringlichkeit">
-                <option value="Normal">Normal</option>
-                <option value="Dringend">Dringend</option>
-                <option value="Notfall">Notfall</option>
-              </select>
-            </div>
-            <div class="form-row" style="margin-bottom:0;">
-              <label for="s-bereich">Bereich</label>
-              <select id="s-bereich">
-                <option value="Küche">Küche</option>
-                <option value="Bad">Bad</option>
-                <option value="Wohnzimmer">Wohnzimmer</option>
-                <option value="Flur">Flur</option>
-                <option value="Keller">Keller</option>
-                <option value="Sonstiges">Sonstiges</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="btn-primary" onclick="submitSchaden()">Absenden</button>
-            <button class="btn-secondary" onclick="toggleSchadenForm()">Abbrechen</button>
-          </div>
-        </div>
-
-        <!-- Ticket List -->
         <div id="tickets-list"></div>
       </div>
 
-      <!-- ── TAB: NACHRICHTEN ───────────────────────────── -->
-      <div class="tab-panel" id="panel-nachrichten">
-        <div class="section-header">
-          <div class="section-title">Nachrichten</div>
+      <!-- ── FOTO ───────────────────────────────────── -->
+      <div class="tab-panel" id="panel-foto">
+        <div class="section-title">Schaden melden</div>
+
+        <div id="foto-preview-wrap">
+          <img id="foto-preview" src="" alt="Foto Vorschau" />
         </div>
 
-        <div class="messages-container">
-          <div class="messages-list" id="messages-list"></div>
-          <div class="messages-input-area">
-            <input type="text" id="msg-input" placeholder="Nachricht schreiben…" onkeydown="if(event.key==='Enter') sendMessage()" />
-            <button class="btn-send" onclick="sendMessage()">Senden ➤</button>
+        <button class="card" id="foto-retake-btn" onclick="triggerCamera()"
+                style="width:100%;text-align:center;color:var(--gray-500);font-size:14px;cursor:pointer;border:2px dashed var(--gray-200);background:var(--gray-50);margin-bottom:14px;">
+          📷 Foto aufnehmen / wechseln
+        </button>
+
+        <div class="form-field">
+          <label>Was ist kaputt?</label>
+          <textarea id="foto-desc" placeholder="Bitte beschreibe den Schaden…" rows="4"></textarea>
+        </div>
+
+        <div class="form-field">
+          <label>Kategorie</label>
+          <select id="foto-kat">
+            <option value="Sanitär">Sanitär</option>
+            <option value="Elektro">Elektro</option>
+            <option value="Heizung">Heizung</option>
+            <option value="Fenster &amp; Türen">Fenster &amp; Türen</option>
+            <option value="Sonstiges">Sonstiges</option>
+          </select>
+        </div>
+
+        <button class="btn-red" id="foto-submit-btn" onclick="submitFotoTicket()">
+          📤 Schaden melden
+        </button>
+      </div>
+
+      <!-- ── CHAT ───────────────────────────────────── -->
+      <div class="tab-panel" id="panel-chat">
+        <div id="chat-messages">
+          <div class="empty-state">
+            <div class="empty-icon">💬</div>
+            <p>Noch keine Nachrichten.<br>Schreib deinem Verwalter!</p>
           </div>
         </div>
-      </div>
-
-      <!-- ── TAB: MITTEILUNGEN ──────────────────────────── -->
-      <div class="tab-panel" id="panel-mitteilungen">
-        <div class="section-header">
-          <div class="section-title">Mitteilungen</div>
+        <div id="chat-input-bar">
+          <button class="chat-attach-btn" onclick="sendChatPhoto()" aria-label="Foto senden" title="Foto senden">📎</button>
+          <input type="text" id="chat-input" placeholder="Nachricht schreiben…"
+                 onkeydown="if(event.key==='Enter')sendChatMessage()" />
+          <button class="chat-send-btn" onclick="sendChatMessage()" aria-label="Senden">➤</button>
         </div>
-        <div id="mitteilungen-list"></div>
       </div>
 
-      <!-- ── TAB: TERMINE ───────────────────────────────── -->
-      <div class="tab-panel" id="panel-termine">
-        <div class="section-header">
-          <div class="section-title">Termine</div>
+      <!-- ── PROFIL ─────────────────────────────────── -->
+      <div class="tab-panel" id="panel-profil">
+        <div class="card" style="text-align:center;">
+          <div class="profil-avatar" id="profil-avatar">?</div>
+          <div class="profil-name" id="profil-name">–</div>
+          <div class="profil-sub" id="profil-sub">–</div>
         </div>
-        <div id="termine-list"></div>
+
+        <div class="card" id="profil-details">
+          <div class="profil-info-row">
+            <span class="pi-label">Wohnung</span>
+            <span class="pi-value" id="profil-wohnung">–</span>
+          </div>
+          <div class="profil-info-row">
+            <span class="pi-label">Objekt</span>
+            <span class="pi-value" id="profil-objekt">–</span>
+          </div>
+          <div class="profil-info-row">
+            <span class="pi-label">Monatliche Miete</span>
+            <span class="pi-value" id="profil-miete">–</span>
+          </div>
+          <div class="profil-info-row">
+            <span class="pi-label">Mietbeginn</span>
+            <span class="pi-value" id="profil-mietbeginn">–</span>
+          </div>
+        </div>
+
+        <div id="profil-actions"></div>
+
+        <div class="install-section" id="install-section">
+          <h3>📱 App installieren</h3>
+          <div id="install-content"></div>
+        </div>
+
+        <button class="btn-logout-red" onclick="handleLogout()">🚪 Abmelden</button>
+
+        <div style="height:8px;"></div>
       </div>
 
-    </main>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav id="bottom-nav">
+      <button class="nav-btn active" id="nav-home" onclick="switchTab('home')">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-btn" id="nav-tickets" onclick="switchTab('tickets')">
+        <span class="nav-icon">🎫</span>
+        <span class="nav-label">Tickets</span>
+      </button>
+      <button class="nav-btn" id="nav-foto" onclick="openFotoTab()">
+        <span class="nav-icon">📷</span>
+        <span class="nav-label">Foto</span>
+      </button>
+      <button class="nav-btn" id="nav-chat" onclick="switchTab('chat')">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">Chat</span>
+      </button>
+      <button class="nav-btn" id="nav-profil" onclick="switchTab('profil')">
+        <span class="nav-icon">👤</span>
+        <span class="nav-label">Profil</span>
+      </button>
+    </nav>
+
   </div>
 
-  <!-- ══════════════════════════════════════════════════════ -->
-  <!--  SCRIPTS                                              -->
-  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- Tickets FAB -->
+  <button class="fab" id="tickets-fab" style="display:none;" onclick="openNewTicketModal()" aria-label="Neues Ticket">+</button>
+
+  <!-- New Ticket Modal -->
+  <div class="modal-overlay" id="ticket-modal" onclick="closeTicketModal(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Neues Ticket</div>
+
+      <div class="form-field">
+        <label>Beschreibung *</label>
+        <textarea id="t-desc" placeholder="Was ist kaputt? Bitte genau beschreiben…" rows="4"></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Kategorie</label>
+        <select id="t-kat">
+          <option value="Sanitär">Sanitär</option>
+          <option value="Elektro">Elektro</option>
+          <option value="Heizung">Heizung</option>
+          <option value="Fenster &amp; Türen">Fenster &amp; Türen</option>
+          <option value="Sonstiges">Sonstiges</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label>Foto (optional)</label>
+        <button class="file-btn" onclick="triggerModalCamera()">📷 Foto aufnehmen oder auswählen</button>
+        <div id="modal-foto-preview-wrap" style="display:none;margin-top:10px;">
+          <img id="modal-foto-preview" src="" alt="" style="width:100%;max-height:140px;object-fit:cover;border-radius:10px;" />
+        </div>
+      </div>
+
+      <button class="btn-primary" id="ticket-submit-btn" onclick="submitNewTicket()">Ticket erstellen</button>
+      <button class="btn-secondary-outline" onclick="closeTicketModal()">Abbrechen</button>
+    </div>
+  </div>
+
+  <!-- Success Overlay -->
+  <div id="success-overlay">
+    <div style="font-size:72px;margin-bottom:16px;">✅</div>
+    <div style="font-size:20px;font-weight:700;color:#15803d;">Schaden gemeldet!</div>
+    <div style="font-size:14px;color:#64748b;margin-top:8px;text-align:center;">Ihr Verwalter wird sich<br>bald bei Ihnen melden.</div>
+  </div>
+
+  <!-- Toast -->
+  <div id="portal-toast"></div>
+
+  <!-- Install Banner -->
+  <div id="install-banner">
+    <div style="font-size:28px;">🏢</div>
+    <div style="flex:1;">
+      <div style="font-size:13px;font-weight:700;">Als App installieren</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Schneller Zugriff vom Homescreen</div>
+    </div>
+    <button onclick="installApp()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Installieren</button>
+    <button onclick="dismissInstall()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;line-height:1;">✕</button>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCRIPTS
+  ══════════════════════════════════════ -->
   <script>
-    // ── Firebase Init ────────────────────────────────────────
-    const firebaseConfig = {
+    // ── Firebase Init ─────────────────────────────────────────
+    var firebaseConfig = {
       apiKey: "AIzaSyA3DfAclMBygqai_k-_z4HmZyGgB9j6IqM",
       authDomain: "immonova-2e0f2.firebaseapp.com",
       projectId: "immonova-2e0f2",
@@ -903,416 +1275,758 @@
     firebase.initializeApp(firebaseConfig);
     var db = firebase.firestore();
 
-    // ── Default Mieter ───────────────────────────────────────
-    const DEFAULT_MIETER = [
-      { name: "Max Mustermann",  wn: "1 OG" },
-      { name: "Anna Schmidt",    wn: "2 OG" },
-      { name: "Idriz Osmanaj",   wn: "EG"   },
-      { name: "Idriz Osmanaj",   wn: "10 OG" },
-      { name: "Idriz Osmanaj",   wn: "7 OG"  }
-    ];
+    // ── State ─────────────────────────────────────────────────
+    var mieterData = {};
+    var _ticketsUnsub = null;
+    var _messagesUnsub = null;
+    var _allTickets = [];
+    var _unreadCount = 0;
+    var _modalFotoFile = null;
+    var deferredPrompt = null;
+    var _currentTab = 'home';
 
-    // ── State ────────────────────────────────────────────────
-    let currentMieterName    = '';
-    let currentMieterWohnung = '';
-
-    // ── Helpers ──────────────────────────────────────────────
-    function normalize(str) {
-      return (str || '').trim().toLowerCase();
+    // ── Security helper ───────────────────────────────────────
+    function escHtml(str) {
+      if (typeof str !== 'string') str = String(str || '');
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    function formatDate(isoString) {
-      if (!isoString) return '–';
-      const d = new Date(isoString);
-      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    // ── Date helpers ──────────────────────────────────────────
+    function fmtDate(iso) {
+      if (!iso) return '–';
+      var d = new Date(iso);
+      return isNaN(d) ? '–' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    function formatDateTime(isoString) {
-      if (!isoString) return '–';
-      const d = new Date(isoString);
-      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
-           + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    function fmtTime(ts) {
+      if (!ts) return '';
+      var d = ts.toDate ? ts.toDate() : new Date(ts);
+      if (isNaN(d)) return '';
+      return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     }
 
-    function lsGet(key) {
-      try { return JSON.parse(localStorage.getItem(key)) || []; }
-      catch(e) { return []; }
+    function fmtDateTime(ts) {
+      if (!ts) return '';
+      var d = ts.toDate ? ts.toDate() : new Date(ts);
+      if (isNaN(d)) return '';
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+        + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     }
 
-    function lsSet(key, value) {
-      localStorage.setItem(key, JSON.stringify(value));
+    function grusszeit() {
+      var h = new Date().getHours();
+      if (h < 12) return 'Guten Morgen';
+      if (h < 18) return 'Guten Tag';
+      return 'Guten Abend';
     }
 
-    // ── Login ─────────────────────────────────────────────────
-    function handleLogin() {
-      const nameVal    = document.getElementById('input-name').value.trim();
-      const wohnungVal = document.getElementById('input-wohnung').value.trim();
-      const errorEl    = document.getElementById('login-error');
+    // ── Toast ─────────────────────────────────────────────────
+    function showPortalToast(msg, type) {
+      var el = document.getElementById('portal-toast');
+      el.textContent = msg;
+      el.className = 'show' + (type ? ' ' + type : '');
+      clearTimeout(el._t);
+      el._t = setTimeout(function() { el.className = ''; }, 3000);
+    }
+
+    // ── Success Overlay ───────────────────────────────────────
+    function showSuccessOverlay() {
+      var el = document.getElementById('success-overlay');
+      el.style.display = 'flex';
+    }
+
+    function hideSuccessOverlay() {
+      var el = document.getElementById('success-overlay');
+      el.style.display = 'none';
+    }
+
+    // ── Tab switching ─────────────────────────────────────────
+    function switchTab(name) {
+      _currentTab = name;
+
+      document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+      document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
+
+      var panel = document.getElementById('panel-' + name);
+      var navBtn = document.getElementById('nav-' + name);
+
+      if (panel) panel.classList.add('active');
+      if (navBtn) navBtn.classList.add('active');
+
+      // Show FAB only on tickets tab
+      var fab = document.getElementById('tickets-fab');
+      fab.style.display = (name === 'tickets') ? 'flex' : 'none';
+
+      // Scroll chat to bottom when opening
+      if (name === 'chat') {
+        setTimeout(function() { scrollChatToBottom(); }, 100);
+      }
+    }
+
+    // ── PIN Login ─────────────────────────────────────────────
+    function handlePinLogin() {
+      var pin = document.getElementById('input-pin').value.trim();
+      var errorEl = document.getElementById('login-error');
+      var btn = document.getElementById('login-btn');
 
       errorEl.style.display = 'none';
-      errorEl.textContent   = '';
 
-      if (!nameVal || !wohnungVal) {
-        errorEl.textContent   = 'Bitte fülle alle Felder aus.';
+      if (!pin) {
+        errorEl.textContent = 'Bitte PIN eingeben.';
         errorEl.style.display = 'block';
         return;
       }
 
-      // Check DEFAULT_MIETER
-      const inDefault = DEFAULT_MIETER.some(
-        m => normalize(m.name) === normalize(nameVal) && normalize(m.wn) === normalize(wohnungVal)
-      );
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spin"></span> Einloggen…';
 
-      // Check localStorage 'in_m'
-      const storedMieter = lsGet('in_m');
-      const inStored = Array.isArray(storedMieter) && storedMieter.some(
-        m => normalize(m.name) === normalize(nameVal) && normalize(m.wn) === normalize(wohnungVal)
-      );
+      // Search all landlord UIDs for this PIN
+      // PIN documents live at /tenants/{landlordUid}/portal-pins/{pin}
+      // We use a collection group query to find the PIN across all landlords
+      db.collectionGroup('portal-pins')
+        .where(firebase.firestore.FieldPath.documentId(), '>=', pin)
+        .where(firebase.firestore.FieldPath.documentId(), '<=', pin + '\uf8ff')
+        .get()
+        .then(function(snap) {
+          if (snap.empty) {
+            showLoginError('PIN nicht gefunden. Bitte Verwalter kontaktieren.');
+            resetLoginBtn();
+            return;
+          }
 
-      if (!inDefault && !inStored) {
-        errorEl.textContent   = 'Name oder Wohnungsbezeichnung nicht gefunden. Bitte wende dich an deinen Verwalter.';
-        errorEl.style.display = 'block';
+          // Take first matching document
+          var doc = snap.docs[0];
+          var data = doc.data();
+          var path = doc.ref.path; // tenants/{landlordUid}/portal-pins/{pin}
+          var parts = path.split('/');
+          var landlordUid = parts[1];
+
+          mieterData = {
+            vn: data.vn || data.vorname || '',
+            nn: data.nn || data.nachname || '',
+            wohnung: data.wohnung || data.wn || '',
+            objekt: data.objekt || '',
+            miete: data.miete || '',
+            mietbeginn: data.mietbeginn || '',
+            email: data.email || '',
+            tel: data.tel || '',
+            landlordPhone: data.landlordPhone || data.verwalterTel || '',
+            landlordUid: landlordUid
+          };
+
+          // Persist session
+          localStorage.setItem('mp_session', JSON.stringify(mieterData));
+          localStorage.setItem('mp_pin', pin);
+
+          showPortal();
+          resetLoginBtn();
+        })
+        .catch(function(err) {
+          // Fallback: try iterating known structure if collection group fails
+          // Try direct lookup with stored landlordUid
+          var savedSession = localStorage.getItem('mp_session');
+          if (savedSession) {
+            try {
+              var s = JSON.parse(savedSession);
+              if (s.landlordUid) {
+                db.collection('tenants').doc(s.landlordUid)
+                  .collection('portal-pins').doc(pin)
+                  .get()
+                  .then(function(doc2) {
+                    if (!doc2.exists) {
+                      showLoginError('PIN nicht gefunden.');
+                      resetLoginBtn();
+                      return;
+                    }
+                    var data2 = doc2.data();
+                    mieterData = {
+                      vn: data2.vn || data2.vorname || '',
+                      nn: data2.nn || data2.nachname || '',
+                      wohnung: data2.wohnung || data2.wn || '',
+                      objekt: data2.objekt || '',
+                      miete: data2.miete || '',
+                      mietbeginn: data2.mietbeginn || '',
+                      email: data2.email || '',
+                      tel: data2.tel || '',
+                      landlordPhone: data2.landlordPhone || data2.verwalterTel || '',
+                      landlordUid: s.landlordUid
+                    };
+                    localStorage.setItem('mp_session', JSON.stringify(mieterData));
+                    localStorage.setItem('mp_pin', pin);
+                    showPortal();
+                    resetLoginBtn();
+                  })
+                  .catch(function() {
+                    showLoginError('Fehler beim Einloggen. Bitte erneut versuchen.');
+                    resetLoginBtn();
+                  });
+                return;
+              }
+            } catch(e) {}
+          }
+          showLoginError('Fehler beim Einloggen: ' + err.message);
+          resetLoginBtn();
+        });
+    }
+
+    function showLoginError(msg) {
+      var el = document.getElementById('login-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function resetLoginBtn() {
+      var btn = document.getElementById('login-btn');
+      btn.disabled = false;
+      btn.innerHTML = '🔐 Einloggen';
+    }
+
+    // ── Show / hide portal ─────────────────────────────────────
+    function showPortal() {
+      document.getElementById('login-page').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      document.getElementById('app').style.flexDirection = 'column';
+
+      populateUI();
+      loadData();
+      requestNotifications();
+    }
+
+    function populateUI() {
+      var vn = mieterData.vn || '';
+      var nn = mieterData.nn || '';
+      var fullName = (vn + ' ' + nn).trim() || 'Mieter';
+
+      document.getElementById('header-greeting').textContent = 'Hallo ' + vn + '!';
+      document.getElementById('home-greeting').textContent = grusszeit() + ', ' + vn + '! 👋';
+      document.getElementById('home-wohnung').textContent = 'Wohnung: ' + escHtml(mieterData.wohnung || '–');
+
+      // Date
+      var now = new Date();
+      document.getElementById('home-date').textContent =
+        now.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' })
+        + '\n' + now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+
+      // Profil
+      var initials = (vn.charAt(0) + nn.charAt(0)).toUpperCase() || '?';
+      document.getElementById('profil-avatar').textContent = initials;
+      document.getElementById('profil-name').textContent = fullName;
+      document.getElementById('profil-sub').textContent = mieterData.wohnung
+        ? 'Wohnung ' + mieterData.wohnung + (mieterData.objekt ? ' · ' + mieterData.objekt : '')
+        : '–';
+      document.getElementById('profil-wohnung').textContent = mieterData.wohnung || '–';
+      document.getElementById('profil-objekt').textContent = mieterData.objekt || '–';
+      document.getElementById('profil-miete').textContent = mieterData.miete
+        ? mieterData.miete + ' €/Monat'
+        : '–';
+      document.getElementById('profil-mietbeginn').textContent = mieterData.mietbeginn
+        ? fmtDate(mieterData.mietbeginn)
+        : '–';
+
+      // Contact buttons
+      var actionsHtml = '';
+      if (mieterData.landlordPhone) {
+        var phone = escHtml(mieterData.landlordPhone);
+        actionsHtml += '<a href="tel:' + phone + '" style="text-decoration:none;">'
+          + '<button class="btn-contact btn-phone" style="width:100%;margin-bottom:10px;">📞 Verwalter anrufen</button></a>';
+        actionsHtml += '<a href="https://wa.me/' + phone.replace(/\D/g, '') + '" target="_blank" rel="noopener" style="text-decoration:none;">'
+          + '<button class="btn-contact btn-whatsapp" style="width:100%;margin-bottom:10px;">📲 WhatsApp</button></a>';
+      }
+      document.getElementById('profil-actions').innerHTML = actionsHtml;
+
+      // Install section
+      populateInstallSection();
+    }
+
+    // ── Load Data ─────────────────────────────────────────────
+    function loadData() {
+      if (!mieterData.landlordUid) return;
+
+      // Tickets realtime
+      if (_ticketsUnsub) { _ticketsUnsub(); _ticketsUnsub = null; }
+      _ticketsUnsub = db.collection('tenants').doc(mieterData.landlordUid)
+        .collection('tickets')
+        .where('wn', '==', mieterData.wohnung || '')
+        .onSnapshot(function(snap) {
+          var tickets = [];
+          snap.forEach(function(d) { tickets.push(Object.assign({ id: d.id }, d.data())); });
+          _allTickets = tickets;
+          renderTickets(tickets);
+          renderHomeTickets(tickets);
+          renderHomeTermin();
+        }, function(err) { console.warn('Tickets error', err); });
+
+      // Messages realtime
+      if (_messagesUnsub) { _messagesUnsub(); _messagesUnsub = null; }
+      _messagesUnsub = db.collection('tenants').doc(mieterData.landlordUid)
+        .collection('messages')
+        .where('wohnung', '==', mieterData.wohnung || '')
+        .orderBy('zeit', 'asc')
+        .onSnapshot(function(snap) {
+          var msgs = [];
+          snap.forEach(function(d) { msgs.push(Object.assign({ id: d.id }, d.data())); });
+          renderChat(msgs);
+          var newUnread = msgs.filter(function(m) { return !m.gelesen && !m.vonMieter; }).length;
+          if (newUnread > _unreadCount && _unreadCount !== undefined && _currentTab !== 'chat') {
+            var lastMsg = msgs[msgs.length - 1];
+            if (lastMsg && !lastMsg.vonMieter) {
+              localNotif('Neue Nachricht', lastMsg.text || '');
+            }
+          }
+          _unreadCount = newUnread;
+          updateBellBadge(newUnread);
+        }, function(err) { console.warn('Messages error', err); });
+    }
+
+    // ── Tickets ───────────────────────────────────────────────
+    function statusBadge(status) {
+      if (status === 'Erledigt') return '<span class="badge badge-erledigt">Erledigt</span>';
+      if (status === 'In Bearbeitung') return '<span class="badge badge-bearbeitung">In Bearbeitung</span>';
+      return '<span class="badge badge-offen">Offen</span>';
+    }
+
+    function renderTickets(tickets) {
+      var container = document.getElementById('tickets-list');
+      if (!tickets || tickets.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎫</div><p>Noch keine Tickets.<br>Melde deinen ersten Schaden!</p></div>';
         return;
       }
+      var sorted = tickets.slice().sort(function(a, b) {
+        return new Date(b.erstellt || 0) - new Date(a.erstellt || 0);
+      });
+      container.innerHTML = sorted.map(function(t) {
+        return '<div class="ticket-full-card">'
+          + '<div class="tf-top">'
+          +   '<div class="tf-desc">' + escHtml(t.pb || t.beschreibung || t.titel || 'Ticket') + '</div>'
+          +   statusBadge(t.status || 'Offen')
+          + '</div>'
+          + '<div class="tf-meta">'
+          +   (t.kategorie ? escHtml(t.kategorie) + ' · ' : '')
+          +   fmtDate(t.erstellt || t.datum || '')
+          + '</div>'
+          + (t.fotoUrl ? '<img class="tf-thumb" src="' + escHtml(t.fotoUrl) + '" alt="Foto" loading="lazy" onclick="window.open(\'' + escHtml(t.fotoUrl) + '\',\'_blank\')" />' : '')
+          + '</div>';
+      }).join('');
+    }
 
-      // Success
-      localStorage.setItem('in_role',          'mieter');
-      localStorage.setItem('in_mieter_name',    nameVal);
-      localStorage.setItem('in_mieter_wohnung', wohnungVal);
+    function renderHomeTickets(tickets) {
+      var container = document.getElementById('home-tickets-list');
+      var open = (tickets || []).filter(function(t) { return t.status !== 'Erledigt'; });
+      if (open.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:12px 0;font-size:13px;color:var(--gray-400);">Keine offenen Tickets 🎉</div>';
+        return;
+      }
+      var show = open.slice(0, 3).sort(function(a, b) {
+        return new Date(b.erstellt || 0) - new Date(a.erstellt || 0);
+      });
+      container.innerHTML = show.map(function(t) {
+        return '<div class="ticket-card-small">'
+          + statusBadge(t.status || 'Offen')
+          + '<div style="flex:1;">'
+          +   '<div class="t-desc">' + escHtml(t.pb || t.beschreibung || 'Ticket') + '</div>'
+          +   '<div class="t-date">' + fmtDate(t.erstellt || '') + '</div>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+    }
 
-      currentMieterName    = nameVal;
-      currentMieterWohnung = wohnungVal;
+    function renderHomeTermin() {
+      // Show next upcoming termin from tickets with a termin field, or a separate fetch if needed
+      // We render a placeholder – extend here if termine collection is used
+      var wrap = document.getElementById('home-termin-wrap');
+      wrap.innerHTML = '';
+    }
 
-      showPortal();
+    // ── New Ticket Modal ──────────────────────────────────────
+    function openNewTicketModal() {
+      document.getElementById('ticket-modal').classList.add('open');
+      document.getElementById('t-desc').focus();
+    }
+
+    function closeTicketModal(event) {
+      if (event && event.target !== document.getElementById('ticket-modal')) return;
+      document.getElementById('ticket-modal').classList.remove('open');
+      document.getElementById('t-desc').value = '';
+      document.getElementById('modal-foto-preview-wrap').style.display = 'none';
+      _modalFotoFile = null;
+    }
+
+    function triggerModalCamera() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment';
+      input.onchange = function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        _modalFotoFile = file;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          document.getElementById('modal-foto-preview').src = ev.target.result;
+          document.getElementById('modal-foto-preview-wrap').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+
+    async function submitNewTicket() {
+      var desc = document.getElementById('t-desc').value.trim();
+      var kat = document.getElementById('t-kat').value;
+      if (!desc) { showPortalToast('Bitte Beschreibung eingeben', 'error'); return; }
+
+      var btn = document.getElementById('ticket-submit-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Wird erstellt…';
+
+      var fotoUrl = '';
+      try {
+        if (_modalFotoFile && typeof firebase !== 'undefined') {
+          var storageRef = firebase.storage().ref(
+            'tenants/' + mieterData.landlordUid + '/tickets/' + Date.now() + '_' + _modalFotoFile.name
+          );
+          await storageRef.put(_modalFotoFile);
+          fotoUrl = await storageRef.getDownloadURL();
+        }
+      } catch(e) { console.warn('Foto upload failed', e); }
+
+      var ticket = {
+        pb: desc,
+        kategorie: kat,
+        wn: mieterData.wohnung || '',
+        status: 'Offen',
+        prio: 'Mittel',
+        erstellt: new Date().toISOString(),
+        fotoUrl: fotoUrl,
+        vonMieter: true,
+        mieterName: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim()
+      };
+
+      try {
+        await db.collection('tenants').doc(mieterData.landlordUid)
+          .collection('tickets').add(ticket);
+        closeTicketModal();
+        showPortalToast('Ticket erstellt ✅', 'success');
+      } catch(e) {
+        showPortalToast('Fehler beim Erstellen. Bitte erneut versuchen.', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Ticket erstellen';
+    }
+
+    // ── Foto Tab ──────────────────────────────────────────────
+    function openFotoTab() {
+      switchTab('foto');
+      setTimeout(function() { triggerCamera(); }, 300);
+    }
+
+    function triggerCamera() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment';
+      input.onchange = function(e) {
+        var file = e.target.files[0];
+        if (!file) { switchTab('home'); return; }
+        showFotoPreview(file);
+      };
+      input.click();
+    }
+
+    function showFotoPreview(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('foto-preview').src = e.target.result;
+        document.getElementById('foto-preview-wrap').style.display = 'block';
+        window._fotoFile = file;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function submitFotoTicket() {
+      var desc = document.getElementById('foto-desc').value.trim();
+      var kat = document.getElementById('foto-kat').value;
+      if (!desc) { showPortalToast('Bitte Beschreibung eingeben', 'error'); return; }
+
+      var btn = document.getElementById('foto-submit-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Wird gesendet…';
+
+      var fotoUrl = '';
+      try {
+        if (window._fotoFile && typeof firebase !== 'undefined') {
+          var storageRef = firebase.storage().ref(
+            'tenants/' + mieterData.landlordUid + '/tickets/' + Date.now() + '_' + window._fotoFile.name
+          );
+          await storageRef.put(window._fotoFile);
+          fotoUrl = await storageRef.getDownloadURL();
+        }
+      } catch(e) { console.warn('Foto upload failed', e); }
+
+      var ticket = {
+        pb: desc,
+        kategorie: kat,
+        wn: mieterData.wohnung || '',
+        status: 'Offen',
+        prio: 'Mittel',
+        erstellt: new Date().toISOString(),
+        fotoUrl: fotoUrl,
+        vonMieter: true,
+        mieterName: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim()
+      };
+
+      try {
+        await db.collection('tenants').doc(mieterData.landlordUid)
+          .collection('tickets').add(ticket);
+
+        showSuccessOverlay();
+
+        document.getElementById('foto-preview-wrap').style.display = 'none';
+        document.getElementById('foto-desc').value = '';
+        window._fotoFile = null;
+
+        setTimeout(function() {
+          hideSuccessOverlay();
+          switchTab('tickets');
+        }, 2000);
+      } catch(e) {
+        showPortalToast('Fehler beim Senden. Bitte erneut versuchen.', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = '📤 Schaden melden';
+    }
+
+    // ── Chat ──────────────────────────────────────────────────
+    function renderChat(msgs) {
+      var container = document.getElementById('chat-messages');
+      if (!msgs || msgs.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><p>Noch keine Nachrichten.<br>Schreib deinem Verwalter!</p></div>';
+        return;
+      }
+      container.innerHTML = msgs.map(function(m) {
+        var isMine = !!m.vonMieter;
+        var timeStr = fmtTime(m.zeit) || fmtDateTime(m.zeit) || '';
+        return '<div class="msg-row ' + (isMine ? 'mine' : 'theirs') + '">'
+          + '<div>'
+          +   '<div class="msg-bubble">' + escHtml(m.text || '') + '</div>'
+          +   '<div class="msg-time">' + escHtml(timeStr) + '</div>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+      scrollChatToBottom();
+    }
+
+    function scrollChatToBottom() {
+      var el = document.getElementById('chat-messages');
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+
+    function sendChatMessage() {
+      var input = document.getElementById('chat-input');
+      var text = input.value.trim();
+      if (!text || !mieterData.landlordUid) return;
+      input.value = '';
+
+      db.collection('tenants').doc(mieterData.landlordUid)
+        .collection('messages').add({
+          text: text,
+          von: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim(),
+          wohnung: mieterData.wohnung || '',
+          zeit: firebase.firestore.FieldValue.serverTimestamp(),
+          gelesen: false,
+          vonMieter: true
+        });
+    }
+
+    function sendChatPhoto() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async function(e) {
+        var file = e.target.files[0];
+        if (!file || !mieterData.landlordUid) return;
+        try {
+          var storageRef = firebase.storage().ref(
+            'tenants/' + mieterData.landlordUid + '/chat/' + Date.now() + '_' + file.name
+          );
+          await storageRef.put(file);
+          var url = await storageRef.getDownloadURL();
+          db.collection('tenants').doc(mieterData.landlordUid)
+            .collection('messages').add({
+              text: '📷 Foto',
+              fotoUrl: url,
+              von: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim(),
+              wohnung: mieterData.wohnung || '',
+              zeit: firebase.firestore.FieldValue.serverTimestamp(),
+              gelesen: false,
+              vonMieter: true
+            });
+        } catch(e) { showPortalToast('Fehler beim Senden des Fotos', 'error'); }
+      };
+      input.click();
+    }
+
+    // ── Bell Badge ────────────────────────────────────────────
+    function updateBellBadge(count) {
+      var badge = document.getElementById('bell-badge');
+      if (count > 0) {
+        badge.textContent = count > 9 ? '9+' : String(count);
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
     }
 
     // ── Logout ────────────────────────────────────────────────
     function handleLogout() {
-      localStorage.removeItem('in_role');
-      localStorage.removeItem('in_mieter_name');
-      localStorage.removeItem('in_mieter_wohnung');
-      currentMieterName    = '';
-      currentMieterWohnung = '';
-      document.getElementById('portal-page').style.display = 'none';
-      document.getElementById('login-page').style.display  = 'flex';
-      document.getElementById('input-name').value    = '';
-      document.getElementById('input-wohnung').value = '';
+      if (_ticketsUnsub) { _ticketsUnsub(); _ticketsUnsub = null; }
+      if (_messagesUnsub) { _messagesUnsub(); _messagesUnsub = null; }
+      localStorage.removeItem('mp_session');
+      localStorage.removeItem('mp_pin');
+      mieterData = {};
+      _allTickets = [];
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('login-page').style.display = 'flex';
+      document.getElementById('input-pin').value = '';
+      switchTab('home');
     }
 
-    // ── Show Portal ───────────────────────────────────────────
-    function showPortal() {
-      document.getElementById('login-page').style.display  = 'none';
-      document.getElementById('portal-page').style.display = 'block';
-
-      document.getElementById('header-name').textContent    = currentMieterName;
-      document.getElementById('header-wohnung').textContent = 'Wohnung: ' + currentMieterWohnung;
-
-      renderTickets();
-      renderMessages();
-      renderMitteilungen();
-      renderTermine();
-    }
-
-    // ── Tabs ──────────────────────────────────────────────────
-    function switchTab(tabName, btn) {
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('panel-' + tabName).classList.add('active');
-      btn.classList.add('active');
-    }
-
-    // ── TICKETS ───────────────────────────────────────────────
-    function toggleSchadenForm() {
-      const form = document.getElementById('schaden-form');
-      form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    }
-
-    function submitSchaden() {
-      const titel        = document.getElementById('s-titel').value.trim();
-      const beschreibung = document.getElementById('s-beschreibung').value.trim();
-      const dringlichkeit = document.getElementById('s-dringlichkeit').value;
-      const bereich      = document.getElementById('s-bereich').value;
-
-      if (!titel) {
-        alert('Bitte gib einen Titel ein.');
-        return;
+    // ── PWA Install ───────────────────────────────────────────
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!localStorage.getItem('install_dismissed_portal')) {
+        var banner = document.getElementById('install-banner');
+        banner.classList.add('show');
       }
+    });
 
-      const tickets = lsGet('in_tickets');
-      const newTicket = {
-        id:           Date.now().toString(),
-        titel:        titel,
-        beschreibung: beschreibung,
-        dringlichkeit: dringlichkeit,
-        bereich:      bereich,
-        wohnung:      currentMieterWohnung,
-        mieter:       currentMieterName,
-        status:       'Offen',
-        datum:        new Date().toISOString()
-      };
-      tickets.push(newTicket);
-      lsSet('in_tickets', tickets);
-
-      // Reset form
-      document.getElementById('s-titel').value        = '';
-      document.getElementById('s-beschreibung').value = '';
-      document.getElementById('s-dringlichkeit').value = 'Normal';
-      document.getElementById('s-bereich').value      = 'Küche';
-      document.getElementById('schaden-form').style.display = 'none';
-
-      renderTickets();
-    }
-
-    function statusBadgeClass(status) {
-      if (status === 'Erledigt')        return 'badge badge-erledigt';
-      if (status === 'In Bearbeitung')  return 'badge badge-progress';
-      return 'badge badge-offen';
-    }
-
-    function dringlichkeitBadgeClass(d) {
-      if (d === 'Dringend') return 'badge badge-dringend';
-      if (d === 'Notfall')  return 'badge badge-notfall';
-      return 'badge badge-normal';
-    }
-
-    function renderTickets() {
-      const container = document.getElementById('tickets-list');
-      const tickets   = lsGet('in_tickets').filter(
-        t => normalize(t.wohnung) === normalize(currentMieterWohnung)
-      );
-
-      if (tickets.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎫</div><p>Noch keine Tickets vorhanden.</p></div>';
-        return;
-      }
-
-      // Sort newest first
-      tickets.sort((a, b) => new Date(b.datum) - new Date(a.datum));
-
-      container.innerHTML = tickets.map(t => {
-        return '<div class="ticket-card">'
-          + '<div class="ticket-header">'
-          +   '<div class="ticket-title">' + escapeHtml(t.titel) + '</div>'
-          +   '<div class="ticket-badges">'
-          +     '<span class="' + dringlichkeitBadgeClass(t.dringlichkeit) + '">' + escapeHtml(t.dringlichkeit || 'Normal') + '</span>'
-          +     '<span class="' + statusBadgeClass(t.status) + '">' + escapeHtml(t.status || 'Offen') + '</span>'
-          +   '</div>'
-          + '</div>'
-          + '<div class="ticket-meta">' + formatDate(t.datum) + '</div>'
-          + (t.bereich ? '<div><span class="ticket-bereich">' + escapeHtml(t.bereich) + '</span></div>' : '')
-          + (t.beschreibung ? '<div style="font-size:0.87rem;color:var(--gray-600);margin-top:8px;line-height:1.5;">' + escapeHtml(t.beschreibung) + '</div>' : '')
-          + '</div>';
-      }).join('');
-    }
-
-    // ── NACHRICHTEN ───────────────────────────────────────────
-    function sendMessage() {
-      const input = document.getElementById('msg-input');
-      const text  = input.value.trim();
-      if (!text) return;
-
-      const messages = lsGet('in_messages');
-      const newMsg = {
-        id:        Date.now().toString(),
-        sender:    currentMieterName,
-        role:      'mieter',
-        text:      text,
-        wohnung:   currentMieterWohnung,
-        timestamp: new Date().toISOString()
-      };
-      messages.push(newMsg);
-      lsSet('in_messages', messages);
-      input.value = '';
-
-      renderMessages();
-      scrollMessagesToBottom();
-    }
-
-    function renderMessages() {
-      const container = document.getElementById('messages-list');
-      const messages  = lsGet('in_messages').filter(
-        m => normalize(m.wohnung) === normalize(currentMieterWohnung)
-      );
-
-      if (messages.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding:32px 16px;"><div class="empty-icon">💬</div><p>Noch keine Nachrichten. Schreib eine Nachricht an deinen Verwalter.</p></div>';
-        return;
-      }
-
-      messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-      container.innerHTML = messages.map(m => {
-        const isMieter = (m.role === 'mieter') || (normalize(m.sender) === normalize(currentMieterName));
-        const cls      = isMieter ? 'mieter' : 'verwalter';
-        const label    = isMieter ? 'Du' : escapeHtml(m.sender || 'Verwalter');
-        return '<div class="msg-bubble ' + cls + '">'
-          + '<div class="msg-sender">' + label + '</div>'
-          + '<div>' + escapeHtml(m.text) + '</div>'
-          + '<div class="msg-time">' + formatDateTime(m.timestamp) + '</div>'
-          + '</div>';
-      }).join('');
-
-      scrollMessagesToBottom();
-    }
-
-    function scrollMessagesToBottom() {
-      const list = document.getElementById('messages-list');
-      list.scrollTop = list.scrollHeight;
-    }
-
-    // ── MITTEILUNGEN ──────────────────────────────────────────
-    function renderMitteilungen() {
-      const container    = document.getElementById('mitteilungen-list');
-      const mitteilungen = lsGet('in_mitteilungen');
-
-      if (!mitteilungen || mitteilungen.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Mitteilungen vorhanden.</p></div>';
-        return;
-      }
-
-      const sorted = [...mitteilungen].sort((a, b) => new Date(b.datum || b.date || 0) - new Date(a.datum || a.date || 0));
-
-      container.innerHTML = sorted.map(m => {
-        const datum = m.datum || m.date || m.timestamp || '';
-        return '<div class="mitteilung-card">'
-          + '<div class="mitteilung-title">' + escapeHtml(m.titel || m.title || 'Mitteilung') + '</div>'
-          + '<div class="mitteilung-date">' + formatDate(datum) + '</div>'
-          + '<div class="mitteilung-text">' + escapeHtml(m.text || m.inhalt || m.content || '') + '</div>'
-          + '</div>';
-      }).join('');
-    }
-
-    // ── TERMIN RESPONSE ───────────────────────────────────────
-    function respondTermin(tid, newStatus) {
-      // Update localStorage
-      var termine = lsGet('in_termine');
-      var ownerUid = localStorage.getItem('in_user_uid') || localStorage.getItem('in_mieter_uid') || '';
-      for (var i = 0; i < termine.length; i++) {
-        if (String(termine[i].id) === String(tid)) {
-          termine[i].terminStatus = newStatus;
-          break;
-        }
-      }
-      lsSet('in_termine', termine);
-
-      // Sync to Firestore if uid known
-      if (ownerUid) {
-        db.collection('tenants').doc(ownerUid).collection('termine').doc(String(tid))
-          .update({ terminStatus: newStatus })
-          .catch(function() {});
-      }
-
-      var label = newStatus === 'angenommen' ? '✅ Termin angenommen' : '❌ Termin abgelehnt';
-      var bg = newStatus === 'angenommen' ? '#16a34a' : '#dc2626';
-      var t = document.createElement('div');
-      t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:' + bg + ';color:white;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);';
-      t.textContent = label;
-      document.body.appendChild(t);
-      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 2500);
-      renderTermine();
-    }
-
-    // ── TERMINE ───────────────────────────────────────────────
-    function renderTermine() {
-      const container = document.getElementById('termine-list');
-      const allTermine = lsGet('in_termine');
-
-      // Filter for this wohnung (or show all if no wohnung filter on entry)
-      const termine = allTermine.filter(t => {
-        if (!t.wohnung) return true;
-        return normalize(t.wohnung) === normalize(currentMieterWohnung);
+    function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(r) {
+        if (r.outcome === 'accepted') showPortalToast('App installiert ✅', 'success');
+        deferredPrompt = null;
+        dismissInstall();
       });
+    }
 
-      if (termine.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>Keine Termine vorhanden.</p></div>';
+    function dismissInstall() {
+      localStorage.setItem('install_dismissed_portal', '1');
+      var banner = document.getElementById('install-banner');
+      banner.classList.remove('show');
+    }
+
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+
+    function isInStandaloneMode() {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    }
+
+    function populateInstallSection() {
+      var content = document.getElementById('install-content');
+      if (isInStandaloneMode()) {
+        document.getElementById('install-section').style.display = 'none';
         return;
       }
-
-      // Sort by date ascending
-      termine.sort((a, b) => {
-        const dateA = new Date((a.datum || a.date || '') + 'T' + (a.uhrzeit || '00:00'));
-        const dateB = new Date((b.datum || b.date || '') + 'T' + (b.uhrzeit || '00:00'));
-        return dateA - dateB;
-      });
-
-      container.innerHTML = termine.map(t => {
-        const rawDate   = t.datum || t.date || '';
-        const uhrzeit   = t.uhrzeit || t.time || '';
-        const betreff   = t.betreff || t.titel || t.title || 'Termin';
-        const ort       = t.ort || t.location || '';
-        const tid       = t.id || '';
-        const status    = t.terminStatus || '';
-
-        let dayStr   = '–';
-        let monthStr = '–';
-        if (rawDate) {
-          const d  = new Date(rawDate + (rawDate.includes('T') ? '' : 'T00:00'));
-          dayStr   = d.getDate().toString().padStart(2, '0');
-          monthStr = d.toLocaleDateString('de-DE', { month: 'short' });
-        }
-
-        let statusBadge = '';
-        let actionBtns  = '';
-        if (status === 'angenommen') {
-          statusBadge = '<span style="display:inline-block;background:#dcfce7;color:#16a34a;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px;">✅ Angenommen</span>';
-        } else if (status === 'abgelehnt') {
-          statusBadge = '<span style="display:inline-block;background:#fee2e2;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px;">❌ Abgelehnt</span>';
-        } else if (tid) {
-          actionBtns = '<div style="display:flex;gap:8px;margin-top:10px;">'
-            + '<button onclick="respondTermin(\'' + tid + '\',\'angenommen\')" style="flex:1;padding:7px;border:1.5px solid #bbf7d0;border-radius:8px;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Annehmen</button>'
-            + '<button onclick="respondTermin(\'' + tid + '\',\'abgelehnt\')" style="flex:1;padding:7px;border:1.5px solid #fecaca;border-radius:8px;background:#fef2f2;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">❌ Ablehnen</button>'
-            + '</div>';
-        }
-
-        return '<div class="termin-card">'
-          + '<div class="termin-date-box">'
-          +   '<div class="termin-day">'   + dayStr   + '</div>'
-          +   '<div class="termin-month">' + monthStr + '</div>'
-          + '</div>'
-          + '<div class="termin-details" style="flex:1;">'
-          +   '<div class="termin-betreff">' + escapeHtml(betreff) + '</div>'
-          +   '<div class="termin-meta">'
-          +     (uhrzeit ? '<span>🕐 ' + escapeHtml(uhrzeit) + ' Uhr</span>' : '')
-          +     (ort     ? '<span>📍 ' + escapeHtml(ort)     + '</span>'     : '')
-          +     (rawDate ? '<span>📅 ' + formatDate(rawDate) + '</span>'     : '')
-          +   '</div>'
-          +   statusBadge
-          +   actionBtns
-          + '</div>'
+      if (isIOS()) {
+        content.innerHTML = '<div class="install-steps">'
+          + '1️⃣ Tippe unten auf <strong>Teilen ↑</strong><br>'
+          + '2️⃣ Wähle <strong>"Zum Home-Bildschirm"</strong><br>'
+          + '3️⃣ Tippe <strong>"Hinzufügen"</strong>'
           + '</div>';
-      }).join('');
-    }
-
-    // ── Security helper ───────────────────────────────────────
-    function escapeHtml(str) {
-      if (typeof str !== 'string') str = String(str || '');
-      return str
-        .replace(/&/g,  '&amp;')
-        .replace(/</g,  '&lt;')
-        .replace(/>/g,  '&gt;')
-        .replace(/"/g,  '&quot;')
-        .replace(/'/g,  '&#39;');
-    }
-
-    // ── Auto-login check on page load ─────────────────────────
-    (function init() {
-      const role    = localStorage.getItem('in_role');
-      const name    = localStorage.getItem('in_mieter_name');
-      const wohnung = localStorage.getItem('in_mieter_wohnung');
-
-      if (role === 'mieter' && name && wohnung) {
-        currentMieterName    = name;
-        currentMieterWohnung = wohnung;
-        showPortal();
       } else {
-        document.getElementById('login-page').style.display  = 'flex';
-        document.getElementById('portal-page').style.display = 'none';
+        content.innerHTML = '<div class="install-steps" style="margin-bottom:8px;">Installiere die App für schnellen Zugriff.</div>'
+          + '<button class="btn-install" id="profil-install-btn" onclick="installApp()">📱 App installieren</button>';
       }
+    }
+
+    // ── Notifications ─────────────────────────────────────────
+    function requestNotifications() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        setTimeout(function() {
+          Notification.requestPermission().then(function(p) {
+            if (p === 'granted') showPortalToast('Benachrichtigungen aktiv ✅', 'success');
+          });
+        }, 8000);
+      }
+    }
+
+    function localNotif(title, body) {
+      if (Notification.permission !== 'granted') return;
+      new Notification(title, {
+        body: body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-72.png'
+      });
+    }
+
+    // ── Service Worker ────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function() {});
+    }
+
+    // ── Auto-login / Init ─────────────────────────────────────
+    (function init() {
+      var savedSession = localStorage.getItem('mp_session');
+      var savedPin = localStorage.getItem('mp_pin');
+
+      if (savedSession && savedPin) {
+        try {
+          var parsed = JSON.parse(savedSession);
+          if (parsed.landlordUid && parsed.wohnung) {
+            // Re-verify PIN against Firestore silently
+            db.collection('tenants').doc(parsed.landlordUid)
+              .collection('portal-pins').doc(savedPin)
+              .get()
+              .then(function(doc) {
+                if (doc.exists) {
+                  var data = doc.data();
+                  mieterData = {
+                    vn: data.vn || data.vorname || parsed.vn || '',
+                    nn: data.nn || data.nachname || parsed.nn || '',
+                    wohnung: data.wohnung || data.wn || parsed.wohnung || '',
+                    objekt: data.objekt || parsed.objekt || '',
+                    miete: data.miete || parsed.miete || '',
+                    mietbeginn: data.mietbeginn || parsed.mietbeginn || '',
+                    email: data.email || parsed.email || '',
+                    tel: data.tel || parsed.tel || '',
+                    landlordPhone: data.landlordPhone || data.verwalterTel || parsed.landlordPhone || '',
+                    landlordUid: parsed.landlordUid
+                  };
+                  localStorage.setItem('mp_session', JSON.stringify(mieterData));
+                  showPortal();
+                } else {
+                  // PIN no longer valid
+                  showLogin();
+                }
+              })
+              .catch(function() {
+                // Offline or error – show portal with cached data anyway
+                mieterData = parsed;
+                showPortal();
+              });
+            return;
+          }
+        } catch(e) {}
+      }
+      showLogin();
     })();
 
-    // ── Allow Enter key on login inputs ───────────────────────
-    document.getElementById('input-name').addEventListener('keydown',    function(e) { if (e.key === 'Enter') document.getElementById('input-wohnung').focus(); });
-    document.getElementById('input-wohnung').addEventListener('keydown', function(e) { if (e.key === 'Enter') handleLogin(); });
+    function showLogin() {
+      document.getElementById('login-page').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
+    }
   </script>
 </body>
 </html>

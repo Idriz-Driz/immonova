@@ -1,43 +1,52 @@
 {
   "name": "ImmoNova",
   "short_name": "ImmoNova",
-  "description": "Moderne Immobilienverwaltung für Vermieter",
+  "description": "Moderne Immobilienverwaltung – Mieter, Tickets, Zahlungen und mehr",
   "start_url": "/app.html",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#f8fafc",
   "theme_color": "#2563eb",
-  "orientation": "portrait-primary",
+  "lang": "de",
+  "categories": ["productivity", "business"],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='24' fill='%232563eb'/><text y='130' x='50%' text-anchor='middle' font-size='110' font-family='sans-serif'>🏠</text></svg>",
+      "src": "icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='64' fill='%232563eb'/><text y='360' x='50%' text-anchor='middle' font-size='300' font-family='sans-serif'>🏠</text></svg>",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
   "shortcuts": [
     {
       "name": "Dashboard",
+      "short_name": "Dashboard",
       "url": "/app.html",
-      "description": "Zur Übersicht"
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Mieter",
+      "short_name": "Mieter",
       "url": "/mieter.html",
-      "description": "Mieterverwaltung"
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Tickets",
+      "short_name": "Tickets",
       "url": "/tickets.html",
-      "description": "Support-Tickets"
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
-  ],
-  "categories": ["productivity", "business"],
-  "lang": "de"
+  ]
 }

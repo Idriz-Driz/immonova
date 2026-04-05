@@ -327,6 +327,20 @@ initFirebase();
 var auth = firebase.auth();
 var db   = firebase.firestore();
 
+// Show session timeout message if redirected here
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('reason') === 'timeout') {
+    setTimeout(function() {
+      showMsg('login-msg', 'ℹ️ Du wurdest nach 8 Stunden Inaktivität automatisch abgemeldet.', 'info');
+    }, 300);
+  }
+  // Pre-fill register tab if ?register=1
+  if (params.get('register') === '1' || window.location.hash === '#register') {
+    switchTab('register');
+  }
+})();
+
 // Tab switch
 function switchTab(tab) {
   var isLogin = tab === 'login';

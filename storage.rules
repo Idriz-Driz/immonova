@@ -1,29 +1,39 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Tenant data: photos, documents, etc.
+    // Tenant files: photos, ticket attachments, documents
     match /tenants/{tenantId}/{allPaths=**} {
-      allow read, write: if request.auth != null
-        && (request.auth.uid == tenantId
-        || firestore.get(
-          /databases/(default)/documents/users/$(request.auth.uid)
-        ).data.parentUid == tenantId);
+      allow read: if request.auth != null
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.uid == tenantId ||
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.parentUid == tenantId ||
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.rolle == 'superadmin'
+        );
+
+      allow write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.uid == tenantId ||
+          (
+            firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.parentUid == tenantId &&
+            firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.aktiv == true
+          ) ||
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.rolle == 'superadmin'
+        )
+        && request.resource.size < 20 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
     }
 
-    // Ticket photos (handwerker + verwalter)
-    match /tickets/{tenantId}/{allPaths=**} {
-      allow read, write: if request.auth != null
-        && (request.auth.uid == tenantId
-        || firestore.get(
-          /databases/(default)/documents/users/$(request.auth.uid)
-        ).data.parentUid == tenantId);
-    }
-
-    // Handwerker completion photos
+    // Handwerker completion photos (authenticated portal users)
     match /handwerker/{allPaths=**} {
       allow read, write: if request.auth != null;
+    }
+
+    // Deny everything else by default
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="DENY">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
@@ -32,6 +32,87 @@ var filterStatus = '';
 /* ── ID generator ──────────────────────────────────────── */
 function generateId() {
   return 'mn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+}
+
+/* ── PIN generator ─────────────────────────────────────── */
+function generatePIN() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+/* ── Save PIN to Firestore ──────────────────────────────── */
+function savePINToFirestore(landlordUid, pin, mieterData) {
+  if (!landlordUid || landlordUid === 'demo' || typeof firebase === 'undefined') return;
+  firebase.firestore()
+    .collection('tenants').doc(landlordUid)
+    .collection('portal-pins').doc(pin).set({
+      pin: pin,
+      vn: mieterData.vn || '',
+      nn: mieterData.nn || '',
+      wohnung: mieterData.wohnung || '',
+      objekt: mieterData.objekt || '',
+      miete: mieterData.miete || 0,
+      mietbeginn: mieterData.mietbeginn || '',
+      email: mieterData.email || '',
+      tel: mieterData.tel || '',
+      landlordUid: landlordUid,
+      createdAt: new Date().toISOString()
+    });
+}
+
+/* ── Show invite modal ──────────────────────────────────── */
+function showInviteModal(mieterEntry, pin) {
+  var fullName = (mieterEntry.vn || '') + ' ' + (mieterEntry.nn || '');
+  var portalUrl = window.location.origin + '/mieter-portal.html';
+  var waText = encodeURIComponent(
+    'Hallo ' + fullName + ',\n\n' +
+    'willkommen in Ihrer neuen Wohnung! 🏠\n\n' +
+    'Ab sofort können Sie über unser digitales Mieterportal:\n' +
+    '✅ Schäden melden (mit Foto)\n' +
+    '💬 Uns direkt schreiben\n' +
+    '📅 Ihre Termine einsehen\n' +
+    '📢 Wichtige Mitteilungen lesen\n\n' +
+    'Ihr Zugang:\n' +
+    '🔗 Link: ' + portalUrl + '\n' +
+    '🔑 PIN: ' + pin + '\n\n' +
+    'Einfach Link öffnen → PIN eingeben → Als App installieren!\n\n' +
+    'Bei Fragen: Einfach hier antworten.\n' +
+    'Ihr Verwalter'
+  );
+  var tel = (mieterEntry.tel || '').replace(/\s/g,'').replace(/^00/,'+').replace(/^0/,'+49');
+  var waHref = tel ? 'https://wa.me/' + tel.replace(/[^0-9+]/g,'') + '?text=' + waText : '#';
+
+  var emailSubj = encodeURIComponent('Ihr Zugang zum ImmoNova Mieterportal');
+  var emailBody = encodeURIComponent(
+    'Hallo ' + fullName + ',\n\n' +
+    'Sie haben nun Zugang zum ImmoNova Mieterportal.\n\n' +
+    'Link: ' + portalUrl + '\nIhr PIN: ' + pin + '\n\n' +
+    'Mit freundlichen Grüßen,\nIhr Verwalter'
+  );
+  var emailHref = mieterEntry.email ? 'mailto:' + mieterEntry.email + '?subject=' + emailSubj + '&body=' + emailBody : '#';
+
+  var modal = document.getElementById('invite-modal');
+  if (!modal) return;
+
+  document.getElementById('invite-name').textContent = fullName;
+  document.getElementById('invite-wohnung').textContent = mieterEntry.wohnung || '–';
+  document.getElementById('invite-pin').textContent = pin;
+  document.getElementById('invite-link').textContent = portalUrl;
+  document.getElementById('invite-wa-btn').href = waHref;
+  document.getElementById('invite-wa-btn').style.display = tel ? 'inline-flex' : 'none';
+  document.getElementById('invite-email-btn').href = emailHref;
+  document.getElementById('invite-email-btn').style.display = mieterEntry.email ? 'inline-flex' : 'none';
+
+  // QR code
+  var qrDiv = document.getElementById('invite-qr');
+  qrDiv.innerHTML = '';
+  var qrUrl = portalUrl + '?pin=' + pin;
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(qrDiv, { text: qrUrl, width: 150, height: 150, colorDark: '#2563eb', colorLight: '#ffffff' });
+  } else {
+    qrDiv.innerHTML = '<div style="font-size:12px;color:#94a3b8;padding:20px;text-align:center;">QR-Code nicht verfügbar</div>';
+  }
+
+  openModal('invite-modal');
 }
 
 /* ── Data helpers ──────────────────────────────────────── */
@@ -258,7 +339,16 @@ function saveMieter() {
   syncToFirebase(user.uid);
   closeModal('add-modal');
   render();
-  toast(wasEdit ? 'Mieter aktualisiert ✅' : 'Mieter hinzugefügt ✅', 'success');
+
+  if (!wasEdit) {
+    // Generate PIN and save to Firestore, then show invite modal
+    var newPin = generatePIN();
+    var savedEntry = mieterList[mieterList.length - 1];
+    savePINToFirestore(user.uid, newPin, savedEntry);
+    setTimeout(function() { showInviteModal(savedEntry, newPin); }, 200);
+  } else {
+    toast('Mieter aktualisiert ✅', 'success');
+  }
 }
 
 /* ── Open delete confirm ────────────────────────────────── */
@@ -609,5 +699,52 @@ function render() {
 initFirebase();
 startPageListener(user.uid, render);
 </script>
+
+<!-- QR Code library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<!-- Invite Modal -->
+<div id="invite-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:3000;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closeModal('invite-modal')">
+  <div style="background:white;border-radius:20px;padding:32px;max-width:440px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.2);">
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:40px;margin-bottom:8px;">✅</div>
+      <h3 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 4px;">Mieter angelegt!</h3>
+      <p style="font-size:13px;color:#64748b;margin:0;">
+        <strong id="invite-name"></strong> · <span id="invite-wohnung"></span>
+      </p>
+    </div>
+
+    <!-- PIN Display -->
+    <div style="background:#eff6ff;border:2px solid #bfdbfe;border-radius:14px;padding:20px;text-align:center;margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Portal-PIN</div>
+      <div id="invite-pin" style="font-size:42px;font-weight:800;color:#1e40af;letter-spacing:8px;font-variant-numeric:tabular-nums;"></div>
+    </div>
+
+    <!-- Link -->
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:#64748b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="invite-link"></span>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('invite-link').textContent).then(function(){toast('Link kopiert ✅','success')})" style="background:#2563eb;color:white;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Kopieren</button>
+    </div>
+
+    <!-- QR Code -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">QR-Code zum Scannen</div>
+      <div id="invite-qr" style="display:inline-block;padding:8px;background:white;border:2px solid #e2e8f0;border-radius:12px;"></div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+      <a id="invite-wa-btn" target="_blank" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#22c55e;color:white;text-decoration:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;">
+        📲 WhatsApp senden
+      </a>
+      <a id="invite-email-btn" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;">
+        📧 Email senden
+      </a>
+    </div>
+
+    <button onclick="closeModal('invite-modal')" style="width:100%;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Schließen</button>
+  </div>
+</div>
 </body>
 </html>
