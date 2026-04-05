@@ -2,6 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mieter – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -340,7 +344,7 @@ function buildFilterBar(mieterList) {
 
   var objOpts = '<option value="">Alle Objekte</option>';
   for(var j=0;j<objekte.length;j++) {
-    objOpts += '<option value="'+objekte[j]+'"'+(filterObjekt===objekte[j]?' selected':'')+'>'+objekte[j]+'</option>';
+    objOpts += '<option value="'+escHtml(objekte[j])+'"'+(filterObjekt===objekte[j]?' selected':'')+'>'+escHtml(objekte[j])+'</option>';
   }
 
   var statusOpts = '<option value="">Alle Status</option>'
@@ -405,8 +409,8 @@ function buildAlleMieter(list) {
     cards += '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">';
     cards += '<div style="width:48px;height:48px;border-radius:50%;background:'+aColor+';color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0;">'+initials+'</div>';
     cards += '<div style="flex:1;min-width:0;">';
-    cards += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fullName+'</div>';
-    cards += '<div style="font-size:12px;color:#64748b;margin-top:2px;">'+( m.wohnung||'–')+' · '+(m.objekt||'–')+'</div>';
+    cards += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(fullName)+'</div>';
+    cards += '<div style="font-size:12px;color:#64748b;margin-top:2px;">'+escHtml(m.wohnung||'–')+' · '+escHtml(m.objekt||'–')+'</div>';
     cards += '</div>';
     cards += statusBadge(m.status||'Ausstehend');
     cards += '</div>';
@@ -462,9 +466,9 @@ function buildKautionen(list) {
     rows += '<td style="padding:12px 14px;">'
       + '<div style="display:flex;align-items:center;gap:9px;">'
       + '<div style="width:32px;height:32px;border-radius:50%;background:'+avatarColor(m.vn||'?')+';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">'+getInitials(m.vn,m.nn)+'</div>'
-      + '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+fullName+'</div>'
+      + '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+escHtml(fullName)+'</div>'
       + '</div></td>';
-    rows += '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+(m.wohnung||'–')+'</td>';
+    rows += '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+escHtml(m.wohnung||'–')+'</td>';
     rows += '<td style="padding:12px 14px;font-size:13px;font-weight:700;color:#1e293b;">'+fmt(m.kaution||0)+' €</td>';
     rows += '<td style="padding:12px 14px;">'+kautionBadge(ks)+'</td>';
     rows += '<td style="padding:12px 14px;font-size:13px;color:#374151;">'+mietende+'</td>';
@@ -514,8 +518,8 @@ function buildHistorie(list) {
     items += '<div style="display:flex;align-items:flex-start;gap:13px;padding:14px 0;border-bottom:1px solid #f1f5f9;">';
     items += '<div style="width:34px;height:34px;border-radius:50%;background:'+ev.aColor+';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">'+ev.initials+'</div>';
     items += '<div style="flex:1;">';
-    items += '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+ev.name+'</div>';
-    items += '<div style="font-size:13px;color:#374151;margin-top:2px;">'+ev.text+'</div>';
+    items += '<div style="font-size:13px;font-weight:600;color:#1e293b;">'+escHtml(ev.name)+'</div>';
+    items += '<div style="font-size:13px;color:#374151;margin-top:2px;">'+escHtml(ev.text)+'</div>';
     items += '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">'+ev.ts+'</div>';
     items += '</div></div>';
   }

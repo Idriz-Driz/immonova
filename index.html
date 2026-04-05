@@ -2,6 +2,10 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ImmoNova – Die modernste Immobilienverwaltung Deutschlands</title>
 <meta name="description" content="ImmoNova vereint Mieter, Tickets, Zahlungen, CRM und mehr in einer professionellen Plattform. 30 Tage kostenlos. DSGVO-konform. Server in Frankfurt.">
@@ -149,8 +153,8 @@ footer{background:#0f172a;padding:60px 24px 28px;}
 
 <section class="hero">
   <div class="hero-badge">🚀 Jetzt in der Beta-Phase – kostenlos testen</div>
-  <h1>Die modernste<br><span>Immobilienverwaltung</span><br>Deutschlands</h1>
-  <p class="hero-sub">Mieter, Tickets, Zahlungen, CRM und mehr – alles in einer Plattform. DSGVO-konform. Made in Germany.</p>
+  <h1>Schluss mit Excel<br>und <span>WhatsApp-Chaos</span></h1>
+  <p class="hero-sub">ImmoNova digitalisiert deine Immobilien in 30 Minuten – egal ob 1 oder 100 Einheiten. Mieter, Tickets, Zahlungen, CRM und mehr. DSGVO-konform. Made in Germany.</p>
   <div class="hero-actions">
     <a href="login.html?register=1" class="btn-hero-primary">Kostenlos starten – 30 Tage</a>
     <button class="btn-hero-secondary" onclick="startDemo()">🎮 Demo ansehen</button>
@@ -222,6 +226,30 @@ footer{background:#0f172a;padding:60px 24px 28px;}
     <span class="comp-pill">🔒 Datensicherheit</span>
   </div>
 </div>
+
+<section class="section" style="padding-top:0;padding-bottom:32px;">
+  <div style="text-align:center;margin-bottom:28px;">
+    <div class="section-label">Perfekt für</div>
+    <h2 class="section-title" style="margin:0 auto 12px;">Wer nutzt ImmoNova?</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:780px;margin:0 auto;">
+    <div style="background:white;border:2px solid #bfdbfe;border-radius:16px;padding:24px 20px;text-align:center;box-shadow:0 2px 8px rgba(37,99,235,0.08);">
+      <div style="font-size:32px;margin-bottom:10px;">🏠</div>
+      <div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px;">Private Vermieter</div>
+      <div style="font-size:13px;color:#64748b;line-height:1.5;">1–10 Einheiten · Raus aus Excel und WhatsApp-Gruppen</div>
+    </div>
+    <div style="background:white;border:2px solid #bbf7d0;border-radius:16px;padding:24px 20px;text-align:center;box-shadow:0 2px 8px rgba(22,163,74,0.08);">
+      <div style="font-size:32px;margin-bottom:10px;">🏢</div>
+      <div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px;">Kleine Hausverwaltungen</div>
+      <div style="font-size:13px;color:#64748b;line-height:1.5;">10–50 Einheiten · Professionelle Software ohne Enterprise-Preis</div>
+    </div>
+    <div style="background:white;border:2px solid #e9d5ff;border-radius:16px;padding:24px 20px;text-align:center;box-shadow:0 2px 8px rgba(124,58,237,0.08);">
+      <div style="font-size:32px;margin-bottom:10px;">👔</div>
+      <div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px;">Immobilien-Investoren</div>
+      <div style="font-size:13px;color:#64748b;line-height:1.5;">50–100 Einheiten · Portfolio-Übersicht und Rendite-Tracking</div>
+    </div>
+  </div>
+</section>
 
 <section class="section" id="features">
   <div style="text-align:center;margin-bottom:52px;">

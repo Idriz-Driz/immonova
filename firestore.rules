@@ -6,30 +6,94 @@ service cloud.firestore {
     function isAuth() {
       return request.auth != null;
     }
-    function isEmailVerified() {
+
+    function isVerified() {
       return request.auth.token.email_verified == true;
     }
+
     function getUser() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+
     function isSuperAdmin() {
-      return getUser().rolle == 'superadmin';
-    }
-    function belongsToTenant(tenantId) {
-      return request.auth.uid == tenantId ||
-        getUser().parentUid == tenantId;
+      return isAuth() && isVerified() && getUser().rolle == 'superadmin';
     }
 
+    function isOwner(tenantId) {
+      return isAuth() && isVerified() && request.auth.uid == tenantId;
+    }
+
+    // Mitarbeiter: must be active, must have correct parentUid, role must be 'mitarbeiter'
+    function isMitarbeiterOf(tenantId) {
+      return isAuth() && isVerified()
+        && getUser().rolle == 'mitarbeiter'
+        && getUser().parentUid == tenantId
+        && getUser().aktiv == true;
+    }
+
+    function canAccessTenant(tenantId) {
+      return isOwner(tenantId) || isMitarbeiterOf(tenantId) || isSuperAdmin();
+    }
+
+    // Protected fields that users can never update on their own profile
+    function protectedFields() {
+      return ['rolle', 'parentUid', 'plan', 'trialEndsAt', 'aktiv'];
+    }
+
+    // ── User profiles ──────────────────────────────────────────
     match /users/{userId} {
-      allow read, write: if isAuth() &&
-        isEmailVerified() &&
-        (request.auth.uid == userId || isSuperAdmin());
+      allow read: if isAuth() && isVerified()
+        && (request.auth.uid == userId || isSuperAdmin());
+
+      allow create: if isAuth()
+        && request.auth.uid == userId
+        // New users can only register as 'verwalter' – never superadmin
+        && request.resource.data.rolle == 'verwalter';
+
+      allow update: if isAuth() && isVerified()
+        && request.auth.uid == userId
+        // Prevent self-elevation of role, parentUid, plan, etc.
+        && !request.resource.data.diff(resource.data)
+              .affectedKeys().hasAny(protectedFields());
+
+      allow delete: if isSuperAdmin();
     }
 
-    match /tenants/{tenantId}/{document=**} {
-      allow read, write: if isAuth() &&
-        isEmailVerified() &&
-        (belongsToTenant(tenantId) || isSuperAdmin());
+    // ── Tenant: Mieter – owners + active employees can read; only owners write ──
+    match /tenants/{tenantId}/mieter/{doc} {
+      allow read:  if canAccessTenant(tenantId);
+      allow write: if isOwner(tenantId) || isSuperAdmin();
+    }
+
+    // ── Tenant: Zahlungen – only owner + superadmin (no employee access) ────────
+    match /tenants/{tenantId}/zahlungen/{doc} {
+      allow read, write: if isOwner(tenantId) || isSuperAdmin();
+    }
+
+    // ── Tenant: Tickets – full access for employees, delete only owner ──────────
+    match /tenants/{tenantId}/tickets/{doc} {
+      allow read:   if canAccessTenant(tenantId);
+      allow create: if canAccessTenant(tenantId);
+      allow update: if canAccessTenant(tenantId);
+      allow delete: if isOwner(tenantId) || isSuperAdmin();
+    }
+
+    // ── Tenant: Aktivitäten – append-only for employees, read/delete for owner ──
+    match /tenants/{tenantId}/aktivitaeten/{doc} {
+      allow read:   if canAccessTenant(tenantId);
+      allow create: if canAccessTenant(tenantId);
+      allow update, delete: if isOwner(tenantId) || isSuperAdmin();
+    }
+
+    // ── Tenant: all other sub-collections – owner or active employee ─────────────
+    match /tenants/{tenantId}/{col}/{doc} {
+      allow read, write: if canAccessTenant(tenantId);
+    }
+
+    // ── Legacy /data/{uid} collection (old sync path) ─────────────────────────
+    match /data/{userId} {
+      allow read, write: if isAuth() && isVerified()
+        && (request.auth.uid == userId || isSuperAdmin());
     }
   }
 }

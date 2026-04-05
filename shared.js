@@ -18,6 +18,11 @@ function initFirebase() {
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 }
 
+// Run migration on every page load (idempotent – only executes once per browser)
+// Must be called AFTER KEYS and encryptData/decryptData are defined.
+// Wrapped in setTimeout so KEYS is guaranteed to be declared.
+setTimeout(function() { if (typeof migrateLocalStorage === 'function') migrateLocalStorage(); }, 0);
+
 // ─── DATA KEYS ────────────────────────────────────────────────
 var KEYS = {
   mieter:        'in_m',
@@ -51,6 +56,42 @@ var DEMO_DATA = {
   objekte: [{ id:'demo-o1', name:'Musterstraße 5', adr:'Musterstraße 5, 44137 Dortmund', einheiten:4, typ:'MFH' }]
 };
 
+// ─── XSS PROTECTION ──────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\//g, '&#x2F;');
+}
+
+// ─── LOCALSTORAGE ENCRYPTION (Base64 obfuscation + migration) ─
+function encryptData(data) {
+  try {
+    var json = JSON.stringify(data);
+    var encoded = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+      return String.fromCharCode('0x' + p1);
+    }));
+    return encoded;
+  } catch(e) {
+    return JSON.stringify(data);
+  }
+}
+
+function decryptData(encoded) {
+  try {
+    var decoded = decodeURIComponent(Array.prototype.map.call(atob(encoded), function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(decoded);
+  } catch(e) {
+    try { return JSON.parse(encoded); } catch(e2) { return null; }
+  }
+}
+
 // ─── FORMAT HELPERS ───────────────────────────────────────────
 function fmt(n) { return (n || 0).toLocaleString('de-DE'); }
 function fmtEur(n) { return (parseFloat(n)||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
@@ -60,12 +101,74 @@ function fmtDate(d) {
 }
 function today() { return new Date().toISOString().split('T')[0]; }
 
-// ─── DATA HELPERS ─────────────────────────────────────────────
-function getData(key, fallback) {
-  try { var v = JSON.parse(localStorage.getItem(key)); return (v !== null && v !== undefined) ? v : fallback; }
-  catch(e) { return fallback; }
+// ─── DATA HELPERS (encrypted localStorage) ───────────────────
+function setData(key, val) {
+  try { localStorage.setItem(key, encryptData(val)); }
+  catch(e) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e2) {} }
 }
-function setData(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+function getData(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (raw === null || raw === undefined) return fallback;
+    var result = decryptData(raw);
+    return (result !== null && result !== undefined) ? result : fallback;
+  } catch(e) { return fallback; }
+}
+
+// Migrate any existing plain-JSON localStorage entries to encrypted format
+function migrateLocalStorage() {
+  var migrated = localStorage.getItem('_ls_migrated_v2');
+  if (migrated) return;
+  Object.keys(KEYS).forEach(function(k) {
+    var key = KEYS[k];
+    var raw = localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      var parsed = JSON.parse(raw);
+      // Only migrate if it was plain JSON (decryptData would also return it, but set it clean)
+      setData(key, parsed);
+    } catch(e) {}
+  });
+  localStorage.setItem('_ls_migrated_v2', '1');
+}
+
+// ─── INPUT VALIDATION ─────────────────────────────────────────
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+function validateTel(tel) {
+  return /^[\d\s\+\-\(\)]{6,20}$/.test(tel);
+}
+function validatePLZ(plz) {
+  return /^\d{5}$/.test(plz);
+}
+function validateRequired(val, fieldId) {
+  if (!val || !String(val).trim()) {
+    showFieldError(fieldId, 'Dieses Feld ist erforderlich');
+    return false;
+  }
+  return true;
+}
+function showFieldError(fieldId, msg) {
+  var field = document.getElementById(fieldId);
+  if (!field) return;
+  field.style.borderColor = '#dc2626';
+  field.style.boxShadow   = '0 0 0 3px rgba(220,38,38,0.1)';
+  var err = document.createElement('div');
+  err.style.cssText = 'color:#dc2626;font-size:11px;margin-top:4px;font-weight:500;';
+  err.textContent = msg;
+  err.className = 'field-error';
+  var existing = field.nextSibling;
+  if (existing && existing.className === 'field-error') existing.remove();
+  field.parentNode.insertBefore(err, field.nextSibling);
+  field.addEventListener('input', function() {
+    field.style.borderColor = '#e2e8f0';
+    field.style.boxShadow   = 'none';
+    var e = field.nextSibling;
+    if (e && e.className === 'field-error') e.remove();
+  }, { once: true });
+}
 
 // ─── USER INFO ────────────────────────────────────────────────
 function getUser() {
@@ -221,9 +324,9 @@ function renderNotifList() {
   if (!notifs.length) { list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#94a3b8;font-size:13px;">🔔<br><br>Keine Benachrichtigungen</div>'; return; }
   list.innerHTML = notifs.slice(0,25).map(function(n,i) {
     return '<div onclick="markNotif(' + i + ')" style="padding:12px 18px;border-bottom:1px solid #f8fafc;cursor:pointer;background:' + (n.unread?'#eff6ff':'white') + ';display:flex;gap:10px;align-items:flex-start;transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'' + (n.unread?'#eff6ff':'white') + '\'">'
-      + '<span style="font-size:18px;margin-top:1px;">' + n.ico + '</span>'
-      + '<div style="flex:1;min-width:0;"><div style="font-size:13px;color:#0f172a;font-weight:' + (n.unread?'600':'400') + ';line-height:1.4;">' + n.txt + '</div>'
-      + '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + n.time + '</div></div>'
+      + '<span style="font-size:18px;margin-top:1px;">' + escHtml(n.ico) + '</span>'
+      + '<div style="flex:1;min-width:0;"><div style="font-size:13px;color:#0f172a;font-weight:' + (n.unread?'600':'400') + ';line-height:1.4;">' + escHtml(n.txt) + '</div>'
+      + '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + escHtml(n.time) + '</div></div>'
       + (n.unread ? '<div style="width:7px;height:7px;border-radius:50%;background:#2563eb;flex-shrink:0;margin-top:4px;"></div>' : '')
       + '</div>';
   }).join('');
@@ -350,13 +453,13 @@ function doSearch(q) {
     results = results.slice(0, 8);
     if (!dropdown) return;
     if (!results.length) {
-      dropdown.innerHTML = '<div style="padding:14px 16px;font-size:13px;color:#94a3b8;text-align:center;">Keine Ergebnisse für „'+q+'"</div>';
+      dropdown.innerHTML = '<div style="padding:14px 16px;font-size:13px;color:#94a3b8;text-align:center;">Keine Ergebnisse für „' + escHtml(q) + '"</div>';
     } else {
       dropdown.innerHTML = results.map(function(r) {
-        return '<a href="'+r.url+'" style="display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:#1e293b;border-bottom:1px solid #f1f5f9;transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
-          + '<span style="font-size:16px;width:22px;text-align:center;flex-shrink:0;">'+r.ico+'</span>'
-          + '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.label+'</div>'
-          + '<div style="font-size:11px;color:#94a3b8;">'+r.sub+'</div></div>'
+        return '<a href="' + escHtml(r.url) + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:#1e293b;border-bottom:1px solid #f1f5f9;transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
+          + '<span style="font-size:16px;width:22px;text-align:center;flex-shrink:0;">' + r.ico + '</span>'
+          + '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(r.label) + '</div>'
+          + '<div style="font-size:11px;color:#94a3b8;">' + escHtml(r.sub) + '</div></div>'
           + '<span style="font-size:11px;color:#94a3b8;flex-shrink:0;">→</span>'
           + '</a>';
       }).join('');
@@ -443,8 +546,8 @@ function getSidebarHTML(activePage) {
     +   '<div style="display:flex;align-items:center;gap:9px;padding:9px 10px;background:#1e293b;border-radius:10px;">'
     +     '<div style="width:30px;height:30px;background:#2563eb;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0;">'+(user.name[0]||'?').toUpperCase()+'</div>'
     +     '<div style="flex:1;min-width:0;">'
-    +       '<div style="font-size:12px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+user.name+'</div>'
-    +       '<div style="font-size:10px;color:#64748b;">'+(isSuperAdmin?'👑 Superadmin':role==='admin'?'⚙️ Admin':role==='mitarbeiter'?'👤 Mitarbeiter':'🏢 Verwalter')+'</div>'
+    +       '<div style="font-size:12px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(user.name) + '</div>'
+    +       '<div style="font-size:10px;color:#64748b;">' + (isSuperAdmin?'👑 Superadmin':role==='admin'?'⚙️ Admin':role==='mitarbeiter'?'👤 Mitarbeiter':'🏢 Verwalter') + '</div>'
     +     '</div>'
     +     '<button onclick="doLogout()" title="Abmelden" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:15px;padding:4px;border-radius:6px;transition:color 0.1s;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#64748b\'">🚪</button>'
     +   '</div>'
@@ -471,13 +574,13 @@ function getTopbarHTML(title, actionBtn) {
     + '<div style="position:relative;" id="avatar-menu-wrap">'
     +   '<button onclick="toggleAvatarMenu()" style="display:flex;align-items:center;gap:7px;background:none;border:1px solid #e2e8f0;border-radius:9px;padding:5px 10px 5px 6px;cursor:pointer;font-family:inherit;transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">'
     +     '<div style="width:28px;height:28px;background:#2563eb;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0;">'+(user.name[0]||'?').toUpperCase()+'</div>'
-    +     '<span style="font-size:13px;font-weight:600;color:#0f172a;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+user.name+'</span>'
+    +     '<span style="font-size:13px;font-weight:600;color:#0f172a;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(user.name) + '</span>'
     +     '<span style="color:#94a3b8;font-size:11px;">▾</span>'
     +   '</button>'
     +   '<div id="avatar-menu" style="display:none;position:absolute;top:calc(100%+6px);right:0;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:180px;z-index:200;overflow:hidden;">'
     +     '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">'
-    +       '<div style="font-size:13px;font-weight:600;color:#0f172a;">'+user.name+'</div>'
-    +       '<div style="font-size:11px;color:#94a3b8;">'+user.email+'</div>'
+    +       '<div style="font-size:13px;font-weight:600;color:#0f172a;">' + escHtml(user.name) + '</div>'
+    +       '<div style="font-size:11px;color:#94a3b8;">' + escHtml(user.email) + '</div>'
     +     '</div>'
     +     '<a href="einstellungen.html" style="display:flex;align-items:center;gap:8px;padding:10px 14px;text-decoration:none;color:#374151;font-size:13px;transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">⚙️ Einstellungen</a>'
     +     '<a href="einstellungen.html#profil" style="display:flex;align-items:center;gap:8px;padding:10px 14px;text-decoration:none;color:#374151;font-size:13px;transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">👤 Mein Profil</a>'

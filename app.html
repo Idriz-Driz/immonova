@@ -2,6 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -239,7 +243,7 @@ function buildWidgetList(id, d) {
         .sort(function(a,b){ return a.datum.localeCompare(b.datum); }).slice(0,5);
       return wrap + header('📅','Nächste Termine','kalender.html')
         + (fut.length === 0 ? empty : fut.map(function(t){
-          return activityItem('#2563eb', '<strong>'+t.titel+'</strong> – ' + t.datum + (t.uhrzeit?' · '+t.uhrzeit:''), '');
+          return activityItem('#2563eb', '<strong>'+escHtml(t.titel||'')+'</strong> – ' + t.datum + (t.uhrzeit?' · '+t.uhrzeit:''), '');
         }).join(''))
         + '</div>';
     }
@@ -248,7 +252,7 @@ function buildWidgetList(id, d) {
       return wrap + header('✅','Offene Aufgaben','aufgaben.html')
         + (off.length === 0 ? empty : off.map(function(a){
           var pCol = a.prioritaet==='Hoch'?'#dc2626':a.prioritaet==='Normal'?'#d97706':'#16a34a';
-          return activityItem(pCol, '<strong>'+a.titel+'</strong>' + (a.faellig?' · fällig: '+a.faellig:''), '');
+          return activityItem(pCol, '<strong>'+escHtml(a.titel||'')+'</strong>' + (a.faellig?' · fällig: '+a.faellig:''), '');
         }).join(''))
         + '</div>';
     }
@@ -261,7 +265,7 @@ function buildWidgetList(id, d) {
       var aktiv = d.projekte.filter(function(p){ return p.status !== 'Abgeschlossen'; }).slice(0,5);
       return wrap + header('🏗️','Aktive Projekte','projekte.html')
         + (aktiv.length === 0 ? empty : aktiv.map(function(p){
-          return activityItem('#7c3aed', '<strong>'+(p.name||'–')+'</strong> – '+(p.status||'Geplant'), '');
+          return activityItem('#7c3aed', '<strong>'+escHtml(p.name||'–')+'</strong> – '+(p.status||'Geplant'), '');
         }).join(''))
         + '</div>';
     }
@@ -385,7 +389,7 @@ function render() {
   }
   if (expiringContracts.length > 0) {
     warningsHTML += warningBanner(
-      '\u26a0\ufe0f Mietvertrag l\u00e4uft aus: ' + expiringContracts.map(function(m) { return m.name || ''; }).join(', '),
+      '\u26a0\ufe0f Mietvertrag l\u00e4uft aus: ' + expiringContracts.map(function(m) { return escHtml(m.name || ''); }).join(', '),
       'mieter.html', 'Ansehen', '#d97706', '#fffbeb', '#92400e'
     );
   }
@@ -401,20 +405,20 @@ function render() {
 
   mieter.forEach(function(m) {
     var d = m.createdAt || m.datum || '';
-    feedItems.push({ date: d, color: '#2563eb', text: 'Mieter <strong>' + (m.name || '') + '</strong> hinzugef\u00fcgt – ' + (m.wn || '') });
+    feedItems.push({ date: d, color: '#2563eb', text: 'Mieter <strong>' + escHtml(m.name || '') + '</strong> hinzugef\u00fcgt – ' + escHtml(m.wn || '') });
   });
   tickets.forEach(function(t) {
     var d = t.erstellt || t.datum || t.created || '';
     var statusColor = t.status === 'Erledigt' ? '#16a34a' : t.status === 'In Bearbeitung' ? '#d97706' : '#dc2626';
-    feedItems.push({ date: d, color: statusColor, text: 'Ticket: <strong>' + ((t.pb || '').substring(0, 45) || 'Kein Titel') + '</strong> – ' + (t.status || '') });
+    feedItems.push({ date: d, color: statusColor, text: 'Ticket: <strong>' + escHtml((t.pb || '').substring(0, 45) || 'Kein Titel') + '</strong> – ' + (t.status || '') });
   });
   termine.forEach(function(t) {
     var d = t.datum || '';
-    feedItems.push({ date: d, color: '#7c3aed', text: 'Termin: <strong>' + (t.titel || t.title || 'Termin') + '</strong> am ' + fmtDate(t.datum) });
+    feedItems.push({ date: d, color: '#7c3aed', text: 'Termin: <strong>' + escHtml(t.titel || t.title || 'Termin') + '</strong> am ' + fmtDate(t.datum) });
   });
   aufgaben.forEach(function(a) {
     var d = a.createdAt || a.datum || '';
-    feedItems.push({ date: d, color: a.done ? '#16a34a' : '#d97706', text: 'Aufgabe: <strong>' + (a.text || a.titel || '') + '</strong>' + (a.done ? ' \u2013 erledigt' : '') });
+    feedItems.push({ date: d, color: a.done ? '#16a34a' : '#d97706', text: 'Aufgabe: <strong>' + escHtml(a.text || a.titel || '') + '</strong>' + (a.done ? ' \u2013 erledigt' : '') });
   });
 
   feedItems.sort(function(a, b) {
@@ -463,7 +467,7 @@ function render() {
       var miete = parseFloat(m.miete) || 0;
       var pct   = Math.round(miete / maxMiete * 100);
       return miniBar(
-        (m.name || 'Unbekannt').split(' ')[0] + ' (' + (m.wn || '') + ')',
+        escHtml((m.name || 'Unbekannt').split(' ')[0]) + ' (' + escHtml(m.wn || '') + ')',
         pct, '#2563eb', formatCurrency(miete)
       );
     }).join('');
@@ -636,7 +640,7 @@ function updateGreeting() {
   var b = getBegruessung();
   var g = document.getElementById('dash-gruss');
   var z = document.getElementById('dash-zeit');
-  if (g) g.innerHTML = b.gruss + ', ' + b.name + '! \uD83D\uDC4B';
+  if (g) g.innerHTML = escHtml(b.gruss) + ', ' + escHtml(b.name) + '! \uD83D\uDC4B';
   if (z) z.textContent = b.datum + ' \u00B7 ' + b.zeit;
 }
 
@@ -675,7 +679,7 @@ function updateLiveFeed(items) {
   el.innerHTML = items.map(function(item) {
     var ico = item.icon || '\ud83d\udcdd';
     var timeStr = item.zeit && item.zeit.toDate ? timeAgo(item.zeit.toDate().toISOString()) : '';
-    return activityItem(colorMap[ico] || '#7c3aed', ico + ' ' + (item.text || ''), timeStr);
+    return activityItem(colorMap[ico] || '#7c3aed', ico + ' ' + escHtml(item.text || ''), timeStr);
   }).join('');
 }
 

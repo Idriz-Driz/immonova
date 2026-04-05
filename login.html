@@ -2,6 +2,10 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ImmoNova – Anmelden</title>
 <meta name="description" content="Melde dich bei ImmoNova an – die modernste Immobilienverwaltung Deutschlands.">
@@ -415,31 +419,6 @@ function doLogin() {
       });
     })
     .catch(function(e) {
-      // Auto-bootstrap superadmin if account doesn't exist yet
-      if ((e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') && email === 'admin@immonova.de') {
-        auth.createUserWithEmailAndPassword(email, pass)
-          .then(function(cred) {
-            return db.collection('users').doc(cred.user.uid).set({
-              rolle: 'superadmin', vn: 'Admin', nn: 'ImmoNova',
-              onboardingDone: true, plan: 'enterprise',
-              createdAt: new Date().toISOString()
-            }).then(function() {
-              localStorage.setItem('in_role',       'superadmin');
-              localStorage.setItem('in_user_name',  'Admin ImmoNova');
-              localStorage.setItem('in_user_uid',   cred.user.uid);
-              localStorage.setItem('in_user_plan',  'enterprise');
-              localStorage.setItem('in_user_email', email);
-              localStorage.setItem('in_user_firma', 'ImmoNova');
-              setLoading('l', false);
-              window.location.href = 'app.html';
-            });
-          })
-          .catch(function() {
-            setLoading('l', false);
-            showMsg('login-msg', '⚠️ Admin-Konto konnte nicht erstellt werden. Passwort mind. 6 Zeichen.');
-          });
-        return;
-      }
       setLoading('l', false);
       var msgs = {
         'auth/user-not-found':    '⚠️ Kein Konto mit dieser E-Mail gefunden.',

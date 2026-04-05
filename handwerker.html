@@ -2,6 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Handwerker – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -352,15 +356,15 @@ function buildCardsGrid(hws) {
     html += '<div style="padding:18px 18px 14px;display:flex;align-items:flex-start;gap:14px;">';
     html += '<div style="width:52px;height:52px;border-radius:13px;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:white;flex-shrink:0;letter-spacing:-1px;">' + initials + '</div>';
     html += '<div style="flex:1;min-width:0;">';
-    html += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</div>';
-    html += '<div style="font-size:12px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (hw.firma || '<em>Keine Firma</em>') + '</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(fullName) + '</div>';
+    html += '<div style="font-size:12px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (hw.firma ? escHtml(hw.firma) : '<em>Keine Firma</em>') + '</div>';
     html += '<div style="margin-top:7px;">' + statusBadge(hw.status) + '</div>';
     html += '</div>';
     html += '</div>';
 
     // Gewerk badge
     html += '<div style="padding:0 18px 12px;">';
-    html += badge(ico + ' ' + (hw.gewerk || 'Sonstiges'), 'blue');
+    html += badge(ico + ' ' + escHtml(hw.gewerk || 'Sonstiges'), 'blue');
     html += '</div>';
 
     html += '<div style="height:1px;background:#f1f5f9;"></div>';
@@ -371,7 +375,7 @@ function buildCardsGrid(hws) {
     // Telefon + WhatsApp
     if (tel) {
       html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">';
-      html += '<a href="tel:' + tel + '" style="font-size:13px;color:#0f172a;text-decoration:none;display:flex;align-items:center;gap:5px;" title="Anrufen">📞 <span>' + tel + '</span></a>';
+      html += '<a href="tel:' + escHtml(tel) + '" style="font-size:13px;color:#0f172a;text-decoration:none;display:flex;align-items:center;gap:5px;" title="Anrufen">📞 <span>' + escHtml(tel) + '</span></a>';
       html += '<a href="' + waLink(tel) + '" target="_blank" style="background:#25D366;color:white;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0;">WhatsApp</a>';
       html += '</div>';
     }
@@ -391,7 +395,7 @@ function buildCardsGrid(hws) {
     if (hw.stundensatz) {
       html += '<div style="flex:1;background:#f8fafc;border-radius:8px;padding:8px 12px;">';
       html += '<div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">Stundensatz</div>';
-      html += '<div style="font-size:17px;font-weight:800;color:#16a34a;margin-top:1px;">' + hw.stundensatz + ' €/h</div>';
+      html += '<div style="font-size:17px;font-weight:800;color:#16a34a;margin-top:1px;">' + escHtml(String(hw.stundensatz)) + ' €/h</div>';
       html += '</div>';
     }
     html += '</div>';

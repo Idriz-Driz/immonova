@@ -2,6 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://nominatim.openstreetmap.org; frame-src 'none'; object-src 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tickets – ImmoNova</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -354,7 +358,7 @@ function ticketCardHTML(t) {
 
     // Title + badges row
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
-      '<div style="font-size:13px;font-weight:700;color:#1e293b;line-height:1.3;flex:1;">' + (t.titel || '(kein Titel)') + '</div>' +
+      '<div style="font-size:13px;font-weight:700;color:#1e293b;line-height:1.3;flex:1;">' + escHtml(t.titel || '(kein Titel)') + '</div>' +
       '<div style="display:flex;gap:4px;flex-shrink:0;">' + prioBadgeHTML(t.prioritaet || 'Normal') + '</div>' +
     '</div>' +
 
@@ -362,13 +366,13 @@ function ticketCardHTML(t) {
     (t.fotoURL ? '<img src="' + t.fotoURL + '" style="width:100%;height:100px;object-fit:cover;border-radius:7px;margin-bottom:8px;" loading="lazy">' : '') +
 
     // Description
-    (descShort ? '<div style="font-size:12px;color:#64748b;line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + descShort + '</div>' : '') +
+    (descShort ? '<div style="font-size:12px;color:#64748b;line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + escHtml(descShort) + '</div>' : '') +
 
     // Meta info
     '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px;">' +
-      (t.mieter || t.wohnung ? '<div style="font-size:11px;color:#64748b;">👤 ' + [t.mieter, t.wohnung].filter(Boolean).join(' – ') + '</div>' : '') +
-      (t.handwerker ? '<div style="font-size:11px;color:#64748b;">🔧 ' + t.handwerker + '</div>' : '') +
-      (t.bereich    ? '<div style="font-size:11px;color:#64748b;">📍 ' + t.bereich + '</div>'    : '') +
+      (t.mieter || t.wohnung ? '<div style="font-size:11px;color:#64748b;">👤 ' + [t.mieter, t.wohnung].filter(Boolean).map(escHtml).join(' – ') + '</div>' : '') +
+      (t.handwerker ? '<div style="font-size:11px;color:#64748b;">🔧 ' + escHtml(t.handwerker) + '</div>' : '') +
+      (t.bereich    ? '<div style="font-size:11px;color:#64748b;">📍 ' + escHtml(t.bereich) + '</div>'    : '') +
       '<div style="font-size:11px;color:#94a3b8;">🕐 ' + relDate(t.datum) + '</div>' +
     '</div>' +
 
@@ -443,15 +447,15 @@ function buildList(filtered) {
 
     return '<tr style="border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background=\'#fafbfc\'" onmouseout="this.style.background=\'white\'">' +
       '<td style="padding:11px 14px;border-left:3px solid ' + prioBorderColor(t.prioritaet || 'Normal') + ';">' +
-        '<div style="font-size:13px;font-weight:700;color:#1e293b;">' + (t.titel || '–') + '</div>' +
-        (t.beschreibung ? '<div style="font-size:11px;color:#64748b;margin-top:2px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.beschreibung + '</div>' : '') +
+        '<div style="font-size:13px;font-weight:700;color:#1e293b;">' + escHtml(t.titel || '–') + '</div>' +
+        (t.beschreibung ? '<div style="font-size:11px;color:#64748b;margin-top:2px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(t.beschreibung) + '</div>' : '') +
       '</td>' +
       '<td style="padding:11px 14px;">' + statusBadgeHTML(t.status || 'Offen') + '</td>' +
       '<td style="padding:11px 14px;">' + prioBadgeHTML(t.prioritaet || 'Normal') + '</td>' +
-      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.bereich  || '–') + '</td>' +
-      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.mieter   || '–') + '</td>' +
-      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.wohnung  || '–') + '</td>' +
-      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + (t.handwerker || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + escHtml(t.bereich  || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + escHtml(t.mieter   || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + escHtml(t.wohnung  || '–') + '</td>' +
+      '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + escHtml(t.handwerker || '–') + '</td>' +
       '<td style="padding:11px 14px;font-size:12px;color:#374151;">' + kosten + '</td>' +
       '<td style="padding:11px 14px;font-size:11px;color:#94a3b8;white-space:nowrap;">' + relDate(t.datum) + '</td>' +
       '<td style="padding:11px 14px;white-space:nowrap;">' +
