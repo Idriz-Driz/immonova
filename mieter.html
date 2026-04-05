@@ -63,20 +63,23 @@ function savePINToFirestore(landlordUid, pin, mieterData) {
 function showInviteModal(mieterEntry, pin) {
   var fullName = (mieterEntry.vn || '') + ' ' + (mieterEntry.nn || '');
   var portalUrl = window.location.origin + '/mieter-portal.html';
+  var wohnungTxt = mieterEntry.wohnung ? '\n🏠 Wohnung: ' + mieterEntry.wohnung : '';
+  var verwalterName = (user && user.name) ? user.name : 'Ihr Verwalter';
   var waText = encodeURIComponent(
-    'Hallo ' + fullName + ',\n\n' +
-    'willkommen in Ihrer neuen Wohnung! 🏠\n\n' +
-    'Ab sofort können Sie über unser digitales Mieterportal:\n' +
+    'Hallo ' + fullName + ',' + wohnungTxt + '\n\n' +
+    'willkommen! Ab sofort haben Sie Zugang zum ImmoNova Mieterportal. 🏠\n\n' +
+    'Damit können Sie:\n' +
     '✅ Schäden melden (mit Foto)\n' +
-    '💬 Uns direkt schreiben\n' +
+    '💬 Direkt mit uns schreiben\n' +
     '📅 Ihre Termine einsehen\n' +
     '📢 Wichtige Mitteilungen lesen\n\n' +
-    'Ihr Zugang:\n' +
-    '🔗 Link: ' + portalUrl + '\n' +
+    'Ihr persönlicher Zugang:\n' +
+    '🔗 ' + portalUrl + '?pin=' + pin + '\n' +
     '🔑 PIN: ' + pin + '\n\n' +
-    'Einfach Link öffnen → PIN eingeben → Als App installieren!\n\n' +
-    'Bei Fragen: Einfach hier antworten.\n' +
-    'Ihr Verwalter'
+    '👉 Link öffnen → PIN wird automatisch eingetragen → Fertig!\n' +
+    '📱 Tipp: Als App installieren für schnellen Zugriff.\n\n' +
+    'Bei Fragen einfach antworten.\n' +
+    verwalterName
   );
   var tel = (mieterEntry.tel || '').replace(/\s/g,'').replace(/^00/,'+').replace(/^0/,'+49');
   var waHref = tel ? 'https://wa.me/' + tel.replace(/[^0-9+]/g,'') + '?text=' + waText : '#';
@@ -84,9 +87,12 @@ function showInviteModal(mieterEntry, pin) {
   var emailSubj = encodeURIComponent('Ihr Zugang zum ImmoNova Mieterportal');
   var emailBody = encodeURIComponent(
     'Hallo ' + fullName + ',\n\n' +
-    'Sie haben nun Zugang zum ImmoNova Mieterportal.\n\n' +
+    'Sie haben nun Zugang zum ImmoNova Mieterportal' +
+    (mieterEntry.wohnung ? ' für Wohnung ' + mieterEntry.wohnung : '') + '.\n\n' +
+    'Direktlink (PIN vorausgefüllt):\n' + portalUrl + '?pin=' + pin + '\n\n' +
+    'Oder manuell einloggen:\n' +
     'Link: ' + portalUrl + '\nIhr PIN: ' + pin + '\n\n' +
-    'Mit freundlichen Grüßen,\nIhr Verwalter'
+    'Mit freundlichen Grüßen,\n' + verwalterName
   );
   var emailHref = mieterEntry.email ? 'mailto:' + mieterEntry.email + '?subject=' + emailSubj + '&body=' + emailBody : '#';
 
@@ -325,7 +331,8 @@ function saveMieter() {
     }
     addNotif('✏️', 'Mieter aktualisiert: ' + vn + ' ' + nn);
   } else {
-    var newEntry = { id: generateId(), vn:vn, nn:nn, email:email, tel:tel, wohnung:wohnung, objekt:objekt,
+    var newPin = generatePIN();
+    var newEntry = { id: generateId(), pin: newPin, vn:vn, nn:nn, email:email, tel:tel, wohnung:wohnung, objekt:objekt,
       miete:miete, kaution:kaution, kautionStatus:'Ausstehend',
       mietbeginn:mietbeginn, mietende:mietende, personen:personen, haustiere:haustiere,
       score:score, status:status, adresse:adresse, notizen:notizen,
@@ -343,11 +350,10 @@ function saveMieter() {
   render();
 
   if (!wasEdit) {
-    // Generate PIN and save to Firestore, then show invite modal
-    var newPin = generatePIN();
+    // Save PIN to portal-pins and show invite modal
     var savedEntry = mieterList[mieterList.length - 1];
-    savePINToFirestore(user.uid, newPin, savedEntry);
-    setTimeout(function() { showInviteModal(savedEntry, newPin); }, 200);
+    savePINToFirestore(user.uid, savedEntry.pin, savedEntry);
+    setTimeout(function() { showInviteModal(savedEntry, savedEntry.pin); }, 200);
   } else {
     toast('Mieter aktualisiert ✅', 'success');
   }

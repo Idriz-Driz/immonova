@@ -100,61 +100,81 @@
       margin-bottom: 24px;
     }
 
-    .pin-field-wrap {
-      margin-bottom: 16px;
+    /* PIN dots */
+    .pin-dots {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin: 24px 0 20px;
     }
-
-    .pin-field-wrap label {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--gray-500);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 6px;
+    .pin-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid var(--gray-400);
+      background: transparent;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
     }
-
-    .pin-field-wrap input {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid var(--gray-200);
-      border-radius: 12px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 16px;
-      color: var(--gray-800);
-      background: var(--white);
-      transition: border-color 0.2s, box-shadow 0.2s;
-      outline: none;
-      -webkit-appearance: none;
-    }
-
-    .pin-field-wrap input:focus {
+    .pin-dot.filled {
+      background: var(--primary);
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+      transform: scale(1.1);
+    }
+    .pin-dot.error {
+      background: var(--red);
+      border-color: var(--red);
     }
 
-    .pin-field-wrap input::placeholder { color: var(--gray-400); }
-
-    .btn-login {
-      width: 100%;
-      margin-top: 8px;
-      padding: 15px;
+    /* Numpad grid */
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .numpad-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 58px;
+      border-radius: 14px;
+      border: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .numpad-btn.digit {
+      background: var(--gray-100);
+      color: var(--gray-800);
+    }
+    .numpad-btn.digit:active { background: var(--gray-200); transform: scale(0.95); }
+    .numpad-btn.backspace {
+      background: var(--gray-100);
+      color: var(--gray-500);
+      font-size: 18px;
+    }
+    .numpad-btn.backspace:active { background: var(--gray-200); transform: scale(0.95); }
+    .numpad-btn.empty {
+      background: transparent;
+      cursor: default;
+      pointer-events: none;
+    }
+    .numpad-btn.checking {
       background: var(--primary);
       color: var(--white);
-      border: none;
-      border-radius: 12px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background 0.2s, transform 0.15s;
-      box-shadow: 0 4px 16px rgba(37,99,235,0.35);
-      -webkit-appearance: none;
     }
 
-    .btn-login:hover { background: var(--primary-dark); }
-    .btn-login:active { transform: scale(0.98); }
-    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+    /* Login hint */
+    .pin-hint {
+      text-align: center;
+      font-size: 13px;
+      color: var(--gray-400);
+      margin-bottom: 4px;
+    }
 
     .login-error {
       margin-top: 12px;
@@ -1001,28 +1021,8 @@
        LOGIN PAGE
   ══════════════════════════════════════ -->
   <div id="login-page" style="display:none;">
-    <div class="login-card">
-      <div class="login-brand">
-        <div class="brand-icon">🏢</div>
-        <div class="brand-name">ImmoNova</div>
-        <div class="brand-sub">Mieter-Portal</div>
-      </div>
-
-      <h2>Mit PIN einloggen</h2>
-
-      <div class="pin-field-wrap">
-        <label for="input-pin">Meine PIN</label>
-        <input type="password" id="input-pin" inputmode="numeric" pattern="[0-9]*"
-               placeholder="4–6-stellige PIN" autocomplete="current-password"
-               onkeydown="if(event.key==='Enter') handlePinLogin()" />
-      </div>
-
-      <button class="btn-login" id="login-btn" onclick="handlePinLogin()">🔐 Einloggen</button>
-      <div class="login-error" id="login-error"></div>
-
-      <div class="login-footer-link">
-        <a href="login.html">Zur Hauptseite →</a>
-      </div>
+    <div class="login-card" id="login-card-content">
+      <!-- rendered by renderPinLogin() -->
     </div>
   </div>
 
@@ -1368,41 +1368,112 @@
       }
     }
 
-    // ── PIN Login ─────────────────────────────────────────────
-    function handlePinLogin() {
-      var pin = document.getElementById('input-pin').value.trim();
-      var errorEl = document.getElementById('login-error');
-      var btn = document.getElementById('login-btn');
+    // ── Numpad PIN Login ──────────────────────────────────────
+    var currentPin = '';
+    var pinChecking = false;
 
-      errorEl.style.display = 'none';
+    function renderPinLogin(errorMsg) {
+      var card = document.getElementById('login-card-content');
+      if (!card) return;
+      card.innerHTML =
+        '<div class="login-brand">' +
+          '<div class="brand-icon">🏢</div>' +
+          '<div class="brand-name">ImmoNova</div>' +
+          '<div class="brand-sub">Mieter-Portal</div>' +
+        '</div>' +
+        '<p class="pin-hint">4-stellige PIN eingeben</p>' +
+        '<div class="pin-dots">' +
+          pinDot(0) + pinDot(1) + pinDot(2) + pinDot(3) +
+        '</div>' +
+        (errorMsg ? '<div class="login-error" style="display:block;margin-bottom:12px;">' + escHtml(errorMsg) + '</div>' : '') +
+        '<div class="numpad">' +
+          numpadBtn('1') + numpadBtn('2') + numpadBtn('3') +
+          numpadBtn('4') + numpadBtn('5') + numpadBtn('6') +
+          numpadBtn('7') + numpadBtn('8') + numpadBtn('9') +
+          '<button class="numpad-btn empty" aria-hidden="true"></button>' +
+          numpadBtn('0') +
+          '<button class="numpad-btn backspace" onclick="pinInput(\'back\')" aria-label="Löschen">⌫</button>' +
+        '</div>' +
+        '<div class="login-footer-link" style="margin-top:24px;">' +
+          '<a href="login.html">Zur Hauptseite →</a>' +
+        '</div>';
+    }
 
-      if (!pin) {
-        errorEl.textContent = 'Bitte PIN eingeben.';
-        errorEl.style.display = 'block';
+    function pinDot(index) {
+      var filled = index < currentPin.length ? ' filled' : '';
+      return '<div class="pin-dot' + filled + '" id="pdot-' + index + '"></div>';
+    }
+
+    function numpadBtn(val) {
+      return '<button class="numpad-btn digit" onclick="pinInput(\'' + val + '\')">' + val + '</button>';
+    }
+
+    function pinInput(val) {
+      if (pinChecking) return;
+      if (val === 'back') {
+        currentPin = currentPin.slice(0, -1);
+        updatePinDots();
         return;
       }
+      if (currentPin.length >= 4) return;
+      currentPin += val;
+      updatePinDots();
+      if (currentPin.length === 4) {
+        setTimeout(function() { checkPin(currentPin); }, 120);
+      }
+    }
 
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spin"></span> Einloggen…';
+    function updatePinDots() {
+      for (var i = 0; i < 4; i++) {
+        var dot = document.getElementById('pdot-' + i);
+        if (!dot) return;
+        dot.className = 'pin-dot' + (i < currentPin.length ? ' filled' : '');
+      }
+    }
 
-      // Search all landlord UIDs for this PIN
-      // PIN documents live at /tenants/{landlordUid}/portal-pins/{pin}
-      // We use a collection group query to find the PIN across all landlords
+    function checkPin(pin) {
+      if (!pin || pin.length !== 4) return;
+      pinChecking = true;
+
+      // Animate dots to blue (checking state)
+      for (var i = 0; i < 4; i++) {
+        var d = document.getElementById('pdot-' + i);
+        if (d) d.className = 'pin-dot filled';
+      }
+
+      // Query portal-pins (existing flow) — field-based lookup
       db.collectionGroup('portal-pins')
-        .where(firebase.firestore.FieldPath.documentId(), '>=', pin)
-        .where(firebase.firestore.FieldPath.documentId(), '<=', pin + '\uf8ff')
+        .where('pin', '==', pin)
+        .limit(1)
         .get()
         .then(function(snap) {
-          if (snap.empty) {
-            showLoginError('PIN nicht gefunden. Bitte Verwalter kontaktieren.');
-            resetLoginBtn();
+          if (!snap.empty) {
+            return snap.docs[0];
+          }
+          // Fallback: try collectionGroup('mieter') where pin field matches (new saves)
+          return db.collectionGroup('mieter')
+            .where('pin', '==', pin)
+            .limit(1)
+            .get()
+            .then(function(snap2) {
+              return snap2.empty ? null : snap2.docs[0];
+            });
+        })
+        .then(function(doc) {
+          if (!doc) {
+            pinChecking = false;
+            currentPin = '';
+            // Shake dots to red
+            for (var i = 0; i < 4; i++) {
+              var d = document.getElementById('pdot-' + i);
+              if (d) d.className = 'pin-dot error';
+            }
+            setTimeout(function() { renderPinLogin('PIN nicht gefunden. Bitte Verwalter kontaktieren.'); }, 600);
             return;
           }
 
-          // Take first matching document
-          var doc = snap.docs[0];
           var data = doc.data();
-          var path = doc.ref.path; // tenants/{landlordUid}/portal-pins/{pin}
+          var path = doc.ref.path;
           var parts = path.split('/');
           var landlordUid = parts[1];
 
@@ -1417,19 +1488,18 @@
             tel: data.tel || '',
             landlordPhone: data.landlordPhone || data.verwalterTel || '',
             landlordUid: landlordUid,
-            mieterId: data.mieterId || pin
+            mieterId: data.mieterId || data.id || pin
           };
 
-          // Persist session
           localStorage.setItem('mp_session', JSON.stringify(mieterData));
           localStorage.setItem('mp_pin', pin);
 
+          pinChecking = false;
+          currentPin = '';
           showPortal();
-          resetLoginBtn();
         })
         .catch(function(err) {
-          // Fallback: try iterating known structure if collection group fails
-          // Try direct lookup with stored landlordUid
+          // Offline fallback: try direct lookup using cached landlordUid
           var savedSession = localStorage.getItem('mp_session');
           if (savedSession) {
             try {
@@ -1439,53 +1509,39 @@
                   .collection('portal-pins').doc(pin)
                   .get()
                   .then(function(doc2) {
+                    pinChecking = false;
+                    currentPin = '';
                     if (!doc2.exists) {
-                      showLoginError('PIN nicht gefunden.');
-                      resetLoginBtn();
+                      renderPinLogin('PIN nicht gefunden.');
                       return;
                     }
-                    var data2 = doc2.data();
+                    var d2 = doc2.data();
                     mieterData = {
-                      vn: data2.vn || data2.vorname || '',
-                      nn: data2.nn || data2.nachname || '',
-                      wohnung: data2.wohnung || data2.wn || '',
-                      objekt: data2.objekt || '',
-                      miete: data2.miete || '',
-                      mietbeginn: data2.mietbeginn || '',
-                      email: data2.email || '',
-                      tel: data2.tel || '',
-                      landlordPhone: data2.landlordPhone || data2.verwalterTel || '',
+                      vn: d2.vn || '', nn: d2.nn || '',
+                      wohnung: d2.wohnung || '', objekt: d2.objekt || '',
+                      miete: d2.miete || '', mietbeginn: d2.mietbeginn || '',
+                      email: d2.email || '', tel: d2.tel || '',
+                      landlordPhone: d2.landlordPhone || '',
                       landlordUid: s.landlordUid,
-                      mieterId: data2.mieterId || pin
+                      mieterId: d2.mieterId || pin
                     };
                     localStorage.setItem('mp_session', JSON.stringify(mieterData));
                     localStorage.setItem('mp_pin', pin);
                     showPortal();
-                    resetLoginBtn();
                   })
                   .catch(function() {
-                    showLoginError('Fehler beim Einloggen. Bitte erneut versuchen.');
-                    resetLoginBtn();
+                    pinChecking = false;
+                    currentPin = '';
+                    renderPinLogin('Fehler beim Einloggen. Bitte erneut versuchen.');
                   });
                 return;
               }
             } catch(e) {}
           }
-          showLoginError('Fehler beim Einloggen: ' + err.message);
-          resetLoginBtn();
+          pinChecking = false;
+          currentPin = '';
+          renderPinLogin('Fehler: ' + (err && err.message ? err.message : 'Unbekannter Fehler'));
         });
-    }
-
-    function showLoginError(msg) {
-      var el = document.getElementById('login-error');
-      el.textContent = msg;
-      el.style.display = 'block';
-    }
-
-    function resetLoginBtn() {
-      var btn = document.getElementById('login-btn');
-      btn.disabled = false;
-      btn.innerHTML = '🔐 Einloggen';
     }
 
     // ── Show / hide portal ─────────────────────────────────────
@@ -1942,9 +1998,8 @@
       mieterData = {};
       _allTickets = [];
       document.getElementById('app').style.display = 'none';
-      document.getElementById('login-page').style.display = 'flex';
-      document.getElementById('input-pin').value = '';
       switchTab('home');
+      showLogin();
     }
 
     // ── PWA Install ───────────────────────────────────────────
@@ -2050,14 +2105,17 @@
 
     // ── Auto-login / Init ─────────────────────────────────────
     (function init() {
+      // Check URL for ?pin= prefill (from invite link)
+      var urlPin = new URLSearchParams(window.location.search).get('pin');
+
       var savedSession = localStorage.getItem('mp_session');
       var savedPin = localStorage.getItem('mp_pin');
 
       if (savedSession && savedPin) {
         try {
           var parsed = JSON.parse(savedSession);
-          if (parsed.landlordUid && parsed.wohnung) {
-            // Re-verify PIN against Firestore silently
+          if (parsed.landlordUid && (parsed.wohnung || parsed.vn)) {
+            // Re-verify PIN against Firestore silently, then show portal
             db.collection('tenants').doc(parsed.landlordUid)
               .collection('portal-pins').doc(savedPin)
               .get()
@@ -2080,12 +2138,12 @@
                   localStorage.setItem('mp_session', JSON.stringify(mieterData));
                   showPortal();
                 } else {
-                  // PIN no longer valid
-                  showLogin();
+                  // PIN no longer valid — show login, prefill URL pin if present
+                  showLogin(urlPin);
                 }
               })
               .catch(function() {
-                // Offline or error – show portal with cached data anyway
+                // Offline or error – use cached data
                 mieterData = parsed;
                 showPortal();
               });
@@ -2093,12 +2151,20 @@
           }
         } catch(e) {}
       }
-      showLogin();
+      // No saved session — show login, auto-fill and check URL pin if present
+      showLogin(urlPin);
     })();
 
-    function showLogin() {
+    function showLogin(prefillPin) {
       document.getElementById('login-page').style.display = 'flex';
       document.getElementById('app').style.display = 'none';
+      currentPin = '';
+      renderPinLogin();
+      if (prefillPin && prefillPin.length === 4) {
+        currentPin = prefillPin;
+        updatePinDots();
+        setTimeout(function() { checkPin(prefillPin); }, 300);
+      }
     }
   </script>
 </body>
