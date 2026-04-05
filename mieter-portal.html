@@ -1416,7 +1416,8 @@
             email: data.email || '',
             tel: data.tel || '',
             landlordPhone: data.landlordPhone || data.verwalterTel || '',
-            landlordUid: landlordUid
+            landlordUid: landlordUid,
+            mieterId: data.mieterId || pin
           };
 
           // Persist session
@@ -1454,7 +1455,8 @@
                       email: data2.email || '',
                       tel: data2.tel || '',
                       landlordPhone: data2.landlordPhone || data2.verwalterTel || '',
-                      landlordUid: s.landlordUid
+                      landlordUid: s.landlordUid,
+                      mieterId: data2.mieterId || pin
                     };
                     localStorage.setItem('mp_session', JSON.stringify(mieterData));
                     localStorage.setItem('mp_pin', pin);
@@ -1495,6 +1497,7 @@
       populateUI();
       loadData();
       requestNotifications();
+      startNotifListener();
     }
 
     function populateUI() {
@@ -1563,9 +1566,10 @@
 
       // Messages realtime
       if (_messagesUnsub) { _messagesUnsub(); _messagesUnsub = null; }
+      var chatMieterId = mieterData.mieterId || localStorage.getItem('mp_pin') || mieterData.wohnung || '';
       _messagesUnsub = db.collection('tenants').doc(mieterData.landlordUid)
-        .collection('messages')
-        .where('wohnung', '==', mieterData.wohnung || '')
+        .collection('messages').doc(chatMieterId)
+        .collection('msgs')
         .orderBy('zeit', 'asc')
         .onSnapshot(function(snap) {
           var msgs = [];
@@ -1695,21 +1699,40 @@
         }
       } catch(e) { console.warn('Foto upload failed', e); }
 
+      var verwalterUid = mieterData.landlordUid;
+      var mieterName = ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim();
+      var ticketId = 'ticket_' + Date.now();
       var ticket = {
+        id: ticketId,
+        wn: mieterData.wohnung || mieterData.wn || '',
         pb: desc,
-        kategorie: kat,
-        wn: mieterData.wohnung || '',
-        status: 'Offen',
         prio: 'Mittel',
+        mieter: mieterName,
+        mieterId: mieterData.mieterId || null,
+        status: 'Offen',
+        dat: new Date().toLocaleDateString('de-DE'),
+        bild: fotoUrl || null,
+        hw: null,
         erstellt: new Date().toISOString(),
-        fotoUrl: fotoUrl,
         vonMieter: true,
-        mieterName: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim()
+        kategorie: kat || 'Sonstiges'
       };
 
       try {
-        await db.collection('tenants').doc(mieterData.landlordUid)
-          .collection('tickets').add(ticket);
+        var batch = db.batch();
+        var ticketRef = db.collection('tenants').doc(verwalterUid)
+          .collection('tickets').doc(ticketId);
+        batch.set(ticketRef, ticket);
+        var aktivRef = db.collection('tenants').doc(verwalterUid)
+          .collection('aktivitaeten').doc();
+        batch.set(aktivRef, {
+          typ: 'ticket_neu_mieter',
+          text: mieterName + ' hat Schaden gemeldet: ' + desc.substring(0, 40),
+          zeit: firebase.firestore.FieldValue.serverTimestamp(),
+          icon: '🎫',
+          wichtig: true
+        });
+        await batch.commit();
         closeTicketModal();
         showPortalToast('Ticket erstellt ✅', 'success');
       } catch(e) {
@@ -1769,21 +1792,40 @@
         }
       } catch(e) { console.warn('Foto upload failed', e); }
 
+      var verwalterUid = mieterData.landlordUid;
+      var mieterName = ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim();
+      var ticketId = 'ticket_' + Date.now();
       var ticket = {
+        id: ticketId,
+        wn: mieterData.wohnung || mieterData.wn || '',
         pb: desc,
-        kategorie: kat,
-        wn: mieterData.wohnung || '',
-        status: 'Offen',
         prio: 'Mittel',
+        mieter: mieterName,
+        mieterId: mieterData.mieterId || null,
+        status: 'Offen',
+        dat: new Date().toLocaleDateString('de-DE'),
+        bild: fotoUrl || null,
+        hw: null,
         erstellt: new Date().toISOString(),
-        fotoUrl: fotoUrl,
         vonMieter: true,
-        mieterName: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim()
+        kategorie: kat || 'Sonstiges'
       };
 
       try {
-        await db.collection('tenants').doc(mieterData.landlordUid)
-          .collection('tickets').add(ticket);
+        var batch = db.batch();
+        var ticketRef = db.collection('tenants').doc(verwalterUid)
+          .collection('tickets').doc(ticketId);
+        batch.set(ticketRef, ticket);
+        var aktivRef = db.collection('tenants').doc(verwalterUid)
+          .collection('aktivitaeten').doc();
+        batch.set(aktivRef, {
+          typ: 'ticket_neu_mieter',
+          text: mieterName + ' hat Schaden gemeldet: ' + desc.substring(0, 40),
+          zeit: firebase.firestore.FieldValue.serverTimestamp(),
+          icon: '🎫',
+          wichtig: true
+        });
+        await batch.commit();
 
         showSuccessOverlay();
 
@@ -1834,11 +1876,14 @@
       if (!text || !mieterData.landlordUid) return;
       input.value = '';
 
+      var chatMieterId = mieterData.mieterId || localStorage.getItem('mp_pin') || mieterData.wohnung || '';
       db.collection('tenants').doc(mieterData.landlordUid)
-        .collection('messages').add({
+        .collection('messages').doc(chatMieterId)
+        .collection('msgs').add({
           text: text,
           von: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim(),
           wohnung: mieterData.wohnung || '',
+          mieterId: chatMieterId,
           zeit: firebase.firestore.FieldValue.serverTimestamp(),
           gelesen: false,
           vonMieter: true
@@ -1858,12 +1903,15 @@
           );
           await storageRef.put(file);
           var url = await storageRef.getDownloadURL();
+          var chatMieterId = mieterData.mieterId || localStorage.getItem('mp_pin') || mieterData.wohnung || '';
           db.collection('tenants').doc(mieterData.landlordUid)
-            .collection('messages').add({
+            .collection('messages').doc(chatMieterId)
+            .collection('msgs').add({
               text: '📷 Foto',
               fotoUrl: url,
               von: ((mieterData.vn || '') + ' ' + (mieterData.nn || '')).trim(),
               wohnung: mieterData.wohnung || '',
+              mieterId: chatMieterId,
               zeit: firebase.firestore.FieldValue.serverTimestamp(),
               gelesen: false,
               vonMieter: true
@@ -1888,6 +1936,7 @@
     function handleLogout() {
       if (_ticketsUnsub) { _ticketsUnsub(); _ticketsUnsub = null; }
       if (_messagesUnsub) { _messagesUnsub(); _messagesUnsub = null; }
+      if (_notifUnsub) { _notifUnsub(); _notifUnsub = null; }
       localStorage.removeItem('mp_session');
       localStorage.removeItem('mp_pin');
       mieterData = {};
@@ -1950,6 +1999,29 @@
       }
     }
 
+    // ── Notification listener (Verwalter → Mieter) ───────────
+    var _notifUnsub = null;
+
+    function startNotifListener() {
+      var uid = mieterData.landlordUid;
+      var mid = mieterData.mieterId || mieterData.id || null;
+      if (!uid || !mid || !db) return;
+      if (_notifUnsub) { _notifUnsub(); _notifUnsub = null; }
+      _notifUnsub = db.collection('tenants').doc(uid)
+        .collection('mieter_notifs')
+        .where('mieterId', '==', mid)
+        .where('gelesen', '==', false)
+        .onSnapshot(function(snap) {
+          if (!snap.empty) {
+            snap.docs.forEach(function(doc) {
+              var n = doc.data();
+              showPortalToast(n.titel + ': ' + n.nachricht, 'info');
+              doc.ref.update({ gelesen: true }).catch(function(){});
+            });
+          }
+        }, function(){});
+    }
+
     // ── Notifications ─────────────────────────────────────────
     function requestNotifications() {
       if (!('Notification' in window)) return;
@@ -2002,7 +2074,8 @@
                     email: data.email || parsed.email || '',
                     tel: data.tel || parsed.tel || '',
                     landlordPhone: data.landlordPhone || data.verwalterTel || parsed.landlordPhone || '',
-                    landlordUid: parsed.landlordUid
+                    landlordUid: parsed.landlordUid,
+                    mieterId: data.mieterId || parsed.mieterId || savedPin || null
                   };
                   localStorage.setItem('mp_session', JSON.stringify(mieterData));
                   showPortal();

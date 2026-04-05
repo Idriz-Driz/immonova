@@ -286,7 +286,7 @@ function submitForm() {
   var email = document.getElementById('cf-email').value.trim();
   var nachricht = document.getElementById('cf-nachricht').value.trim();
   if (!vorname || !email || !nachricht) {
-    alert('Bitte alle Pflichtfelder ausfüllen.');
+    toast('Bitte alle Pflichtfelder ausfüllen.', 'error');
     return;
   }
   // Build mailto link as fallback

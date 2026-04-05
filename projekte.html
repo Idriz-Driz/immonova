@@ -276,7 +276,7 @@ function openEdit(id) {
 
 function saveProj() {
   var name = document.getElementById('p-name').value.trim();
-  if (!name) { alert('Bitte Projektname eingeben.'); return; }
+  if (!name) { toast('Bitte Projektname eingeben.', 'error'); return; }
   var list = getData(KEYS.projekte, []);
   var obj = {
     id: editId || gid(),
@@ -297,6 +297,8 @@ function saveProj() {
     list.unshift(obj);
   }
   setData(KEYS.projekte, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'projekte', list).catch(function(){}); }
   syncToFirebase(uid);
   addNotif('🏗️','Projekt "'+name+'" gespeichert');
   editId = null;
@@ -310,14 +312,26 @@ function changeStatus(id, status) {
   if (!p) return;
   p.status = status;
   setData(KEYS.projekte, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'projekte', list).catch(function(){}); }
   syncToFirebase(uid);
   render();
 }
 
 function deleteProj(id) {
-  if (!confirm('Projekt wirklich löschen?')) return;
+  confirmAction('Projekt wirklich löschen?', function() {
+  _deleteProjConfirmed(id);
+  });
+}
+function _deleteProjConfirmed(id) {
+  var _deletedId = id;
   var list = getData(KEYS.projekte, []).filter(function(x){ return x.id!==id; });
   setData(KEYS.projekte, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'projekte', _deletedId).catch(function(){});
+    saveCollection(_uid, 'projekte', list).catch(function(){});
+  }
   syncToFirebase(uid);
   render();
 }
@@ -325,7 +339,20 @@ function deleteProj(id) {
 function switchTab(t) { activeTab = t; render(); }
 
 initFirebase();
-loadFromFirebase(uid, function(){ render(); });
+loadFromFirebase(uid, function(){
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'projekte', null);
+      if (remote && remote.length > 0) setData(KEYS.projekte, remote);
+      else {
+        var local = getData(KEYS.projekte, []);
+        if (local.length > 0) saveCollection(_uid, 'projekte', local).catch(function(){});
+      }
+    }
+    render();
+  })();
+});
 </script>
 </body>
 </html>

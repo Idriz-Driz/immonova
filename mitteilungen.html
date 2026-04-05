@@ -156,7 +156,7 @@ function closeAdd() { hideModal('add-modal'); }
 
 function saveMitt() {
   var titel = document.getElementById('m-titel').value.trim();
-  if (!titel) { alert('Bitte Titel eingeben.'); return; }
+  if (!titel) { toast('Bitte Titel eingeben.', 'error'); return; }
   var list = getData(KEYS.mitteilungen, []);
   var obj = { id: editId||gid(), typ: document.getElementById('m-typ').value,
     titel: titel, datum: document.getElementById('m-datum').value,
@@ -167,24 +167,54 @@ function saveMitt() {
     var idx = list.findIndex(function(x){ return x.id===editId; });
     if (idx >= 0) { obj.gesendet = list[idx].gesendet; list[idx] = obj; }
   } else { list.unshift(obj); }
-  setData(KEYS.mitteilungen, list); syncToFirebase(uid); closeAdd(); render();
+  setData(KEYS.mitteilungen, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'mitteilungen', list).catch(function(){}); }
+  syncToFirebase(uid); closeAdd(); render();
 }
 
 function markSent(id) {
   var list = getData(KEYS.mitteilungen, []);
   var m = list.find(function(x){ return x.id===id; }); if (!m) return;
   m.gesendet = !m.gesendet;
-  setData(KEYS.mitteilungen, list); syncToFirebase(uid); render();
+  setData(KEYS.mitteilungen, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'mitteilungen', list).catch(function(){}); }
+  syncToFirebase(uid); render();
 }
 
 function deleteMitt(id) {
-  if (!confirm('Mitteilung löschen?')) return;
-  setData(KEYS.mitteilungen, getData(KEYS.mitteilungen,[]).filter(function(x){return x.id!==id;}));
+  confirmAction('Mitteilung löschen?', function() {
+  _deleteMittConfirmed(id);
+  });
+}
+function _deleteMittConfirmed(id) {
+  var _deletedId = id;
+  var _updatedArr = getData(KEYS.mitteilungen,[]).filter(function(x){return x.id!==id;});
+  setData(KEYS.mitteilungen, _updatedArr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'mitteilungen', _deletedId).catch(function(){});
+    saveCollection(_uid, 'mitteilungen', _updatedArr).catch(function(){});
+  }
   syncToFirebase(uid); render();
 }
 
 initFirebase();
-loadFromFirebase(uid, function(){ render(); });
+loadFromFirebase(uid, function(){
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'mitteilungen', null);
+      if (remote && remote.length > 0) setData(KEYS.mitteilungen, remote);
+      else {
+        var local = getData(KEYS.mitteilungen, []);
+        if (local.length > 0) saveCollection(_uid, 'mitteilungen', local).catch(function(){});
+      }
+    }
+    render();
+  })();
+});
 </script>
 </body>
 </html>

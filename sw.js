@@ -1,5 +1,7 @@
-// ImmoNova Service Worker v2
-var CACHE = 'immonova-v2';
+// ImmoNova Service Worker – auto-versioned by build date
+var CACHE_DATE = new Date().toISOString().split('T')[0].replace(/-/g, '');
+var CACHE = 'immonova-v' + CACHE_DATE;
+
 var ASSETS = [
   '/mieter-portal.html',
   '/shared.js',
@@ -11,11 +13,11 @@ var ASSETS = [
 self.addEventListener('install', function(e) {
   e.waitUntil(
     caches.open(CACHE).then(function(c) {
-      // Add each asset individually so one failure doesn't break install
       return Promise.allSettled(ASSETS.map(function(url) { return c.add(url); }));
+    }).then(function() {
+      return self.skipWaiting();
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', function(e) {
@@ -24,9 +26,10 @@ self.addEventListener('activate', function(e) {
       return Promise.all(
         keys.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); })
       );
+    }).then(function() {
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 // Network-first for HTML/JS, cache-first for images/fonts
@@ -63,6 +66,13 @@ self.addEventListener('fetch', function(e) {
       return caches.match(e.request);
     })
   );
+});
+
+// Notify all clients when a new SW version is waiting
+self.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Push notifications

@@ -111,6 +111,12 @@ var _filterTab      = 'alle';  // alle | ungelesen | mieter | handwerker
 var _searchQ        = '';
 var _emojiOpen      = false;
 
+// Firestore realtime state
+var _aktiverChatMieterId = null;
+var _chatListener        = null;
+var _mieterListeLoaded   = [];
+var _unreadBadges        = {};   // mieterId -> unread count
+
 var AVATAR_COLORS = ['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#be185d'];
 
 var EMOJIS = ['😊','😂','👍','❤️','🙏','😅','🔑','📋','✅','⚠️',
@@ -163,44 +169,24 @@ function dayLabel(dayStr) {
 }
 
 // ─── DATA ACCESSORS ───────────────────────────────────────────────────────────
-function getMessages() {
-  return getData(KEYS.messages, []);
-}
-function setMessages(msgs) {
-  setData(KEYS.messages, msgs);
-}
-
-// Build conversation list from messages
+// Build conversation list from loaded mieter list + unread badge state
 function getConversations() {
-  var msgs = getMessages();
-  var convMap = {};
-  msgs.forEach(function(msg) {
-    var k = msg.konvId;
-    if (!convMap[k]) {
-      convMap[k] = {
-        konvId:    k,
-        name:      msg.an === user.name ? msg.von : msg.an,
-        role:      msg.role || 'Mieter',
-        messages:  [],
-        unread:    0
-      };
-    }
-    convMap[k].messages.push(msg);
-    if (!msg.gelesen && msg.von !== user.name) convMap[k].unread++;
+  var convs = _mieterListeLoaded.map(function(m) {
+    var id   = m.id || m.uid || (m.vn + '_' + m.nn).replace(/\s+/g,'_');
+    var name = ((m.vn || '') + ' ' + (m.nn || '')).trim() || m.name || id;
+    return {
+      konvId: id,
+      name:   name,
+      role:   'Mieter',
+      unread: _unreadBadges[id] || 0,
+      lastMsg: null   // populated lazily; we don't cache last-msg from Firestore here
+    };
   });
 
-  var convs = Object.keys(convMap).map(function(k) {
-    var c = convMap[k];
-    c.messages.sort(function(a, b) { return (a.datum || '') < (b.datum || '') ? -1 : 1; });
-    c.lastMsg = c.messages[c.messages.length - 1];
-    return c;
-  });
-
-  // Sort by last message descending
+  // Sort: entries with unread first, then alphabetically
   convs.sort(function(a, b) {
-    var da = a.lastMsg ? (a.lastMsg.datum || '') : '';
-    var db = b.lastMsg ? (b.lastMsg.datum || '') : '';
-    return da < db ? 1 : -1;
+    if (b.unread !== a.unread) return b.unread - a.unread;
+    return a.name.localeCompare(b.name);
   });
 
   return convs;
@@ -316,17 +302,13 @@ function renderConvList() {
   }
 
   listEl.innerHTML = convs.map(function(c) {
-    var isActive = c.konvId === _activeKonvId;
+    var isActive = c.konvId === _aktiverChatMieterId;
     var color = avatarColor(c.name);
-    var lastText = c.lastMsg ? c.lastMsg.text : 'Noch keine Nachrichten';
-    if (lastText.length > 40) lastText = lastText.substring(0, 40) + '…';
-    var lastTime = c.lastMsg ? formatMsgTime(c.lastMsg.datum) : '';
-    var isOwn = c.lastMsg && c.lastMsg.von === user.name;
-    var roleLabel = (c.role === 'Handwerker') ? 'Handwerker' : 'Mieter';
-    var roleBg    = (c.role === 'Handwerker') ? '#fff7ed' : '#eff6ff';
-    var roleColor = (c.role === 'Handwerker') ? '#ea580c' : '#2563eb';
+    var roleLabel = 'Mieter';
+    var roleBg    = '#eff6ff';
+    var roleColor = '#2563eb';
 
-    return '<div class="conv-item" onclick="selectConversation(\'' + escAttr(c.konvId) + '\')"'
+    return '<div class="conv-item" id="conv-item-' + escAttr(c.konvId) + '" onclick="selectConversation(\'' + escAttr(c.konvId) + '\', \'' + escAttr(c.name) + '\')"'
       + ' style="padding:13px 16px;border-bottom:1px solid #f8fafc;background:' + (isActive ? '#eff6ff' : 'white') + ';display:flex;align-items:center;gap:10px;">'
       // Avatar
       + '<div style="position:relative;flex-shrink:0;">'
@@ -339,16 +321,11 @@ function renderConvList() {
       +       '<span style="font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">' + esc(c.name) + '</span>'
       +       '<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;background:' + roleBg + ';color:' + roleColor + ';white-space:nowrap;">' + roleLabel + '</span>'
       +     '</div>'
-      +     '<span style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:4px;">' + esc(lastTime) + '</span>'
+      +     '<span id="conv-time-' + escAttr(c.konvId) + '" style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:4px;"></span>'
       +   '</div>'
       +   '<div style="display:flex;align-items:center;justify-content:space-between;">'
-      +     '<span style="font-size:12px;color:' + (c.unread > 0 ? '#0f172a' : '#64748b') + ';font-weight:' + (c.unread > 0 ? '500' : '400') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;">'
-      +       (isOwn ? '<span style="color:#94a3b8;">Du: </span>' : '')
-      +       esc(lastText)
-      +     '</span>'
-      +     (c.unread > 0
-          ? '<span style="background:#2563eb;color:white;font-size:10px;font-weight:700;min-width:19px;height:19px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;flex-shrink:0;margin-left:4px;">' + c.unread + '</span>'
-          : '')
+      +     '<span id="conv-preview-' + escAttr(c.konvId) + '" style="font-size:12px;color:' + (c.unread > 0 ? '#0f172a' : '#64748b') + ';font-weight:' + (c.unread > 0 ? '500' : '400') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;">–</span>'
+      +     '<span id="conv-badge-' + escAttr(c.konvId) + '" style="display:' + (c.unread > 0 ? 'inline-flex' : 'none') + ';background:#2563eb;color:white;font-size:10px;font-weight:700;min-width:19px;height:19px;border-radius:50%;align-items:center;justify-content:center;padding:0 3px;flex-shrink:0;margin-left:4px;">' + (c.unread || '') + '</span>'
       +   '</div>'
       + '</div>'
       + '</div>';
@@ -356,18 +333,12 @@ function renderConvList() {
 }
 
 // ─── SELECT CONVERSATION ──────────────────────────────────────────────────────
-function selectConversation(konvId) {
-  _activeKonvId = konvId;
-
-  // Mark messages as read
-  var msgs = getMessages();
-  msgs.forEach(function(m) {
-    if (m.konvId === konvId && m.von !== user.name) m.gelesen = true;
-  });
-  setMessages(msgs);
+function selectConversation(mieterId, mieterName) {
+  _activeKonvId = mieterId;
 
   renderConvList();
-  renderChatWindow(konvId);
+  renderChatWindowShell(mieterId, mieterName);
+  openMieterChat(mieterId, mieterName);
 
   // Mobile: show right panel
   var lp = document.getElementById('left-panel');
@@ -376,48 +347,37 @@ function selectConversation(konvId) {
   if (rp) rp.classList.add('conv-open');
 }
 
-// ─── RENDER CHAT WINDOW ───────────────────────────────────────────────────────
-function renderChatWindow(konvId) {
+// ─── RENDER CHAT WINDOW SHELL ─────────────────────────────────────────────────
+// Builds the right-panel chrome (header + empty msgs area + input bar).
+// The actual messages are injected by renderChatMessages() via the onSnapshot listener.
+function renderChatWindowShell(mieterId, mieterName) {
   var rp = document.getElementById('right-panel');
   if (!rp) return;
 
-  var convs = getConversations();
-  var conv = null;
-  convs.forEach(function(c) { if (c.konvId === konvId) conv = c; });
-
-  if (!conv) {
-    rp.innerHTML = buildEmptyState();
-    return;
-  }
-
-  var color = avatarColor(conv.name);
-  var roleLabel = (conv.role === 'Handwerker') ? 'Handwerker' : 'Mieter';
-  var roleBg    = (conv.role === 'Handwerker') ? '#fff7ed' : '#eff6ff';
-  var roleColor = (conv.role === 'Handwerker') ? '#ea580c' : '#2563eb';
+  var color    = avatarColor(mieterName);
+  var roleBg   = '#eff6ff';
+  var roleColor = '#2563eb';
 
   rp.innerHTML =
     // Header
     '<div style="background:white;border-bottom:1px solid #e2e8f0;padding:13px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">'
     // Mobile back button
     + '<button id="back-btn" onclick="goBackToList()" style="display:none;background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;padding:0 4px 0 0;margin-right:2px;">←</button>'
-    + '<div style="width:42px;height:42px;background:' + color + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white;flex-shrink:0;">' + getInitials(conv.name) + '</div>'
+    + '<div style="width:42px;height:42px;background:' + color + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white;flex-shrink:0;">' + getInitials(mieterName) + '</div>'
     + '<div style="flex:1;">'
     +   '<div style="display:flex;align-items:center;gap:7px;">'
-    +     '<span style="font-size:14px;font-weight:700;color:#0f172a;">' + esc(conv.name) + '</span>'
-    +     '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:' + roleBg + ';color:' + roleColor + ';">' + roleLabel + '</span>'
+    +     '<span style="font-size:14px;font-weight:700;color:#0f172a;">' + esc(mieterName) + '</span>'
+    +     '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:' + roleBg + ';color:' + roleColor + ';">Mieter</span>'
     +   '</div>'
-    +   '<div style="font-size:12px;color:#16a34a;display:flex;align-items:center;gap:4px;margin-top:1px;">'
-    +     '<span style="width:7px;height:7px;background:#16a34a;border-radius:50%;display:inline-block;"></span>'
-    +     'Online'
-    +   '</div>'
+    +   '<div style="font-size:12px;color:#94a3b8;display:flex;align-items:center;gap:4px;margin-top:1px;">Mieter-Konversation</div>'
     + '</div>'
-    + '<button onclick="alert(\'Anruf-Funktion in Kürze verfügbar\')" style="background:white;border:1px solid #e2e8f0;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;color:#0f172a;transition:all 0.15s;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">📞 Anrufen</button>'
+    + '<button onclick="toast(\'Anruf-Funktion in Kürze verfügbar\', \'info\')" style="background:white;border:1px solid #e2e8f0;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;color:#0f172a;transition:all 0.15s;display:flex;align-items:center;gap:5px;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">📞 Anrufen</button>'
     + '<button onclick="showConvMenu(this)" style="background:white;border:1px solid #e2e8f0;border-radius:9px;width:36px;height:36px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'white\'">⋮</button>'
     + '</div>'
 
-    // Messages area
+    // Messages area — filled by renderChatMessages() via onSnapshot
     + '<div id="chat-msgs" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:4px;background:#f8fafc;">'
-    + renderMessages(conv.messages)
+    + '<div style="flex:1;display:flex;align-items:center;justify-content:center;"><div style="text-align:center;color:#94a3b8;font-size:13px;">Laden…</div></div>'
     + '</div>'
 
     // Input bar wrapper (relative for emoji picker)
@@ -432,7 +392,7 @@ function renderChatWindow(konvId) {
     +   '</div>'
     +   '<div style="background:white;border-top:1px solid #e2e8f0;padding:12px 16px;display:flex;gap:8px;align-items:flex-end;">'
     +     '<button onclick="toggleEmojiPicker()" title="Emoji" style="width:36px;height:36px;background:none;border:1px solid #e2e8f0;border-radius:9px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'none\'">😊</button>'
-    +     '<button onclick="alert(\'Dateianhang in Kürze verfügbar\')" title="Anhang" style="width:36px;height:36px;background:none;border:1px solid #e2e8f0;border-radius:9px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'none\'">📎</button>'
+    +     '<button onclick="toast(\'Dateianhang in Kürze verfügbar\', \'info\')" title="Anhang" style="width:36px;height:36px;background:none;border:1px solid #e2e8f0;border-radius:9px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'none\'">📎</button>'
     +     '<textarea id="chat-input" rows="1" placeholder="Nachricht schreiben…" onkeydown="chatKeydown(event)" oninput="autoResizeTA(this)"'
     +     ' style="flex:1;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:20px;font-size:14px;font-family:inherit;color:#0f172a;background:#f8fafc;outline:none;resize:none;max-height:120px;line-height:1.45;box-sizing:border-box;transition:border-color 0.15s;"'
     +     ' onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'"></textarea>'
@@ -440,11 +400,100 @@ function renderChatWindow(konvId) {
     +   '</div>'
     + '</div>';
 
-  scrollToBottom();
-
   // Show back button on mobile
   var backBtn = document.getElementById('back-btn');
   if (backBtn && window.innerWidth <= 640) backBtn.style.display = 'flex';
+}
+
+// ─── FIRESTORE REALTIME CHAT ──────────────────────────────────────────────────
+function openMieterChat(mieterId, mieterName) {
+  _aktiverChatMieterId = mieterId;
+  if (_chatListener) { _chatListener(); _chatListener = null; }
+  var uid = getCurrentUid();
+  if (!uid) return;
+  _chatListener = firebase.firestore()
+    .collection('tenants').doc(uid)
+    .collection('messages').doc(mieterId)
+    .collection('msgs')
+    .orderBy('zeit', 'asc')
+    .onSnapshot(function(snap) {
+      var msgs = snap.docs.map(function(doc) {
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+      renderChatMessages(msgs, mieterName);
+      // Mark incoming mieter messages as read
+      snap.docs.forEach(function(doc) {
+        if (!doc.data().gelesen && doc.data().von === 'mieter') {
+          doc.ref.update({ gelesen: true }).catch(function(){});
+        }
+      });
+    }, function(err) { console.error('chat onSnapshot:', err); });
+}
+
+// Renders Firestore messages into the #chat-msgs area
+function renderChatMessages(msgs, mieterName) {
+  var chatMsgs = document.getElementById('chat-msgs');
+  if (!chatMsgs) return;
+
+  if (!msgs || !msgs.length) {
+    chatMsgs.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;"><div style="text-align:center;color:#94a3b8;font-size:13px;padding:30px;">Noch keine Nachrichten.<br>Schreibe etwas!</div></div>';
+    return;
+  }
+
+  var lastDay = '';
+  var html = '';
+
+  msgs.forEach(function(msg) {
+    // von === 'verwalter' means own message
+    var isOwn = msg.von === 'verwalter';
+    var zeit  = msg.zeit && msg.zeit.toDate ? msg.zeit.toDate() : (msg.zeit ? new Date(msg.zeit) : null);
+    var dayStr = zeit ? zeit.toLocaleDateString('de-DE') : '';
+
+    if (dayStr && dayStr !== lastDay) {
+      lastDay = dayStr;
+      html += '<div style="text-align:center;margin:12px 0 8px;">'
+        + '<span style="background:#e2e8f0;color:#475569;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;">' + dayLabel(dayStr) + '</span>'
+        + '</div>';
+    }
+
+    var timeStr = zeit ? zeit.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+    var readReceipt = isOwn ? (msg.gelesen ? ' ✓✓' : ' ✓') : '';
+    var txt = esc(msg.txt || msg.text || '');
+
+    if (isOwn) {
+      html += '<div style="display:flex;justify-content:flex-end;margin-bottom:3px;">'
+        + '<div style="max-width:68%;">'
+        +   '<div style="background:#2563eb;color:white;border-radius:18px 18px 4px 18px;padding:10px 14px;font-size:14px;line-height:1.45;word-wrap:break-word;">' + txt + '</div>'
+        +   '<div style="font-size:11px;color:#94a3b8;text-align:right;margin-top:3px;padding-right:4px;">' + timeStr + '<span style="color:' + (msg.gelesen ? '#2563eb' : '#94a3b8') + ';">' + readReceipt + '</span></div>'
+        + '</div>'
+        + '</div>';
+    } else {
+      html += '<div style="display:flex;justify-content:flex-start;margin-bottom:3px;">'
+        + '<div style="max-width:68%;">'
+        +   '<div style="background:white;color:#0f172a;border-radius:18px 18px 18px 4px;padding:10px 14px;font-size:14px;line-height:1.45;box-shadow:0 1px 3px rgba(0,0,0,0.07);word-wrap:break-word;">' + txt + '</div>'
+        +   '<div style="font-size:11px;color:#94a3b8;text-align:left;margin-top:3px;padding-left:4px;">' + timeStr + '</div>'
+        + '</div>'
+        + '</div>';
+    }
+  });
+
+  chatMsgs.innerHTML = html;
+  scrollToBottom();
+}
+
+// Updates the unread badge in the conversation list without a full re-render
+function updateUnreadBadge(mieterId, count) {
+  _unreadBadges[mieterId] = count;
+  var badge   = document.getElementById('conv-badge-' + mieterId);
+  var preview = document.getElementById('conv-preview-' + mieterId);
+  if (badge) {
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    badge.textContent   = count > 0 ? count : '';
+  }
+  if (preview) {
+    preview.style.color      = count > 0 ? '#0f172a' : '#64748b';
+    preview.style.fontWeight = count > 0 ? '500' : '400';
+  }
 }
 
 // ─── RENDER MESSAGES ──────────────────────────────────────────────────────────
@@ -505,6 +554,26 @@ function sendMessage() {
   input.style.height = 'auto';
   closeEmojiPicker();
 
+  var uid = getCurrentUid();
+
+  // If we have a Firestore chat open (Mieter via portal), write there
+  if (uid && _aktiverChatMieterId) {
+    firebase.firestore()
+      .collection('tenants').doc(uid)
+      .collection('messages').doc(_aktiverChatMieterId)
+      .collection('msgs')
+      .add({
+        von: 'verwalter',
+        name: user.name || 'Verwalter',
+        txt: txt,
+        zeit: firebase.firestore.FieldValue.serverTimestamp(),
+        gelesen: false
+      }).catch(function(e) { console.error('sendMessage Firestore error:', e); });
+    // onSnapshot will re-render automatically
+    return;
+  }
+
+  // Fallback: localStorage-based conversation (Handwerker etc.)
   var convs = getConversations();
   var conv = null;
   convs.forEach(function(c) { if (c.konvId === _activeKonvId) conv = c; });
@@ -524,7 +593,7 @@ function sendMessage() {
   var msgs = getMessages();
   msgs.push(newMsg);
   setMessages(msgs);
-  syncToFirebase(user.uid);
+  if (uid) saveCollection(uid, 'messages', getMessages()).catch(function(){});
 
   // Re-render
   renderConvList();
@@ -598,7 +667,7 @@ function onSearchInput(val) {
 
 // ─── CONV CONTEXT MENU ────────────────────────────────────────────────────────
 function showConvMenu(btn) {
-  alert('Aktionen:\n- Konversation archivieren\n- Alle als gelesen markieren\n\n(In Kürze verfügbar)');
+  toast('Aktionen:\n- Konversation archivieren\n- Alle als gelesen markieren\n\n(In Kürze verfügbar)', 'info');
 }
 
 // ─── MOBILE BACK ─────────────────────────────────────────────────────────────
@@ -655,8 +724,8 @@ function startConversation() {
   var empfaenger = selEl.value.trim();
   var text = (txtEl.value || '').trim();
 
-  if (!empfaenger) { alert('Bitte einen Empfänger wählen.'); return; }
-  if (!text)       { alert('Bitte eine Nachricht eingeben.'); return; }
+  if (!empfaenger) { toast('Bitte einen Empfänger wählen.', 'error'); return; }
+  if (!text)       { toast('Bitte eine Nachricht eingeben.', 'error'); return; }
 
   // Determine role from selected option
   var selectedOption = selEl.options[selEl.selectedIndex];
@@ -709,11 +778,24 @@ function softUpdate() {
 
 // ─── BOOTSTRAP ────────────────────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, function() {
-  startPageListener(user.uid, function() {
-    softUpdate();
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    // Sync Mieter list from Firestore so conversation list is complete
+    var remoteMieter = await loadCollection(_uid, 'mieter', null);
+    if (remoteMieter && remoteMieter.length > 0) {
+      setData(KEYS.mieter, remoteMieter);
+      _mieterListeLoaded = remoteMieter;
+    } else {
+      _mieterListeLoaded = getData(KEYS.mieter, []);
+    }
+  }
+  loadFromFirebase(user.uid, function() {
+    startPageListener(user.uid, function() {
+      softUpdate();
+    });
   });
-});
+})();
 </script>
 </body>
 </html>

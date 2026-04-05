@@ -165,7 +165,7 @@ function closeAdd() { document.getElementById('add-modal').style.display='none';
 function saveInt() {
   var vn = document.getElementById('i-vn').value.trim();
   var nn = document.getElementById('i-nn').value.trim();
-  if (!vn && !nn) { alert('Bitte Namen eingeben.'); return; }
+  if (!vn && !nn) { toast('Bitte Namen eingeben.', 'error'); return; }
   var list = getData(KEYS.interessenten, []);
   var obj = { id: editId||gid(), vn: vn, nn: nn,
     email: document.getElementById('i-em').value.trim(),
@@ -191,7 +191,11 @@ function changeStatus(id, status) {
 }
 
 function deleteInt(id) {
-  if (!confirm('Interessent löschen?')) return;
+  confirmAction('Interessent löschen?', function() {
+  _deleteIntConfirmed(id);
+  });
+}
+function _deleteIntConfirmed(id) {
   setData(KEYS.interessenten, getData(KEYS.interessenten,[]).filter(function(x){return x.id!==id;}));
   syncToFirebase(uid); render();
 }

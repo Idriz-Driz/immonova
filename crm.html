@@ -274,20 +274,25 @@ function closeIntModal() { hideModal('int-modal'); }
 
 function saveFu() {
   var name = document.getElementById('fu-name').value.trim();
-  if (!name) { alert('Bitte Namen eingeben.'); return; }
+  if (!name) { toast('Bitte Namen eingeben.', 'error'); return; }
   var list = getData(KEYS.followups, []);
   var obj = { id: editId||gid(), name: name, tel: document.getElementById('fu-tel').value.trim(),
     firma: document.getElementById('fu-firma').value.trim(), thema: document.getElementById('fu-thema').value.trim(),
     dat: document.getElementById('fu-dat').value, uhr: document.getElementById('fu-uhr').value,
     prio: document.getElementById('fu-prio').value, notiz: document.getElementById('fu-notiz').value.trim(), done: false };
   if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0){obj.done=list[idx].done;list[idx]=obj;} } else list.unshift(obj);
-  setData(KEYS.followups, list); syncToFirebase(uid); closeFuModal(); render();
+  setData(KEYS.followups, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    saveCollection(_uid, 'followups', getData(KEYS.followups, [])).catch(function(){});
+  }
+  closeFuModal(); render();
 }
 
 function saveInt() {
   var vn = document.getElementById('int-vn').value.trim();
   var nn = document.getElementById('int-nn').value.trim();
-  if (!vn && !nn) { alert('Bitte Namen eingeben.'); return; }
+  if (!vn && !nn) { toast('Bitte Namen eingeben.', 'error'); return; }
   var list = getData(KEYS.interessenten, []);
   var obj = { id: editId||gid(), vn: vn, nn: nn, email: document.getElementById('int-em').value.trim(),
     tel: document.getElementById('int-tel').value.trim(), objekt: document.getElementById('int-obj').value.trim(),
@@ -295,21 +300,36 @@ function saveInt() {
     qm: document.getElementById('int-qm').value, status: document.getElementById('int-status').value,
     notiz: document.getElementById('int-notiz').value.trim() };
   if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0) list[idx]=obj; } else list.unshift(obj);
-  setData(KEYS.interessenten, list); syncToFirebase(uid); closeIntModal(); render();
+  setData(KEYS.interessenten, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    saveCollection(_uid, 'interessenten', getData(KEYS.interessenten, [])).catch(function(){});
+  }
+  closeIntModal(); render();
 }
 
 function toggleDone(id) {
   var list = getData(KEYS.followups, []);
   var item = list.find(function(x){ return x.id===id; }); if (!item) return;
   item.done = !item.done;
-  setData(KEYS.followups, list); syncToFirebase(uid); render();
+  setData(KEYS.followups, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    saveCollection(_uid, 'followups', getData(KEYS.followups, [])).catch(function(){});
+  }
+  render();
 }
 
 function changeIntStatus(id, status) {
   var list = getData(KEYS.interessenten, []);
   var item = list.find(function(x){ return x.id===id; }); if (!item) return;
   item.status = status;
-  setData(KEYS.interessenten, list); syncToFirebase(uid); render();
+  setData(KEYS.interessenten, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    saveCollection(_uid, 'interessenten', getData(KEYS.interessenten, [])).catch(function(){});
+  }
+  render();
 }
 
 function createFuFromInt(id) {
@@ -326,11 +346,48 @@ function createFuFromInt(id) {
   }, 100);
 }
 
-function deleteFu(id) { if(!confirm('Follow-Up löschen?')) return; setData(KEYS.followups, getData(KEYS.followups,[]).filter(function(x){return x.id!==id;})); syncToFirebase(uid); render(); }
-function deleteInt(id) { if(!confirm('Interessent löschen?')) return; setData(KEYS.interessenten, getData(KEYS.interessenten,[]).filter(function(x){return x.id!==id;})); syncToFirebase(uid); render(); }
+function deleteFu(id) {
+  confirmAction('Follow-Up löschen?', function() {
+  setData(KEYS.followups, getData(KEYS.followups,[]).filter(function(x){return x.id!==id;}));
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'followups', id).catch(function(){});
+    saveCollection(_uid, 'followups', getData(KEYS.followups, [])).catch(function(){});
+  }
+  render();
+  });
+}
+function deleteInt(id) {
+  confirmAction('Interessent löschen?', function() {
+  setData(KEYS.interessenten, getData(KEYS.interessenten,[]).filter(function(x){return x.id!==id;}));
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'interessenten', id).catch(function(){});
+    saveCollection(_uid, 'interessenten', getData(KEYS.interessenten, [])).catch(function(){});
+  }
+  render();
+  });
+}
 
 initFirebase();
-loadFromFirebase(uid, function(){ render(); });
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    var remoteFu = await loadCollection(_uid, 'followups', null);
+    if (remoteFu && remoteFu.length > 0) setData(KEYS.followups, remoteFu);
+    else {
+      var localFu = getData(KEYS.followups, []);
+      if (localFu.length > 0) saveCollection(_uid, 'followups', localFu).catch(function(){});
+    }
+    var remoteInt = await loadCollection(_uid, 'interessenten', null);
+    if (remoteInt && remoteInt.length > 0) setData(KEYS.interessenten, remoteInt);
+    else {
+      var localInt = getData(KEYS.interessenten, []);
+      if (localInt.length > 0) saveCollection(_uid, 'interessenten', localInt).catch(function(){});
+    }
+  }
+  render();
+})();
 </script>
 </body>
 </html>

@@ -228,7 +228,7 @@ function renderBars(containerId) {
 function subscribe() {
   var email = document.getElementById('sub-email').value.trim();
   if (!email || !email.includes('@')) {
-    alert('Bitte gültige E-Mail-Adresse eingeben.');
+    toast('Bitte gültige E-Mail-Adresse eingeben.', 'error');
     return;
   }
   alert('✅ Danke! ' + email + ' wurde für Status-Updates eingetragen.');

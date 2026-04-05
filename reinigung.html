@@ -184,24 +184,51 @@ function closeAdd() { hideModal('add-modal'); }
 
 function saveRei() {
   var mieter = document.getElementById('r-mieter').value.trim();
-  if (!mieter) { alert('Bitte Mieter eingeben.'); return; }
+  if (!mieter) { toast('Bitte Mieter eingeben.', 'error'); return; }
   var list = getData(KEYS.reinigungen, []);
   var obj = { id: editId||gid(), mieter: mieter, wohnung: document.getElementById('r-wohnung').value.trim(),
     bereich: document.getElementById('r-bereich').value, von: document.getElementById('r-von').value,
     bis: document.getElementById('r-bis').value, notiz: document.getElementById('r-notiz').value.trim() };
   if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0) list[idx]=obj; }
   else list.push(obj);
-  setData(KEYS.reinigungen, list); syncToFirebase(uid); closeAdd(); render();
+  setData(KEYS.reinigungen, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'reinigungen', list).catch(function(){}); }
+  syncToFirebase(uid); closeAdd(); render();
 }
 
 function deleteRei(id) {
-  if (!confirm('Eintrag löschen?')) return;
-  setData(KEYS.reinigungen, getData(KEYS.reinigungen,[]).filter(function(x){return x.id!==id;}));
+  confirmAction('Eintrag löschen?', function() {
+  _deleteReiConfirmed(id);
+  });
+}
+function _deleteReiConfirmed(id) {
+  var _deletedId = id;
+  var _updatedArr = getData(KEYS.reinigungen,[]).filter(function(x){return x.id!==id;});
+  setData(KEYS.reinigungen, _updatedArr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'reinigungen', _deletedId).catch(function(){});
+    saveCollection(_uid, 'reinigungen', _updatedArr).catch(function(){});
+  }
   syncToFirebase(uid); render();
 }
 
 initFirebase();
-loadFromFirebase(uid, function(){ render(); });
+loadFromFirebase(uid, function(){
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'reinigungen', null);
+      if (remote && remote.length > 0) setData(KEYS.reinigungen, remote);
+      else {
+        var local = getData(KEYS.reinigungen, []);
+        if (local.length > 0) saveCollection(_uid, 'reinigungen', local).catch(function(){});
+      }
+    }
+    render();
+  })();
+});
 </script>
 </body>
 </html>

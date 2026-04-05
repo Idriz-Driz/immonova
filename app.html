@@ -622,6 +622,23 @@ function render() {
 
     + '</div>'; // end max-width wrapper
 
+  // ── Onboarding Guide für neue Nutzer ─────────────────────
+  if (mieter.length === 0 && objekte.length === 0 && tickets.length === 0) {
+    mainContent = '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:white;border-radius:16px;padding:28px;margin-bottom:24px;">'
+      + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">🎉 Willkommen bei ImmoNova!</div>'
+      + '<div style="font-size:14px;opacity:0.9;margin-bottom:20px;">Starte jetzt mit 3 einfachen Schritten – es dauert nur wenige Minuten:</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">'
+      + ['🏢|1|Objekt anlegen|objekte.html','👥|2|Mieter anlegen|mieter.html','🎫|3|Ticket erstellen|tickets.html'].map(function(s){
+          var p = s.split('|');
+          return '<a href="'+p[3]+'" style="background:rgba(255,255,255,0.15);border-radius:12px;padding:16px;text-decoration:none;color:white;text-align:center;display:block;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.25)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.15)\'">'
+            + '<div style="font-size:28px;margin-bottom:8px;">'+p[0]+'</div>'
+            + '<div style="font-size:11px;opacity:0.7;margin-bottom:4px;">Schritt '+p[1]+'</div>'
+            + '<div style="font-size:13px;font-weight:600;">'+p[2]+'</div>'
+            + '</a>';
+        }).join('')
+      + '</div></div>' + mainContent;
+  }
+
   renderLayout('dashboard', 'Dashboard', '', mainContent, '');
 
   // Append widget panel slide-in (once)
@@ -783,6 +800,29 @@ function initLiveListeners() {
 
 // ─── INIT ───────────────────────────────────────────────────
 initLiveListeners();
+
+// ─── SERVICE WORKER REGISTRATION + UPDATE NOTIFICATION ──────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+    reg.addEventListener('updatefound', function() {
+      var newWorker = reg.installing;
+      if (!newWorker) return;
+      newWorker.addEventListener('statechange', function() {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // New version available — show toast with reload option
+          var t = document.getElementById('toast');
+          if (t) {
+            t.innerHTML = '🔄 Update verfügbar! <a href="#" onclick="location.reload();return false;" style="color:white;font-weight:700;margin-left:8px;text-decoration:underline;">Jetzt laden</a>';
+            t.className = 'show info';
+            clearTimeout(t._t);
+          } else {
+            toast('🔄 Update verfügbar – Seite neu laden für neueste Version', 'info');
+          }
+        }
+      });
+    });
+  }).catch(function() {});
+}
 </script>
 </body>
 </html>

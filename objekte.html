@@ -639,9 +639,9 @@ function saveObj() {
   var name = document.getElementById('obj-name').value.trim();
   var strasse = document.getElementById('obj-strasse').value.trim();
   var stadt = document.getElementById('obj-stadt').value.trim();
-  if (!name) { alert('Bitte gib einen Objektnamen ein.'); return; }
-  if (!strasse) { alert('Bitte gib eine Straße ein.'); return; }
-  if (!stadt) { alert('Bitte gib eine Stadt ein.'); return; }
+  if (!name) { toast('Bitte gib einen Objektnamen ein.', 'error'); return; }
+  if (!strasse) { toast('Bitte gib eine Straße ein.', 'error'); return; }
+  if (!stadt) { toast('Bitte gib eine Stadt ein.', 'error'); return; }
 
   var objs = getObjekte();
   var obj = {
@@ -673,16 +673,27 @@ function saveObj() {
   }
 
   setData(KEYS.objekte, objs);
-  syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    saveCollection(_uid, 'objekte', getObjekte()).catch(function(){});
+  }
   hideModal('obj-modal');
   renderMain();
 }
 
 function deleteObj(id) {
-  if (!confirm('Objekt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) return;
+  confirmAction('Objekt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.', function() {
+  _deleteObjConfirmed(id);
+  });
+}
+function _deleteObjConfirmed(id) {
   var objs = getObjekte().filter(function(o) { return o.id !== id; });
   setData(KEYS.objekte, objs);
-  syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'objekte', id).catch(function(){});
+    saveCollection(_uid, 'objekte', objs).catch(function(){});
+  }
   renderMain();
 }
 
@@ -710,7 +721,18 @@ function render() {
 
 // ─── INIT ───────────────────────────────────────────────────
 initFirebase();
-startPageListener(user.uid, render);
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    var remote = await loadCollection(_uid, 'objekte', null);
+    if (remote && remote.length > 0) setData(KEYS.objekte, remote);
+    else {
+      var local = getData(KEYS.objekte, []);
+      if (local.length > 0) saveCollection(_uid, 'objekte', local).catch(function(){});
+    }
+  }
+  render();
+})();
 </script>
 </body>
 </html>

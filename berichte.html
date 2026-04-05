@@ -529,7 +529,7 @@ function render() {
 
   // ─── ACTION BUTTONS ───────────────────────────────────
   var actionBtn =
-    '<button onclick="alert(\'PDF-Export ist in Kürze verfügbar.\')" style="background:white;color:#374151;border:1.5px solid #e2e8f0;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:6px;">📊 PDF Export</button>'
+    '<button onclick="toast(\'PDF-Export ist in Kürze verfügbar.\', \'info\')" style="background:white;color:#374151;border:1.5px solid #e2e8f0;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:6px;">📊 PDF Export</button>'
     + '<button onclick="exportCSV()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">📥 Excel Export</button>';
 
   renderLayout('berichte', 'Berichte & Analysen', actionBtn, mainContent, '');
@@ -549,7 +549,20 @@ function setPeriod(id) {
 
 // ─── BOOT ─────────────────────────────────────────────────
 initFirebase();
-loadFromFirebase(user.uid, render);
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    // Pull all report-relevant collections from Firestore into localStorage
+    await Promise.all([
+      loadCollection(_uid, 'mieter', null).then(function(r) { if (r && r.length) setData(KEYS.mieter, r); }),
+      loadCollection(_uid, 'tickets', null).then(function(r) { if (r && r.length) setData(KEYS.tickets, r); }),
+      loadCollection(_uid, 'zahlungen', null).then(function(r) { if (r && r.length) setData(KEYS.zahlungen, r); }),
+      loadCollection(_uid, 'objekte', null).then(function(r) { if (r && r.length) setData(KEYS.objekte, r); }),
+      loadCollection(_uid, 'handwerker', null).then(function(r) { if (r && r.length) setData(KEYS.handwerker, r); }),
+    ]).catch(function(){});
+  }
+  loadFromFirebase(user.uid, render);
+})();
 </script>
 </body>
 </html>

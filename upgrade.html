@@ -145,21 +145,28 @@
 
 <script>
 function selectPlan(plan) {
-  // In a real app this would open a payment flow (Stripe etc.)
-  // For demo: show confirmation and redirect back
   var names = { starter: 'Starter (29€/Monat)', pro: 'Pro (79€/Monat)', business: 'Business (199€/Monat)' };
-  var confirmed = confirm('Plan "' + (names[plan] || plan) + '" auswählen?\n\nIn der Demo-Version wird der Plan direkt aktiviert.');
-  if (confirmed) {
-    localStorage.setItem('in_user_plan', plan);
-    // Extend trial by 30 days for demo
-    var newTrial = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    localStorage.setItem('in_trial_ends', newTrial);
-    window.location.href = 'app.html';
-  }
+  var planName = names[plan] || plan;
+  var subject = encodeURIComponent('ImmoNova Upgrade: ' + planName);
+  var body = encodeURIComponent('Hallo ImmoNova-Team,\n\nIch möchte den Plan "' + planName + '" buchen.\n\nMein Name:\nMeine E-Mail:\nMeine Telefonnummer:\n\nMit freundlichen Grüßen');
+  // Show options: Email or WhatsApp
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px);';
+  overlay.innerHTML = '<div style="background:white;border-radius:20px;padding:32px 28px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.25);">'
+    + '<div style="font-size:28px;text-align:center;margin-bottom:10px;">🚀</div>'
+    + '<div style="font-size:17px;font-weight:700;text-align:center;color:#0f172a;margin-bottom:6px;">' + planName + ' buchen</div>'
+    + '<div style="font-size:13px;color:#64748b;text-align:center;margin-bottom:24px;">Wähle deinen bevorzugten Kontaktweg:</div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;">'
+    + '<a href="mailto:kontakt@immonova.de?subject=' + subject + '&body=' + body + '" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:12px;text-decoration:none;color:#1d4ed8;font-weight:600;font-size:14px;">📧 Per E-Mail anfragen</a>'
+    + '<a href="https://wa.me/4917600000000?text=' + encodeURIComponent('Hallo, ich möchte ImmoNova ' + planName + ' buchen.') + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;text-decoration:none;color:#15803d;font-weight:600;font-size:14px;">📲 WhatsApp Beratung</a>'
+    + '<button onclick="this.closest(\'div\').parentElement.parentElement.remove()" style="padding:12px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;color:#64748b;font-family:inherit;">Abbrechen</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 }
 
 function contactSales() {
-  window.location.href = 'mailto:info@immonova.de?subject=Enterprise-Plan Anfrage&body=Hallo ImmoNova-Team,%0A%0AIch interessiere mich für den Enterprise-Plan.%0A%0AAnzahl Einheiten:%0AAnforderungen:%0A%0AMit freundlichen Grüßen';
+  window.location.href = 'mailto:kontakt@immonova.de?subject=Enterprise-Plan%20Anfrage&body=Hallo%20ImmoNova-Team%2C%0A%0AIch%20interessiere%20mich%20f%C3%BCr%20den%20Enterprise-Plan.%0A%0AAnzahl%20Einheiten%3A%0AAnforderungen%3A%0A%0AMit%20freundlichen%20Gr%C3%BC%C3%9Fen';
 }
 </script>
 </body>

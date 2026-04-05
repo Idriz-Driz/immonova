@@ -205,7 +205,7 @@ function closeAdd() { hideModal('add-modal'); }
 
 function saveVs() {
   var ges = document.getElementById('v-ges').value.trim();
-  if (!ges) { alert('Bitte Versicherungsgesellschaft eingeben.'); return; }
+  if (!ges) { toast('Bitte Versicherungsgesellschaft eingeben.', 'error'); return; }
   var list = getData(KEYS.versicherungen, []);
   var obj = { id: editId||gid(), typ: document.getElementById('v-typ').value,
     gesellschaft: ges, nummer: document.getElementById('v-num').value.trim(),
@@ -214,17 +214,44 @@ function saveVs() {
     zahlweise: document.getElementById('v-zahl').value, notiz: document.getElementById('v-notiz').value.trim() };
   if (editId) { var idx=list.findIndex(function(x){return x.id===editId;}); if(idx>=0) list[idx]=obj; }
   else list.unshift(obj);
-  setData(KEYS.versicherungen, list); syncToFirebase(uid); closeAdd(); render();
+  setData(KEYS.versicherungen, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'versicherungen', list).catch(function(){}); }
+  syncToFirebase(uid); closeAdd(); render();
 }
 
 function deleteVs(id) {
-  if (!confirm('Versicherung löschen?')) return;
-  setData(KEYS.versicherungen, getData(KEYS.versicherungen,[]).filter(function(x){return x.id!==id;}));
+  confirmAction('Versicherung löschen?', function() {
+  _deleteVsConfirmed(id);
+  });
+}
+function _deleteVsConfirmed(id) {
+  var _deletedId = id;
+  var _updatedArr = getData(KEYS.versicherungen,[]).filter(function(x){return x.id!==id;});
+  setData(KEYS.versicherungen, _updatedArr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'versicherungen', _deletedId).catch(function(){});
+    saveCollection(_uid, 'versicherungen', _updatedArr).catch(function(){});
+  }
   syncToFirebase(uid); render();
 }
 
 initFirebase();
-loadFromFirebase(uid, function(){ render(); });
+loadFromFirebase(uid, function(){
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'versicherungen', null);
+      if (remote && remote.length > 0) setData(KEYS.versicherungen, remote);
+      else {
+        var local = getData(KEYS.versicherungen, []);
+        if (local.length > 0) saveCollection(_uid, 'versicherungen', local).catch(function(){});
+      }
+    }
+    render();
+  })();
+});
 </script>
 </body>
 </html>

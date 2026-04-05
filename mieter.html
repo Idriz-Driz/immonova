@@ -337,6 +337,8 @@ function saveMieter() {
   var wasEdit = !!editId;
   setData(KEYS.mieter, mieterList);
   syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid) { saveCollection(_uid, 'mieter', getMieter()).catch(function(){}); }
   closeModal('add-modal');
   render();
 
@@ -363,12 +365,17 @@ function confirmDelete() {
   if(!deleteId) return;
   var mieterList = getMieter();
   var name = '';
+  var deletedId = deleteId;
   mieterList = mieterList.filter(function(m) {
-    if(m.id === deleteId) { name = (m.vn||'') + ' ' + (m.nn||''); return false; }
+    if(m.id === deletedId) { name = (m.vn||'') + ' ' + (m.nn||''); return false; }
     return true;
   });
   setData(KEYS.mieter, mieterList);
   syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid) {
+    deleteFromFirestore(_uid, 'mieter', deletedId).catch(function(){});
+  }
   addNotif('🗑️', 'Mieter gelöscht: ' + name.trim());
   closeModal('delete-modal');
   deleteId = null;
@@ -697,7 +704,18 @@ function render() {
 
 /* ── Boot ───────────────────────────────────────────────── */
 initFirebase();
-startPageListener(user.uid, render);
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid) {
+    var remote = await loadCollection(_uid, 'mieter', null);
+    if (remote && remote.length > 0) {
+      setData(KEYS.mieter, remote);
+    } else if (getMieter().length > 0) {
+      saveCollection(_uid, 'mieter', getMieter()).catch(function(){});
+    }
+  }
+  startPageListener(user.uid, render);
+})();
 </script>
 
 <!-- QR Code library -->

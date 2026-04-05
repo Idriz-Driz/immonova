@@ -547,8 +547,8 @@ function updateFarbePreview() {
 function saveTermin() {
   var titel = (document.getElementById('f-titel').value || '').trim();
   var datum = document.getElementById('f-datum').value;
-  if (!titel) { alert('Bitte Titel eingeben.'); return; }
-  if (!datum) { alert('Bitte Datum auswählen.'); return; }
+  if (!titel) { toast('Bitte Titel eingeben.', 'error'); return; }
+  if (!datum) { toast('Bitte Datum auswählen.', 'error'); return; }
 
   var ev = {
     id:           editingId || ('ter_' + Date.now()),
@@ -574,6 +574,8 @@ function saveTermin() {
   }
 
   setData(KEYS.termine, termine);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'termine', termine).catch(function(){}); }
   syncToFirebase(user.uid);
   addNotif('📅', (editingId ? 'Termin bearbeitet: ' : 'Neuer Termin: ') + titel);
   hideModal('termin-modal');
@@ -584,14 +586,21 @@ function saveTermin() {
 function deleteTermin() {
   if (!editingId) return;
   var ev = termine.find(function(t) { return t.id === editingId; });
-  if (!confirm('Termin "' + (ev ? ev.titel : '') + '" wirklich löschen?')) return;
-  termine = termine.filter(function(t) { return t.id !== editingId; });
-  setData(KEYS.termine, termine);
-  syncToFirebase(user.uid);
-  addNotif('🗑️', 'Termin gelöscht: ' + (ev ? ev.titel : ''));
-  hideModal('termin-modal');
-  editingId = null;
-  refreshView();
+  confirmAction('Termin "' + (ev ? ev.titel : '') + '" wirklich löschen?', function() {
+    var _deletedId = editingId;
+    termine = termine.filter(function(t) { return t.id !== editingId; });
+    setData(KEYS.termine, termine);
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      deleteFromFirestore(_uid, 'termine', _deletedId).catch(function(){});
+      saveCollection(_uid, 'termine', termine).catch(function(){});
+    }
+    syncToFirebase(user.uid);
+    addNotif('🗑️', 'Termin gelöscht: ' + (ev ? ev.titel : ''));
+    hideModal('termin-modal');
+    editingId = null;
+    refreshView();
+  });
 }
 
 function refreshView() {
@@ -744,12 +753,27 @@ function buildPage() {
 buildPage();
 
 loadFromFirebase(user.uid, function() {
-  termine = getData(KEYS.termine, []);
-  refreshView();
   startPageListener(user.uid, function() {
     termine = getData(KEYS.termine, []);
     refreshView();
   });
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'termine', null);
+      if (remote && remote.length > 0) {
+        setData(KEYS.termine, remote);
+        termine = remote;
+      } else {
+        var local = getData(KEYS.termine, []);
+        termine = local;
+        if (local.length > 0) saveCollection(_uid, 'termine', local).catch(function(){});
+      }
+    } else {
+      termine = getData(KEYS.termine, []);
+    }
+    refreshView();
+  })();
 });
 </script>
 </body>

@@ -1061,6 +1061,144 @@ function mapsLink(address) {
   return 'https://maps.google.com/?q=' + encodeURIComponent(address);
 }
 
+// ─── FIRESTORE SYNC HELPERS ───────────────────────────────────
+// saveCollection: Writes entire array to Firestore as batch
+async function saveCollection(uid, collection, data) {
+  if (!uid || uid === 'demo') return;
+  if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return;
+  try {
+    var db = firebase.firestore();
+    var ref = db.collection('tenants').doc(uid).collection(collection);
+    var batch = db.batch();
+    data.forEach(function(item, index) {
+      if (!item.id) item.id = collection + '_' + Date.now() + '_' + index;
+      batch.set(ref.doc(item.id), item);
+    });
+    await batch.commit();
+  } catch(e) {
+    console.error('Firestore saveCollection error [' + collection + ']:', e);
+  }
+}
+
+// loadCollection: Loads array from Firestore (falls back to fallback on error/empty)
+async function loadCollection(uid, collection, fallback) {
+  if (!uid || uid === 'demo') return fallback || [];
+  if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return fallback || [];
+  try {
+    var db = firebase.firestore();
+    var snap = await db.collection('tenants').doc(uid).collection(collection).get();
+    if (snap.empty) return fallback || [];
+    return snap.docs.map(function(doc) {
+      return Object.assign({ id: doc.id }, doc.data());
+    });
+  } catch(e) {
+    console.error('Firestore loadCollection error [' + collection + ']:', e);
+    return fallback || [];
+  }
+}
+
+// deleteFromFirestore: Deletes a single document
+async function deleteFromFirestore(uid, collection, id) {
+  if (!uid || uid === 'demo' || !id) return;
+  if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return;
+  try {
+    await firebase.firestore()
+      .collection('tenants').doc(uid)
+      .collection(collection).doc(id)
+      .delete();
+  } catch(e) {
+    console.error('Firestore deleteFromFirestore error [' + collection + '/' + id + ']:', e);
+  }
+}
+
+// syncAndLoad: Loads from Firestore, updates localStorage cache, returns data
+async function syncAndLoad(uid, key, collection, defaultVal) {
+  var local = getData(key, defaultVal != null ? defaultVal : []);
+  if (!uid || uid === 'demo') return local;
+  try {
+    var remote = await loadCollection(uid, collection, null);
+    if (remote && remote.length > 0) {
+      setData(key, remote);
+      return remote;
+    }
+    // If Firestore is empty but we have local data, push it up
+    if (local && local.length > 0) {
+      await saveCollection(uid, collection, local);
+    }
+    return local;
+  } catch(e) {
+    return local;
+  }
+}
+
+// ─── FIREBASE STORAGE UPLOAD HELPERS ────────────────────────
+async function uploadToStorage(uid, filename, dataUrl) {
+  if (!uid || uid === 'demo') return dataUrl;
+  try {
+    var blob = await fetch(dataUrl).then(function(r) { return r.blob(); });
+    var ref = firebase.storage().ref('tenants/' + uid + '/' + filename + '.jpg');
+    var snap = await ref.put(blob, { contentType: 'image/jpeg' });
+    return await snap.ref.getDownloadURL();
+  } catch(e) {
+    console.error('Storage upload error:', e);
+    return dataUrl;
+  }
+}
+
+async function uploadMieterFoto(verwalterUid, dataUrl) {
+  return uploadToStorage(verwalterUid, 'tickets/mieter_' + Date.now(), dataUrl);
+}
+
+// ─── MIETER BENACHRICHTIGUNG ──────────────────────────────────
+async function notifyMieter(verwalterUid, mieterId, titel, nachricht) {
+  if (!verwalterUid || !mieterId) return;
+  try {
+    await firebase.firestore()
+      .collection('tenants').doc(verwalterUid)
+      .collection('mieter_notifs')
+      .add({
+        mieterId: mieterId,
+        titel: titel,
+        nachricht: nachricht,
+        gelesen: false,
+        zeit: firebase.firestore.FieldValue.serverTimestamp()
+      });
+  } catch(e) {
+    console.error('notifyMieter error:', e);
+  }
+}
+
+// ─── CONFIRM DIALOG (replaces window.confirm) ─────────────────
+function confirmAction(msg, onYes, labelYes, labelNo) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;backdrop-filter:blur(4px);';
+  var yesLabel = labelYes || 'Ja, löschen';
+  var noLabel  = labelNo  || 'Abbrechen';
+  overlay.innerHTML =
+    '<div style="background:white;border-radius:16px;padding:28px 24px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.25);">'
+    + '<div style="font-size:32px;text-align:center;margin-bottom:10px;">⚠️</div>'
+    + '<div style="font-size:15px;font-weight:700;text-align:center;color:#0f172a;margin-bottom:8px;">Bist du sicher?</div>'
+    + '<div style="font-size:13px;color:#64748b;text-align:center;margin-bottom:22px;line-height:1.5;">' + msg + '</div>'
+    + '<div style="display:flex;gap:10px;">'
+    + '<button class="ca-no" style="flex:1;padding:12px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;color:#374151;">' + noLabel + '</button>'
+    + '<button class="ca-yes" style="flex:1;padding:12px;border-radius:9px;border:none;background:#dc2626;color:white;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">' + yesLabel + '</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('.ca-no').onclick  = function() { overlay.remove(); };
+  overlay.querySelector('.ca-yes').onclick = function() { overlay.remove(); onYes(); };
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+}
+
+// ─── GET CURRENT USER UID (safe) ─────────────────────────────
+function getCurrentUid() {
+  try {
+    if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+      return firebase.auth().currentUser.uid;
+    }
+  } catch(e) {}
+  return null;
+}
+
 // Run on load
 (function() {
   injectGlobalStyles();

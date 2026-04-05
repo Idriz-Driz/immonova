@@ -81,6 +81,8 @@ function getTickets() {
 function saveTickets(arr) {
   setData(KEYS.tickets, arr);
   syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid) { saveCollection(_uid, 'tickets', arr).catch(function(){}); }
 }
 
 function getFiltered() {
@@ -114,13 +116,19 @@ function ticketNextStatus(id) {
 }
 
 function deleteTicket(id) {
-  if (!confirm('Ticket wirklich löschen?')) return;
+  confirmAction('Ticket wirklich löschen?', function() {
+  _deleteTicketConfirmed(id);
+  });
+}
+function _deleteTicketConfirmed(id) {
   var tickets = getTickets();
   var idx = tickets.findIndex(function(x){ return x.id == id; });
   if (idx < 0) return;
   var label = (tickets[idx].titel || '').substring(0, 30);
   tickets.splice(idx, 1);
   saveTickets(tickets);
+  var _uid = getCurrentUid();
+  if (_uid) { deleteFromFirestore(_uid, 'tickets', String(id)).catch(function(){}); }
   addNotif('🗑️', 'Ticket gelöscht: ' + label);
   render();
 }
@@ -634,9 +642,35 @@ function render() {
   renderLayout('tickets', 'Tickets & Schadensmeldungen', actionBtn, mainContent, modals);
 }
 
+// ── Realtime tickets listener (picks up mieter-portal submissions) ──
+function startTicketsListener(uid) {
+  if (!uid || uid === 'demo') return;
+  if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return;
+  firebase.firestore()
+    .collection('tenants').doc(uid)
+    .collection('tickets')
+    .orderBy('erstellt', 'desc')
+    .onSnapshot(function(snap) {
+      var tickets = snap.docs.map(function(doc) {
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+      setData(KEYS.tickets, tickets);
+      render();
+    }, function(err) {
+      console.error('tickets onSnapshot error:', err);
+    });
+}
+
 // ── Bootstrap ────────────────────────────────────────────────────
 initFirebase();
-startPageListener(user.uid, render);
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid) {
+    startTicketsListener(_uid);
+  } else {
+    startPageListener(user.uid, render);
+  }
+})();
 </script>
 </body>
 </html>

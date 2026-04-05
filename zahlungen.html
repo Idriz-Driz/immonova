@@ -39,6 +39,8 @@ function getZahlungen() {
 }
 function saveZahlungen(arr) {
   setData(KEYS.zahlungen, arr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'zahlungen', arr).catch(function(){}); }
   syncToFirebase(user.uid);
 }
 
@@ -157,9 +159,14 @@ function showToast(msg) {
 
 // ── Delete zahlung ────────────────────────────────────────────
 function deleteZahlung(id) {
-  if (!confirm('Zahlung wirklich l\u00f6schen?')) return;
-  var arr = getZahlungen().filter(function(z) { return z.id !== id; });
+  confirmAction('Zahlung wirklich löschen?', function() {
+    var _deletedId = id;
+    var arr = getZahlungen().filter(function(z) { return z.id !== id;
+  });
+});
   saveZahlungen(arr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { deleteFromFirestore(_uid, 'zahlungen', _deletedId).catch(function(){}); }
   addNotif('\ud83d\uddd1\ufe0f', 'Zahlung gel\u00f6scht');
   render();
 }
@@ -218,9 +225,9 @@ function saveZahlung() {
   var iban = document.getElementById('f-iban').value.trim();
   var notizen = document.getElementById('f-notizen').value.trim();
 
-  if (!mieter) { alert('Bitte Mieter / Beschreibung eingeben.'); return; }
-  if (!betrag) { alert('Bitte einen Betrag eingeben.'); return; }
-  if (!datum)  { alert('Bitte ein Datum w\u00e4hlen.'); return; }
+  if (!mieter) { toast('Bitte Mieter / Beschreibung eingeben.', 'error'); return; }
+  if (!betrag) { toast('Bitte einen Betrag eingeben.', 'error'); return; }
+  if (!datum)  { toast('Bitte ein Datum w\u00e4hlen.', 'error'); return; }
 
   var arr = getZahlungen();
   if (editId) {
@@ -693,7 +700,18 @@ function buildModals() {
 initFirebase();
 loadFromFirebase(user.uid, function() {
   startPageListener(user.uid, render);
-  render();
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'zahlungen', null);
+      if (remote && remote.length > 0) setData(KEYS.zahlungen, remote);
+      else {
+        var local = getData(KEYS.zahlungen, []);
+        if (local.length > 0) saveCollection(_uid, 'zahlungen', local).catch(function(){});
+      }
+    }
+    render();
+  })();
 });
 </script>
 </body>

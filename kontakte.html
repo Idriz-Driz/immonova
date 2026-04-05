@@ -600,7 +600,7 @@ function saveKontakt() {
   var tags    = tagsRaw ? tagsRaw.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [];
 
   if (!vn && !nn && !firma) {
-    alert('Bitte mindestens Vor- / Nachname oder Firma eingeben.');
+    toast('Bitte mindestens Vor- / Nachname oder Firma eingeben.', 'error');
     return;
   }
 
@@ -642,6 +642,8 @@ function saveKontakt() {
   }
 
   setData(KEYS.kontakte, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'kontakte', list).catch(function(){}); }
   syncToFirebase(user.uid);
   hideModal('kon-modal');
   _editId = null;
@@ -650,9 +652,20 @@ function saveKontakt() {
 
 // ─── DELETE ───────────────────────────────────────────────
 function confirmDelete(id) {
-  if (!id || !confirm('Kontakt wirklich löschen?')) return;
+  if (!id) return;
+  confirmAction('Kontakt wirklich löschen?', function() {
+  _deleteKontaktConfirmed(id);
+  });
+}
+function _deleteKontaktConfirmed(id) {
+  var _deletedId = id;
   var list = getKonfakte().filter(function (k) { return k.id !== id; });
   setData(KEYS.kontakte, list);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'kontakte', _deletedId).catch(function(){});
+    saveCollection(_uid, 'kontakte', list).catch(function(){});
+  }
   syncToFirebase(user.uid);
   _editId = null;
   renderContent();
@@ -696,7 +709,19 @@ function render() {
 
 // ─── BOOT ─────────────────────────────────────────────────
 initFirebase();
-startPageListener(user.uid, render);
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    var remote = await loadCollection(_uid, 'kontakte', null);
+    if (remote && remote.length > 0) setData(KEYS.kontakte, remote);
+    else {
+      var local = getData(KEYS.kontakte, []);
+      if (local.length > 0) saveCollection(_uid, 'kontakte', local).catch(function(){});
+    }
+  }
+  render();
+  startPageListener(user.uid, render);
+})();
 </script>
 </body>
 </html>

@@ -199,7 +199,7 @@ function openEditModal(id) {
 function saveHW() {
   var vn = document.getElementById('hw-vn').value.trim();
   var nn = document.getElementById('hw-nn').value.trim();
-  if (!vn || !nn) { alert('Vor- und Nachname sind Pflichtfelder.'); return; }
+  if (!vn || !nn) { toast('Vor- und Nachname sind Pflichtfelder.', 'error'); return; }
 
   var hws = getHW();
   var obj = {
@@ -228,17 +228,28 @@ function saveHW() {
   }
 
   setData(KEYS.handwerker, hws);
-  syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    saveCollection(_uid, 'handwerker', getHW()).catch(function(){});
+  }
   hideModal('hw-modal');
   render();
 }
 
 // ─── DELETE ───────────────────────────────────────────────
 function deleteHW(id) {
-  if (!confirm('Handwerker wirklich löschen?')) return;
+  confirmAction('Handwerker wirklich löschen?', function() {
+  _deleteHWConfirmed(id);
+  });
+}
+function _deleteHWConfirmed(id) {
   var hws = getHW().filter(function (h) { return h.id !== id; });
   setData(KEYS.handwerker, hws);
-  syncToFirebase(user.uid);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'handwerker', id).catch(function(){});
+    saveCollection(_uid, 'handwerker', hws).catch(function(){});
+  }
   render();
 }
 
@@ -497,7 +508,18 @@ function render() {
 
 // ─── BOOT ─────────────────────────────────────────────────
 initFirebase();
-startPageListener(user.uid, render);
+(async function() {
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    var remote = await loadCollection(_uid, 'handwerker', null);
+    if (remote && remote.length > 0) setData(KEYS.handwerker, remote);
+    else {
+      var local = getData(KEYS.handwerker, []);
+      if (local.length > 0) saveCollection(_uid, 'handwerker', local).catch(function(){});
+    }
+  }
+  render();
+})();
 </script>
 </body>
 </html>

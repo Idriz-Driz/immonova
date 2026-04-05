@@ -144,7 +144,7 @@ function saveProfile() {
   var lang= (document.getElementById('p-lang')|| {}).value || 'de';
   var tz  = (document.getElementById('p-tz')  || {}).value || 'Europe/Berlin';
   vn = vn.trim(); nn = nn.trim();
-  if (!vn) { alert('Bitte Vornamen eingeben.'); return; }
+  if (!vn) { toast('Bitte Vornamen eingeben.', 'error'); return; }
   var fullName = (vn + ' ' + nn).trim();
   localStorage.setItem('in_user_name', fullName);
   localStorage.setItem('in_user_tel', tel.trim());
@@ -199,17 +199,19 @@ function showMsg(el, text, isError) {
 
 // ─── DELETE ACCOUNT ───────────────────────────────────────
 function deleteAccount() {
-  if (!confirm('Bist du sicher? Dein Konto und alle Daten werden unwiderruflich gelöscht!')) return;
-  if (!confirm('Letzte Warnung: Alle Daten gehen verloren. Wirklich fortfahren?')) return;
-  if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
-    firebase.auth().currentUser.delete().then(function(){
-      localStorage.clear();
-      window.location.href = 'login.html';
-    }).catch(function(e){ alert('Fehler: ' + e.message); });
-  } else {
-    localStorage.clear();
-    window.location.href = 'login.html';
-  }
+  confirmAction('Konto und alle Daten unwiderruflich löschen?', function() {
+    confirmAction('Letzte Warnung: Alle Daten gehen verloren. Wirklich fortfahren?', function() {
+      if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
+        firebase.auth().currentUser.delete().then(function(){
+          localStorage.clear();
+          window.location.href = 'login.html';
+        }).catch(function(e){ toast('Fehler: ' + e.message, 'error'); });
+      } else {
+        localStorage.clear();
+        window.location.href = 'login.html';
+      }
+    }, 'Ja, endgültig löschen');
+  }, 'Ja, fortfahren');
 }
 
 // ─── SAVE FIRMA ───────────────────────────────────────────
@@ -281,10 +283,10 @@ function importData(input) {
       var data = JSON.parse(e.target.result);
       Object.keys(data).forEach(function(k){ localStorage.setItem(k, data[k]); });
       addNotif('📤', 'Daten importiert');
-      alert('Import erfolgreich! Die Seite wird neu geladen.');
+      toast('Import erfolgreich! Die Seite wird neu geladen.', 'success');
       window.location.reload();
     } catch(ex) {
-      alert('Fehler beim Importieren: Ungültige JSON-Datei.');
+      toast('Fehler beim Importieren: Ungültige JSON-Datei.', 'error');
     }
   };
   reader.readAsText(file);
@@ -305,9 +307,10 @@ function manualSync() {
 
 // ─── DELETE LOCAL DATA ────────────────────────────────────
 function deleteLocalData() {
-  if (!confirm('Alle lokalen Daten löschen? Die Seite wird danach neu geladen.')) return;
-  localStorage.clear();
-  window.location.href = 'login.html';
+  confirmAction('Alle lokalen Daten löschen? Die Seite wird danach neu geladen.', function() {
+    localStorage.clear();
+    window.location.href = 'login.html';
+  });
 }
 
 // ─── STORAGE SIZE ─────────────────────────────────────────
@@ -324,7 +327,7 @@ function getStorageSize() {
 function inviteTeamMember() {
   var email = (document.getElementById('invite-email') || {}).value || '';
   var rolle = (document.getElementById('invite-rolle') || {}).value || 'mitarbeiter';
-  if (!email || email.indexOf('@') < 0) { alert('Bitte gültige E-Mail eingeben.'); return; }
+  if (!email || email.indexOf('@') < 0) { toast('Bitte gültige E-Mail eingeben.', 'error'); return; }
   if (typeof firebase !== 'undefined' && firebase.apps.length) {
     firebase.firestore().collection('invites').add({
       email: email.trim(), rolle: rolle,
@@ -333,24 +336,25 @@ function inviteTeamMember() {
     }).then(function(){
       addNotif('👥', 'Einladung an ' + email + ' gesendet');
       hideModal('modal-invite');
-      alert('Einladung gesendet! (' + email + ')');
-    }).catch(function(e){ alert('Fehler: ' + e.message); });
+      toast('Einladung gesendet! (' + email + ')', 'success');
+    }).catch(function(e){ toast('Fehler: ' + e.message, 'error'); });
   } else {
-    alert('Einladung gesendet (Demo): ' + email);
+    toast('Einladung gesendet (Demo): ' + email, 'success');
     hideModal('modal-invite');
   }
 }
 
 // ─── REMOVE TEAM MEMBER ───────────────────────────────────
 function removeTeamMember(uid) {
-  if (!confirm('Mitarbeiter wirklich entfernen?')) return;
-  if (typeof firebase !== 'undefined' && firebase.apps.length) {
-    firebase.firestore().collection('users').doc(uid).update({ status:'inaktiv' })
-      .then(function(){ addNotif('👥', 'Mitarbeiter entfernt'); render(); })
-      .catch(function(e){ alert('Fehler: ' + e.message); });
-  } else {
-    alert('Mitarbeiter entfernt (Demo-Modus)');
-  }
+  confirmAction('Mitarbeiter wirklich entfernen?', function() {
+    if (typeof firebase !== 'undefined' && firebase.apps.length) {
+      firebase.firestore().collection('users').doc(uid).update({ status:'inaktiv' })
+        .then(function(){ addNotif('👥', 'Mitarbeiter entfernt'); render(); })
+        .catch(function(e){ toast('Fehler: ' + e.message, 'error'); });
+    } else {
+      toast('Mitarbeiter entfernt (Demo-Modus)', 'info');
+    }
+  });
 }
 
 // ─── LOAD TEAM MEMBERS ───────────────────────────────────
@@ -441,7 +445,7 @@ function render() {
     +   '<div style="width:88px;height:88px;background:linear-gradient(135deg,#2563eb,#3b82f6);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;color:white;box-shadow:0 4px 18px rgba(37,99,235,0.35);margin-bottom:14px;">' + initial + '</div>'
     +   '<div style="font-size:16px;font-weight:700;color:#0f172a;">' + u.name + '</div>'
     +   '<div style="font-size:12px;color:#64748b;margin-bottom:14px;">' + u.email + '</div>'
-    +   '<button onclick="alert(\'Foto-Upload kommt in Kürze!\')" style="background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">📷 Foto ändern</button>'
+    +   '<button onclick="toast(\'Foto-Upload kommt in Kürze!\', \'info\')" style="background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">📷 Foto ändern</button>'
     + '</div>'
 
     + '<div class="section-card">'
@@ -454,7 +458,7 @@ function render() {
     +   formGroup('E-Mail',
         '<div style="display:flex;align-items:center;gap:10px;">'
         + '<input style="width:100%;padding:10px 13px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;font-family:inherit;color:#94a3b8;background:#f8fafc;outline:none;box-sizing:border-box;" value="' + u.email + '" readonly>'
-        + '<a href="#" onclick="alert(\'E-Mail-Änderung kommt in Kürze!\')" style="font-size:12px;color:#2563eb;white-space:nowrap;text-decoration:none;font-weight:600;">E-Mail ändern</a>'
+        + '<a href="#" onclick="toast(\'E-Mail-Änderung kommt in Kürze!\', \'info\'); return false;" style="font-size:12px;color:#2563eb;white-space:nowrap;text-decoration:none;font-weight:600;">E-Mail ändern</a>'
         + '</div>'
       )
     +   formGroup('Telefon', '<input id="p-tel" ' + inputStyle + ' value="' + tel + '" placeholder="+49 151 ...">')
@@ -519,7 +523,7 @@ function render() {
     + '<div class="section-card">'
     +   '<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">'
     +     '<span>📱 Aktive Sitzungen</span>'
-    +     '<button onclick="alert(\'Alle anderen Sitzungen wurden abgemeldet (Demo).\')" style="background:white;color:#64748b;border:1px solid #e2e8f0;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Alle anderen abmelden</button>'
+    +     '<button onclick="toast(\'Alle anderen Sitzungen wurden abgemeldet.\', \'success\')" style="background:white;color:#64748b;border:1px solid #e2e8f0;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Alle anderen abmelden</button>'
     +   '</div>'
     +   '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">'
     +     '<div>'
@@ -578,7 +582,7 @@ function render() {
 
     + '<div class="section-card">'
     +   '<div class="section-title">🖼️ Firmenlogo</div>'
-    +   '<div style="background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;padding:32px;text-align:center;cursor:pointer;" onclick="alert(\'Logo-Upload kommt in Kürze!\')">'
+    +   '<div style="background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;padding:32px;text-align:center;cursor:pointer;" onclick="toast(\'Logo-Upload kommt in Kürze!\', \'info\')">'
     +     '<div style="font-size:32px;margin-bottom:10px;">🏢</div>'
     +     '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">Logo hochladen</div>'
     +     '<div style="font-size:12px;color:#94a3b8;">PNG, JPG oder SVG · Max. 2 MB <span class="coming-soon">Demnächst</span></div>'
@@ -722,7 +726,7 @@ function render() {
     +       '<div style="font-size:13px;font-weight:600;color:#374151;">Light</div>'
     +       (curSchema==='light'?'<div style="font-size:11px;color:#2563eb;font-weight:700;margin-top:4px;">Aktiv</div>':'')
     +     '</div>'
-    +     '<div onclick="alert(\'Dark Mode kommt in Kürze!\');" style="flex:1;min-width:140px;border:2px solid #e2e8f0;border-radius:12px;padding:16px;cursor:pointer;text-align:center;background:#1e293b;opacity:0.85;">'
+    +     '<div onclick="toast(\'Dark Mode kommt in Kürze!\', \'info\');" style="flex:1;min-width:140px;border:2px solid #e2e8f0;border-radius:12px;padding:16px;cursor:pointer;text-align:center;background:#1e293b;opacity:0.85;">'
     +       '<div style="font-size:24px;margin-bottom:8px;">🌙</div>'
     +       '<div style="font-size:13px;font-weight:600;color:#94a3b8;">Dark <span class="coming-soon">Demnächst</span></div>'
     +     '</div>'

@@ -30,6 +30,8 @@ function getAufgaben() { return getData(KEYS.aufgaben, []); }
 
 function saveAufgaben(arr) {
   setData(KEYS.aufgaben, arr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'aufgaben', arr).catch(function(){}); }
   syncToFirebase(user.uid);
 }
 
@@ -96,9 +98,18 @@ function toggleErledigt(id) {
 
 // ─── DELETE ──────────────────────────────────────────────────
 function deleteAufgabe(id) {
-  if (!confirm('Aufgabe wirklich löschen?')) return;
+  confirmAction('Aufgabe wirklich löschen?', function() {
+  _deleteAufgabeConfirmed(id);
+  });
+}
+function _deleteAufgabeConfirmed(id) {
+  var _deletedId = id;
   var arr = getAufgaben().filter(function(x) { return x.id !== id; });
   saveAufgaben(arr);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') {
+    deleteFromFirestore(_uid, 'aufgaben', _deletedId).catch(function(){});
+  }
   render();
 }
 
@@ -428,6 +439,18 @@ function buildModal() {
 initFirebase();
 loadFromFirebase(user.uid, function() {
   startPageListener(user.uid, render);
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'aufgaben', null);
+      if (remote && remote.length > 0) setData(KEYS.aufgaben, remote);
+      else {
+        var local = getData(KEYS.aufgaben, []);
+        if (local.length > 0) saveCollection(_uid, 'aufgaben', local).catch(function(){});
+      }
+    }
+    render();
+  })();
 });
 </script>
 </body>

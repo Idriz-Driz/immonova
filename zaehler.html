@@ -172,7 +172,7 @@ function openAddWohnung() { if (checkDemoBlock()) return; showModal('manual-moda
 function closeManual() { hideModal('manual-modal'); }
 function startManual() {
   var wn = document.getElementById('man-wn').value.trim();
-  if (!wn) { alert('Bitte Wohnung eingeben.'); return; }
+  if (!wn) { toast('Bitte Wohnung eingeben.', 'error'); return; }
   closeManual();
   openRead(wn);
 }
@@ -188,11 +188,27 @@ function saveRead() {
     obj[t.key+'_vorjahr'] = document.getElementById('r-'+t.key+'-v').value;
   });
   all[editWohnung] = obj;
-  setData(KEYS.zaehler, all); syncToFirebase(uid); closeRead(); render();
+  setData(KEYS.zaehler, all);
+  var _uid = getCurrentUid();
+  if (_uid && _uid !== 'demo') { saveCollection(_uid, 'zaehler', [all]).catch(function(){}); }
+  syncToFirebase(uid); closeRead(); render();
 }
 
 initFirebase();
-loadFromFirebase(uid, function(){ render(); });
+loadFromFirebase(uid, function(){
+  (async function() {
+    var _uid = getCurrentUid();
+    if (_uid && _uid !== 'demo') {
+      var remote = await loadCollection(_uid, 'zaehler', null);
+      if (remote && remote.length > 0) setData(KEYS.zaehler, remote[0]);
+      else {
+        var local = getData(KEYS.zaehler, {});
+        if (Object.keys(local).length > 0) saveCollection(_uid, 'zaehler', [local]).catch(function(){});
+      }
+    }
+    render();
+  })();
+});
 </script>
 </body>
 </html>

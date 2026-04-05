@@ -447,13 +447,14 @@ function extendTrial(uid) {
 }
 
 function deleteUser(uid) {
-  if (!confirm('Nutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) return;
-  db.collection('users').doc(uid).delete().then(function() {
-    db.collection('data').doc(uid).delete();
-    allUsers = allUsers.filter(function(x) { return x.uid !== uid; });
-    renderUsers(allUsers);
-    updateKPIs();
-  });
+  confirmAction('Nutzer wirklich löschen? Diese Aktion kann nicht rükgängig gemacht werden.', function() {
+    db.collection('users').doc(uid).delete().then(function() {
+      db.collection('data').doc(uid).delete();
+      allUsers = allUsers.filter(function(x) { return x.uid !== uid; });
+      renderUsers(allUsers);
+      updateKPIs();
+    });
+  }, 'Ja, löschen');
 }
 
 function openCreateModal() {
@@ -506,7 +507,7 @@ function showSection(id) {
 }
 
 function saveSettings() {
-  alert('✅ Einstellungen gespeichert (Demo)');
+  toast('✅ Einstellungen gespeichert (Demo)', 'success');
 }
 
 function doLogout() {

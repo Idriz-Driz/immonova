@@ -4,6 +4,17 @@ admin-config.js
 .env.local
 secrets.js
 
+# Internal scripts (not for hosting)
+_write_files.js
+
+# Firebase
+.firebase/
+firebase-debug.log
+*.log
+
+# Node
+node_modules/
+
 # System
 .DS_Store
 Thumbs.db

@@ -305,9 +305,9 @@ function loadDemoData() {
   script.onload = function() {
     if (typeof activateDemoForLoggedInUser === 'function') {
       activateDemoForLoggedInUser();
-      alert('✅ Demo-Daten geladen!\n\nDashboard öffnen → alle Musterdaten sind sichtbar.');
+      toast('✅ Demo-Daten geladen!\n\nDashboard öffnen → alle Musterdaten sind sichtbar.', 'success');
     } else {
-      alert('ℹ️ Bitte zuerst einloggen, dann Demo-Daten über den Dashboard-Button laden.');
+      toast('ℹ️ Bitte zuerst einloggen, dann Demo-Daten über den Dashboard-Button laden.', 'error');
     }
   };
   document.head.appendChild(script);
