@@ -738,9 +738,37 @@ function render() {
     + '<button onclick="closeModal(\'delete-modal\')" style="padding:11px 28px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Abbrechen</button>'
     + '</div></div>';
 
+  var inviteModalHTML =
+    '<div id="invite-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:3000;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closeModal(\'invite-modal\')">'
+    + '<div style="background:white;border-radius:20px;padding:32px;max-width:440px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto;">'
+    + '<div style="text-align:center;margin-bottom:20px;">'
+    + '<div style="font-size:40px;margin-bottom:8px;">✅</div>'
+    + '<h3 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 4px;">Mieter einladen</h3>'
+    + '<p style="font-size:13px;color:#64748b;margin:0;"><strong id="invite-name"></strong> · <span id="invite-wohnung"></span></p>'
+    + '</div>'
+    + '<div style="background:#eff6ff;border:2px solid #bfdbfe;border-radius:14px;padding:20px;text-align:center;margin-bottom:20px;">'
+    + '<div style="font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Portal-PIN</div>'
+    + '<div id="invite-pin" style="font-size:42px;font-weight:800;color:#1e40af;letter-spacing:8px;font-variant-numeric:tabular-nums;"></div>'
+    + '</div>'
+    + '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">'
+    + '<span style="font-size:12px;color:#64748b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="invite-link"></span>'
+    + '<button onclick="navigator.clipboard.writeText(document.getElementById(\'invite-link\').textContent).then(function(){toast(\'Link kopiert ✅\',\'success\')})" style="background:#2563eb;color:white;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Kopieren</button>'
+    + '</div>'
+    + '<div style="text-align:center;margin-bottom:20px;">'
+    + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">QR-Code zum Scannen</div>'
+    + '<div id="invite-qr" style="display:inline-block;padding:8px;background:white;border:2px solid #e2e8f0;border-radius:12px;"></div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">'
+    + '<a id="invite-wa-btn" target="_blank" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#22c55e;color:white;text-decoration:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;">📲 WhatsApp senden</a>'
+    + '<a id="invite-email-btn" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;">📧 Email senden</a>'
+    + '</div>'
+    + '<button onclick="closeModal(\'invite-modal\')" style="width:100%;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Schließen</button>'
+    + '</div></div>';
+
   var modalsHTML =
     modalHTML('add-modal', '<span id="modal-title">👥 Mieter hinzufügen</span>', addModalBody)
-    + modalHTML('delete-modal', 'Mieter löschen', deleteModalBody);
+    + modalHTML('delete-modal', 'Mieter löschen', deleteModalBody)
+    + inviteModalHTML;
 
   var actionBtn = '<button onclick="openAddModal()" style="background:#2563eb;color:white;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Mieter hinzufügen</button>';
 
@@ -773,48 +801,5 @@ initFirebase();
 <!-- QR Code library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<!-- Invite Modal -->
-<div id="invite-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:3000;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closeModal('invite-modal')">
-  <div style="background:white;border-radius:20px;padding:32px;max-width:440px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.2);">
-    <!-- Header -->
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-size:40px;margin-bottom:8px;">✅</div>
-      <h3 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 4px;">Mieter angelegt!</h3>
-      <p style="font-size:13px;color:#64748b;margin:0;">
-        <strong id="invite-name"></strong> · <span id="invite-wohnung"></span>
-      </p>
-    </div>
-
-    <!-- PIN Display -->
-    <div style="background:#eff6ff;border:2px solid #bfdbfe;border-radius:14px;padding:20px;text-align:center;margin-bottom:20px;">
-      <div style="font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Portal-PIN</div>
-      <div id="invite-pin" style="font-size:42px;font-weight:800;color:#1e40af;letter-spacing:8px;font-variant-numeric:tabular-nums;"></div>
-    </div>
-
-    <!-- Link -->
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
-      <span style="font-size:12px;color:#64748b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="invite-link"></span>
-      <button onclick="navigator.clipboard.writeText(document.getElementById('invite-link').textContent).then(function(){toast('Link kopiert ✅','success')})" style="background:#2563eb;color:white;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Kopieren</button>
-    </div>
-
-    <!-- QR Code -->
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">QR-Code zum Scannen</div>
-      <div id="invite-qr" style="display:inline-block;padding:8px;background:white;border:2px solid #e2e8f0;border-radius:12px;"></div>
-    </div>
-
-    <!-- Action Buttons -->
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-      <a id="invite-wa-btn" target="_blank" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#22c55e;color:white;text-decoration:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;">
-        📲 WhatsApp senden
-      </a>
-      <a id="invite-email-btn" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;">
-        📧 Email senden
-      </a>
-    </div>
-
-    <button onclick="closeModal('invite-modal')" style="width:100%;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">Schließen</button>
-  </div>
-</div>
 </body>
 </html>
