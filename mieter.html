@@ -121,6 +121,29 @@ function showInviteModal(mieterEntry, pin) {
   openModal('invite-modal');
 }
 
+/* ── Resend invite for existing mieter ─────────────────── */
+function resendInvite(id) {
+  if (checkDemoBlock()) return;
+  var mieterList = getMieter();
+  var m = null;
+  for (var i = 0; i < mieterList.length; i++) { if (mieterList[i].id === id) { m = mieterList[i]; break; } }
+  if (!m) return;
+  var pin = m.pin;
+  if (!pin) {
+    // Mieter was created before PIN feature — generate and save now
+    pin = generatePIN();
+    m.pin = pin;
+    mieterList[i] = m;
+    setData(KEYS.mieter, mieterList);
+    var _uid = getCurrentUid();
+    if (_uid) {
+      savePINToFirestore(_uid, pin, m);
+      saveCollection(_uid, 'mieter', getMieter()).catch(function(){});
+    }
+  }
+  showInviteModal(m, pin);
+}
+
 /* ── Data helpers ──────────────────────────────────────── */
 function getMieter() {
   return getData(KEYS.mieter, []);
@@ -542,6 +565,7 @@ function buildAlleMieter(list) {
 
     /* Action buttons */
     cards += '<div style="display:flex;gap:7px;flex-wrap:wrap;">';
+    cards += '<button onclick="resendInvite(\''+m.id+'\')" title="Einladung senden" style="display:inline-flex;align-items:center;gap:5px;background:#faf5ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">📩 Einladen</button>';
     cards += '<a href="'+waHref+'" target="_blank" title="WhatsApp Mahnung" style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;text-decoration:none;'+waStyle+'">📲 Mahnung</a>';
     cards += '<button onclick="openEditModal(\''+m.id+'\')" title="Bearbeiten" style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Bearbeiten</button>';
     cards += '<button onclick="openDeleteModal(\''+m.id+'\')" title="Löschen" style="display:inline-flex;align-items:center;gap:5px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🗑️ Löschen</button>';
