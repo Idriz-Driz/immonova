@@ -1441,9 +1441,10 @@
         if (d) d.className = 'pin-dot filled';
       }
 
-      // Query portal-pins (existing flow) — field-based lookup
+      // Query portal-pins by documentId (PIN = doc ID, no index needed)
       db.collectionGroup('portal-pins')
-        .where('pin', '==', pin)
+        .where(firebase.firestore.FieldPath.documentId(), '>=', pin)
+        .where(firebase.firestore.FieldPath.documentId(), '<=', pin + '\uf8ff')
         .limit(1)
         .get()
         .then(function(snap) {
